@@ -50,7 +50,7 @@ describe("AnkiExportPanel", () => {
     expect(screen.getByText(/\{\{#Translation\}\}/)).toBeVisible();
   });
 
-  it("includes English automatically for items saved without it", async () => {
+  it("includes English and pinyin automatically for items saved without them", async () => {
     const store = new MemoryLearningStore();
     const { provider, translate } = fakeTranslationProvider();
     renderWithProviders(<AnkiExportPanel items={[item(0), item(1)]} />, {
@@ -61,14 +61,14 @@ describe("AnkiExportPanel", () => {
 
     await userEvent.click(exportButton());
     await screen.findByText("✓ CSV downloaded successfully.");
-    expect(exportedCsv()).toContain("第一句。,,The first sentence.,");
-    expect(exportedCsv()).toContain("第二句。,,The second sentence.,");
+    expect(exportedCsv()).toContain("第一句。,dì yī jù。,The first sentence.,");
+    expect(exportedCsv()).toContain("第二句。,dì èr jù。,The second sentence.,");
     expect(translate).toHaveBeenCalledTimes(2);
     // Resolved translations are kept on the learning items.
     await waitFor(async () =>
-      expect((await store.listItems()).map((i) => i.translation).sort()).toEqual([
-        "The first sentence.",
-        "The second sentence.",
+      expect((await store.listItems()).map((i) => [i.pinyin, i.translation]).sort()).toEqual([
+        ["dì yī jù。", "The first sentence."],
+        ["dì èr jù。", "The second sentence."],
       ]),
     );
   });
@@ -93,7 +93,8 @@ describe("AnkiExportPanel", () => {
     renderWithProviders(<AnkiExportPanel items={[edited, item(1)]} />);
     await userEvent.click(exportButton());
     expect(await screen.findByText(/1 edited line exported without English/)).toBeInTheDocument();
-    expect(exportedCsv()).toContain("第一句话。,,,"); // blank Translation, columns intact
+    // Pinyin is generated for the edited text; Translation stays blank, columns intact.
+    expect(exportedCsv()).toContain("第一句话。,dì yī jù huà。,,");
   });
 
   it("still exports when translations can't be loaded, and says so", async () => {

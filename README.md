@@ -47,7 +47,7 @@ Click or tap any line to play from it. Scrolling the transcript pauses auto-foll
   provider signals replace the simulation once a transcription provider exists.
 - **Corrections** — edit a whole line; the original transcript text is kept, viewable and
   restorable with **Revert**.
-- **Learning items** — save whole lines (with pinyin if generated, English, an optional note
+- **Learning items** — save whole lines (pinyin and English are filled in on export, an optional note
   and provenance) and export them as [Anki-compatible CSV](docs/ANKI_EXPORT.md).
 
 Learner data lives in this browser (IndexedDB). **Reset demo data** clears it; episode content is

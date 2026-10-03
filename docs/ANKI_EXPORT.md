@@ -19,15 +19,15 @@ Anki's import header lines (supported by Anki 2.1.55 and newer):
 | #   | Column      | Content                                                                                                                                                                             |
 | --- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Chinese     | Line text as saved (your correction, if you edited it)                                                                                                                              |
-| 2   | Pinyin      | Generated pinyin, if it was shown before saving; otherwise empty                                                                                                                    |
+| 2   | Pinyin      | Generated pinyin for the saved text. Filled in automatically on export if it wasn't generated before saving; empty only if pinyin couldn't be generated                             |
 | 3   | Translation | English. Filled in automatically on export when a translation is available; empty for edited lines (prepared translations match only the original text) or if it couldn't be loaded |
 | 4   | Note        | Your note; may span several lines                                                                                                                                                   |
 | 5   | Source      | `Episode title · m:ss`                                                                                                                                                              |
 | 6   | Tags        | `pebble pebble::<episode-id>`, plus `pebble::edited` for corrected lines                                                                                                            |
 
-- English is added automatically: on export, Pebble looks up translations for any items that
-  don't have one yet (only then; nothing is fetched in the background) and keeps them on the
-  learning items. After the download, Pebble reports any items exported without English.
+- English and pinyin are added automatically: on export, Pebble fills in whichever is missing
+  (only then; nothing is fetched in the background) and keeps the results on the learning
+  items. After the download, Pebble reports any items exported without English or pinyin.
 - Every row has exactly six fields. Empty values stay empty in place, so a missing
   translation never shifts Note or Source into the wrong column.
 - Fields containing `,` `"` or line breaks, or starting with `#` or whitespace, are quoted, and

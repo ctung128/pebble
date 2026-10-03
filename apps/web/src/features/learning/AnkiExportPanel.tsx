@@ -10,6 +10,7 @@ import {
   ankiCsvFilename,
   toAnkiCsv,
 } from "./ankiCsv.ts";
+import { fillPinyin } from "./fillPinyin.ts";
 import { fillTranslations } from "./fillTranslations.ts";
 import { useLearning } from "./LearningContext.tsx";
 import styles from "./AnkiExportPanel.module.css";
@@ -17,7 +18,12 @@ import styles from "./AnkiExportPanel.module.css";
 type ExportState =
   | { kind: "idle" }
   | { kind: "preparing" }
-  | { kind: "downloaded"; missingEdited: number; missingUnavailable: number }
+  | {
+      kind: "downloaded";
+      missingEdited: number;
+      missingUnavailable: number;
+      pinyinFailed: boolean;
+    }
   | { kind: "failed" };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -31,14 +37,18 @@ export function AnkiExportPanel({ items }: { items: readonly LearningItem[] }) {
   const exportCsv = async () => {
     setState({ kind: "preparing" });
     try {
-      // English is included automatically: missing translations are resolved now, on export.
-      const result = await fillTranslations(items, translations);
-      for (const item of result.filled) saveItem(item);
-      downloadText(ankiCsvFilename(), toAnkiCsv(result.items), ANKI_CSV_TYPE);
+      // English and pinyin are included automatically: anything missing is filled in now, on
+      // export, and kept on the learning items.
+      const english = await fillTranslations(items, translations);
+      const pinyin = await fillPinyin(english.items);
+      const changed = new Set([...english.filled, ...pinyin.filled].map((item) => item.id));
+      for (const item of pinyin.items) if (changed.has(item.id)) saveItem(item);
+      downloadText(ankiCsvFilename(), toAnkiCsv(pinyin.items), ANKI_CSV_TYPE);
       setState({
         kind: "downloaded",
-        missingEdited: result.missingEdited,
-        missingUnavailable: result.missingUnavailable,
+        missingEdited: english.missingEdited,
+        missingUnavailable: english.missingUnavailable,
+        pinyinFailed: pinyin.failed,
       });
     } catch (error) {
       console.warn("Pebble: CSV export failed.", error);
@@ -64,7 +74,7 @@ export function AnkiExportPanel({ items }: { items: readonly LearningItem[] }) {
 
       <div className={styles.status} role="status">
         {state.kind === "preparing" ? (
-          <p className={styles.oneTime}>Adding English translations…</p>
+          <p className={styles.oneTime}>Adding English and pinyin…</p>
         ) : null}
         {state.kind === "downloaded" ? (
           <>
@@ -73,6 +83,11 @@ export function AnkiExportPanel({ items }: { items: readonly LearningItem[] }) {
               <p className={styles.oneTime}>
                 {plural(state.missingEdited, "edited line")} exported without English. Prepared
                 translations only match the original transcript text.
+              </p>
+            ) : null}
+            {state.pinyinFailed ? (
+              <p className={styles.oneTime}>
+                Pinyin couldn’t be generated, so it was left blank. Export again to retry.
               </p>
             ) : null}
             {state.missingUnavailable > 0 ? (

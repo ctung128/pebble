@@ -27,7 +27,7 @@ export const LearningItemSchema = z
     text: NonEmptyTextSchema,
     /** Transcript text before correction; null when the line was not edited. */
     originalText: NonEmptyTextSchema.nullable(),
-    /** Pinyin generated for `text`, if pinyin had been generated in the session. */
+    /** Pinyin generated for `text`, when saving or later (e.g. on export). */
     pinyin: z.string().min(1).nullable(),
     /** Translation of `text`, if resolved when saving or later (e.g. on export). */
     translation: z.string().min(1).nullable(),
