@@ -46,7 +46,8 @@ export function toAnkiCsv(items: readonly LearningItem[]): string {
     `#columns:${ANKI_COLUMNS.join(",")}`,
     `#tags column:${ANKI_COLUMNS.indexOf("Tags") + 1}`,
   ];
-  const rows = [...items]
+  const rows = items
+    .filter((item) => item.provenance.transcriptKind !== "mock") // never export placeholder text
     .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
     .map((item) =>
       [

@@ -1,7 +1,7 @@
 import type { Episode, Transcript } from "@pebble/schema";
 
-/** "local" (the 127.0.0.1 worker) arrives in M0C. */
-export type SourceMode = "demo";
+/** "demo": bundled fixtures. "local": the 127.0.0.1 worker (local-mode build only). */
+export type SourceMode = "demo" | "local";
 
 export interface ResolvedEpisode extends Episode {
   /** Absolute URL the <audio> element can load. */

@@ -4,8 +4,8 @@ Local mode turns audio **you own or are authorized to use** into a timestamped t
 your own computer. A small Python worker does the processing; the Pebble web app talks to it
 over `127.0.0.1` only. Nothing is uploaded to the internet.
 
-> **Status: M0C-1.** The worker, its job pipeline and the **mock** transcription provider are
-> built. The web app does not talk to the worker yet (M0C-2).
+> **Status: M0C-2.** The worker, its job pipeline, the **mock** transcription provider and the
+> web app's local mode are built.
 
 > [!IMPORTANT]
 > **Current limitation:** the worker processes your real local audio through probe,
@@ -37,6 +37,49 @@ your installed Python. (Set `UV_PYTHON_DOWNLOADS=never` if you want uv to refuse
 Python build.)
 
 Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765. If the port is busy, the worker says so and exits; choose another with `PEBBLE_PORT`.
+
+## Using local mode in the browser
+
+Local mode is a separate build of the web app; the public demo never contains it. In two
+terminals, from the repository root:
+
+```bash
+npm run worker          # the worker on 127.0.0.1:8790
+npm run dev:local       # the app in local mode on http://localhost:5175
+```
+
+Open **http://localhost:5175**. (Port 5175 lets local mode run alongside the demo dev server
+on 5173; both are in the worker's default origin allowlist.)
+
+1. **Worker status.** The app calls `/health` first and offers uploads only when it reads
+   "Local worker is ready." Otherwise it explains what to fix — the worker isn't running
+   (`npm run worker`), FFmpeg is missing (`brew install ffmpeg`, then
+   `npm run worker:doctor`), the app and worker versions don't match, the data folder isn't
+   accessible (with its path and the worker's hint), or the worker refused this page's
+   address — and re-checks every few seconds.
+2. **Process audio locally.** Choose a file (M4A, MP3, WAV, FLAC, OGG/Opus, WebM or AAC, up to
+   2 GB), adjust the title (prefilled from the filename), confirm _"I own this audio or am
+   authorized to process it. Pebble processes it only on this computer."_, and choose **Run
+   processing preview**. Upload progress shows real bytes sent.
+3. **Progress.** Stages are shown as they happen, with "Processing section 2 of 5" only while
+   sections are being processed — no estimated percentages. The page polls every second for
+   30 s, then every 3 s, and pauses while the tab is hidden. Cancel and retry are available
+   when the worker allows them. "Finished" appears only after the transcript has loaded and
+   validated.
+4. **Your local audio.** The library lists every job with its status. Completed episodes open
+   in the transcript reader, with audio streamed from the worker. **Delete** asks for
+   confirmation and permanently removes that episode's audio, sections, preview transcript and
+   job record — nothing else.
+
+### Preview transcripts (mock provider)
+
+Until real speech recognition is connected, every local transcript is placeholder text. The
+reader shows a persistent banner — _"Preview transcript: This is placeholder text used to test
+local audio processing. It is not a transcription of your audio."_ — and keeps Pinyin,
+English, Save and Edit visible but disabled, explained by _"Learning tools become available
+after Pebble creates a real transcript."_ Placeholder text never generates pinyin, never
+becomes a learning item, and is never exported to Anki (both are also enforced in code, not
+just in the UI).
 
 ## Local data
 
@@ -167,16 +210,17 @@ Errors use `{ "error": { "code", "message", "hint"? } }`. Uploads must confirm o
 - Binds to `127.0.0.1` only; any other host (`0.0.0.0`, `localhost`, `::`, LAN addresses) is
   refused at startup.
 - `Host` must be `127.0.0.1` or `localhost` (guards against DNS rebinding).
-- Browser requests must come from an allowlisted origin. Defaults:
-  `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:4173`,
-  `http://127.0.0.1:4173` (Vite dev and preview). Override with a comma-separated
+- Browser requests must come from an allowlisted origin. Defaults: `localhost` and
+  `127.0.0.1` on ports `5173` (demo dev), `5175` (local-mode dev) and `4173` (preview). Override with a comma-separated
   `PEBBLE_ALLOWED_ORIGINS`; only `http://localhost:PORT` / `http://127.0.0.1:PORT` are
   accepted. Requests from other origins — including multipart form posts that skip CORS
   preflight — are rejected with `403`, as are cross-site requests without an `Origin`
   (e.g. an `<audio>` tag on another website). The web app's audio element must therefore use
   `crossorigin="anonymous"`.
 - CORS echoes only allowlisted origins (never `*`) and never allows credentials.
-- No interactive docs, OpenAPI schema, directory listings or file paths are exposed.
+- No interactive docs, OpenAPI schema or directory listings are exposed. The only path the
+  API reports is the data folder's location in `/health` (abbreviated with `~`), so the app can
+  explain data-folder problems; no other file paths appear in responses.
 
 ## Configuration reference
 

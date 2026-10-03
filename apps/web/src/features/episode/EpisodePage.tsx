@@ -27,6 +27,11 @@ import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
 import styles from "./EpisodePage.module.css";
 
 const REVIEW_HELP_ID = "review-help";
+const LOCKED_HELP_ID = "learning-locked-help";
+export const LEARNING_LOCKED_MESSAGE =
+  "Learning tools become available after Pebble creates a real transcript.";
+export const PREVIEW_BANNER =
+  "This is placeholder text used to test local audio processing. It is not a transcription of your audio.";
 
 export function EpisodePage({ episodeId }: { episodeId: string }) {
   const source = useEpisodeSource();
@@ -158,15 +163,22 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     });
   }, []);
 
+  // Mock transcripts exist to test the pipeline. They must never feed learning features:
+  // no pinyin, translation, saving, export or corrections.
+  const learningLocked = transcript.provenance.kind === "mock";
+
   const actions = useMemo<LineActions>(
     () => ({
       select: (segment) => {
         resume();
         seek(segment.startMs, { play: true });
       },
-      togglePinyin: (segment) => latest.current.pinyin.toggleLine(segment.id),
+      togglePinyin: (segment) => {
+        if (!learningLocked) latest.current.pinyin.toggleLine(segment.id);
+      },
       retryPinyin: () => latest.current.pinyin.retry(),
       toggleTranslation: (segment) => {
+        if (learningLocked) return;
         const view = latest.current.lines.get(segment.id);
         if (view) latest.current.translations.toggle(segment, view.text, view.translation);
       },
@@ -175,6 +187,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         if (view) latest.current.translations.retry(segment, view.text);
       },
       toggleSave: (segment) => {
+        if (learningLocked) return;
         const { learning, lines, pinyin, episode, transcript } = latest.current;
         const existing = learning.itemForSegment(episode.id, segment.id);
         if (existing) {
@@ -207,7 +220,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         setConfirmUnsaveId(null);
       },
       cancelUnsave: () => setConfirmUnsaveId(null),
-      startEdit: (segment) => setEditingId(segment.id),
+      startEdit: (segment) => {
+        if (!learningLocked) setEditingId(segment.id);
+      },
       cancelEdit: () => setEditingId(null),
       saveEdit: (segment, text) => {
         const result = latest.current.learning.saveCorrection(
@@ -224,7 +239,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       toggleOriginal: (segment) => toggleOriginalShown(segment.id),
     }),
-    [resume, seek, translationProvider, toggleOriginalShown],
+    [resume, seek, translationProvider, toggleOriginalShown, learningLocked],
   );
 
   const goToIndex = useCallback(
@@ -289,6 +304,17 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   return (
     <article className={styles.page}>
       <title>{`${episode.title} · Pebble`}</title>
+      {learningLocked ? (
+        <div className={styles.previewBanner} role="note" aria-label="Preview transcript">
+          <p>
+            <strong>Preview transcript:</strong> {PREVIEW_BANNER}
+          </p>
+          <p className={styles.previewBannerNote}>
+            Translation will be available after a real transcription and translation provider are
+            connected.
+          </p>
+        </div>
+      ) : null}
       <BackLink />
 
       <header className={styles.header}>
@@ -335,7 +361,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
               className={styles.toolButton}
               aria-pressed={pinyin.showAll}
               aria-busy={pinyin.status === "loading" || undefined}
-              onClick={pinyin.toggleAll}
+              aria-disabled={learningLocked || undefined}
+              aria-describedby={learningLocked ? LOCKED_HELP_ID : undefined}
+              onClick={learningLocked ? undefined : pinyin.toggleAll}
             >
               {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
             </button>
@@ -351,6 +379,11 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             </button>
           </div>
         </div>
+        {learningLocked ? (
+          <p id={LOCKED_HELP_ID} className={styles.help}>
+            {LEARNING_LOCKED_MESSAGE}
+          </p>
+        ) : null}
         {pinyinInfoOpen ? (
           <p id="pinyin-info" className={styles.help}>
             Pronunciation is generated automatically and may be imperfect for some words.
@@ -371,11 +404,17 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           lines={lines}
           actions={actions}
           reviewDescriptionId={REVIEW_HELP_ID}
+          lockedDescriptionId={learningLocked ? LOCKED_HELP_ID : undefined}
         />
         <p className={styles.keys} aria-label="Keyboard shortcuts">
           <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay · <kbd>←</kbd>
-          <kbd>→</kbd> previous/next · <kbd>P</kbd> pinyin · <kbd>T</kbd> English · <kbd>S</kbd>{" "}
-          save line
+          <kbd>→</kbd> previous/next
+          {learningLocked ? null : (
+            <>
+              {" "}
+              · <kbd>P</kbd> pinyin · <kbd>T</kbd> English · <kbd>S</kbd> save line
+            </>
+          )}
         </p>
       </section>
 
@@ -385,7 +424,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         </button>
       ) : null}
 
-      <audio ref={audioRef} src={episode.audioUrl} preload="metadata" />
+      {/* crossOrigin: local-mode audio comes from the worker, which only answers allowlisted origins. */}
+      <audio ref={audioRef} src={episode.audioUrl} preload="metadata" crossOrigin="anonymous" />
       <PlayerBar
         player={player}
         canGoPrevious={activeIndex > 0}

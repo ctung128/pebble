@@ -23,3 +23,6 @@ __pycache__/
 *.db-shm
 *.sqlite
 *.sqlite3
+
+# Local-mode build output
+apps/web/dist-local/

@@ -26,7 +26,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.2"
+CURRENT_SCHEMA_VERSION = "1.3"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -260,11 +260,19 @@ class ProviderStatus(Model):
     detail: NonEmptyStr | None
 
 
+class DataDir(Model):
+    path: NonEmptyStr  # abbreviated with "~" under the home directory
+    writable: bool
+    hint: NonEmptyStr | None
+
+
 class WorkerHealth(Model):
+    _omit_when_none = frozenset({"data_dir"})
     schema_version: SchemaVersion
     worker_version: NonEmptyStr
     status: Literal["ok", "degraded"]
     data_dir_writable: bool
+    data_dir: DataDir | None = None
     tools: Tools
     providers: list[ProviderStatus]
 

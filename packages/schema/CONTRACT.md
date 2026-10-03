@@ -15,6 +15,9 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.3** — Worker health may include `dataDir: { path, writable, hint }` (optional) so the
+  local app can explain data-folder problems. `path` is the only filesystem path in any
+  payload, abbreviated with `~` under the home folder.
 - **1.2** — Transcript provenance `kind` adds `"mock"` (placeholder output, never `"asr"`).
   Audio provenance `kind` adds `"user-provided"` (local-mode files). New payloads: job and
   worker health. Invalid-example expectations move to `examples/expectations.json`, shared
@@ -147,7 +150,7 @@ Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDI
 
 `{ schemaVersion, workerVersion, status: "ok" | "degraded", dataDirWritable, tools: { ffmpeg,
 ffprobe: { available, version } }, providers: [{ id, kind, available, detail }] }`. Never
-contains filesystem paths.
+contains filesystem paths, except the optional `dataDir.path` (1.3).
 
 ## Validation in two languages
 

@@ -21,7 +21,8 @@
     "fixtures:build": "node scripts/build-demo-fixture.mjs",
     "worker": "uv run --project services/worker pebble-worker serve",
     "worker:doctor": "uv run --project services/worker pebble-worker doctor",
-    "test:worker": "cd services/worker && uv run pytest && uv run ruff check . && uv run ruff format --check ."
+    "test:worker": "cd services/worker && uv run pytest && uv run ruff check . && uv run ruff format --check .",
+    "dev:local": "npm run dev:local -w @pebble/web --"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

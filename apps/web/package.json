@@ -7,10 +7,12 @@
     "predev": "node scripts/copy-fixtures.mjs",
     "dev": "vite",
     "prebuild": "node scripts/copy-fixtures.mjs",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/check-demo-bundle.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:local": "VITE_PEBBLE_MODE=local vite --port 5175 --strictPort",
+    "build:local": "VITE_PEBBLE_MODE=local vite build --outDir dist-local"
   },
   "dependencies": {
     "@pebble/schema": "0.1.0",

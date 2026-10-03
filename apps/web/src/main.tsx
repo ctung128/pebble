@@ -15,22 +15,31 @@ import "./styles/global.css";
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
 
-const source = createDefaultSource();
-const translations = new SessionCachedTranslationProvider(
-  new DemoTranslationProvider({
-    locate: (episodeId) => source.getDemoTranslationsUrl(episodeId),
-    alwaysFail: devFlags.failTranslations,
-  }),
-);
+if (__PEBBLE_LOCAL__) {
+  // Removed entirely from the demo build (the condition is the literal `false` there).
+  void import("./local/bootstrapLocal.tsx").then(({ renderLocal }) => renderLocal(root));
+} else {
+  renderDemo(root);
+}
 
-createRoot(root).render(
-  <StrictMode>
-    <SourceProvider source={source}>
-      <TranslationProviderContext provider={translations}>
-        <LearningProvider openStore={openLearningStore}>
-          <App />
-        </LearningProvider>
-      </TranslationProviderContext>
-    </SourceProvider>
-  </StrictMode>,
-);
+function renderDemo(container: HTMLElement) {
+  const source = createDefaultSource();
+  const translations = new SessionCachedTranslationProvider(
+    new DemoTranslationProvider({
+      locate: (episodeId) => source.getDemoTranslationsUrl(episodeId),
+      alwaysFail: devFlags.failTranslations,
+    }),
+  );
+
+  createRoot(container).render(
+    <StrictMode>
+      <SourceProvider source={source}>
+        <TranslationProviderContext provider={translations}>
+          <LearningProvider openStore={openLearningStore}>
+            <App />
+          </LearningProvider>
+        </TranslationProviderContext>
+      </SourceProvider>
+    </StrictMode>,
+  );
+}

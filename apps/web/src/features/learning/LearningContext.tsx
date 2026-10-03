@@ -152,6 +152,10 @@ export function LearningProvider({
 
   const saveItem = useCallback(
     (item: LearningItem) => {
+      if (item.provenance.transcriptKind === "mock") {
+        console.warn("Pebble: refused to save a learning item from a mock transcript.");
+        return;
+      }
       setItems((current) => new Map(current).set(item.id, item));
       persist((store) => store.putItem(item));
     },

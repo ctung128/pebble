@@ -13,9 +13,9 @@ from .errors import ConfigError
 LOOPBACK_HOST = "127.0.0.1"
 # Not 8765: that's AnkiConnect's default, and Pebble users often run Anki.
 DEFAULT_PORT = 8790
-# Vite dev (5173) and preview (4173), by name and by address.
+# Vite dev (5173), local-mode dev (5175) and preview (4173), by name and by address.
 DEFAULT_ORIGINS: tuple[str, ...] = tuple(
-    f"http://{host}:{port}" for port in (5173, 4173) for host in ("localhost", "127.0.0.1")
+    f"http://{host}:{port}" for port in (5173, 5175, 4173) for host in ("localhost", "127.0.0.1")
 )
 ALLOWED_HOST_NAMES: tuple[str, ...] = ("127.0.0.1", "localhost")
 _LOCAL_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1):\d{1,5}$")

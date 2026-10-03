@@ -7,14 +7,13 @@ from conftest import DEMO_AUDIO, upload, wait_for_job
 from pebble_worker.contract import parse_job, parse_manifest, parse_transcript, parse_worker_health
 
 
-def test_health_matches_the_contract_and_has_no_paths(client, settings):
+def test_health_matches_the_contract(client, settings):
     response = client.get("/health")
     assert response.status_code == 200
     body = response.json()
     assert parse_worker_health(body).ok
     assert body["status"] == "ok"
     assert body["providers"][0]["kind"] == "mock"
-    assert str(settings.data_dir) not in response.text
 
 
 def test_upload_requires_ownership_confirmation(client, audio):
@@ -147,3 +146,29 @@ def test_demo_fixture_end_to_end_with_default_chunking(make_client, settings):
     assert abs(transcript["durationMs"] - 34_358) < 100
     assert transcript["provenance"]["kind"] == "mock"
     assert transcript["segments"][0]["text"].startswith("（模拟转写）")
+
+
+def test_health_reports_the_data_directory_without_other_paths(client, settings):
+    body = client.get("/health").json()
+    assert body["dataDir"]["writable"] is True and body["dataDir"]["hint"] is None
+    assert body["dataDir"]["path"].endswith("pebble")
+
+
+def test_health_explains_an_unwritable_data_directory(client, settings):
+    settings.data_dir.chmod(0o500)
+    try:
+        body = client.get("/health").json()
+    finally:
+        settings.data_dir.chmod(0o700)
+    assert body["status"] == "degraded"
+    assert body["dataDirWritable"] is False
+    assert "PEBBLE_DATA_DIR" in body["dataDir"]["hint"]
+
+
+def test_display_path_abbreviates_home():
+    from pathlib import Path
+
+    from pebble_worker.health import display_path
+
+    assert display_path(Path.home() / ".pebble") == "~/.pebble"
+    assert display_path(Path("/Volumes/Archive/pebble")) == "/Volumes/Archive/pebble"

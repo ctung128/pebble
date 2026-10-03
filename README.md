@@ -70,16 +70,18 @@ unavailable storage, `?translation=fail` makes translations fail. Put them befor
 | `npm run format`         | Prettier                                                       |
 | `npm run fixtures:build` | Regenerate the placeholder demo fixture (macOS `say` + FFmpeg) |
 
-## Local mode (in progress)
+## Local mode (preview)
 
-A private worker on your own computer turns audio you provide into a transcript. The worker
-and its pipeline are built (M0C-1) with a **mock** provider that produces placeholder text —
-not real transcription yet — and the web app is not connected to it yet. See
+A private worker on your own computer processes audio you provide, and a local-mode build of
+the app talks to it over `127.0.0.1`. The pipeline is real (probe, normalize, silence-aware
+chunking), but transcripts currently come from a **mock** provider: placeholder text, clearly
+labelled, with learning tools disabled. Real Mandarin speech recognition arrives in M1. See
 [docs/LOCAL_MODE.md](docs/LOCAL_MODE.md):
 
 ```bash
 npm run worker:doctor   # requires uv and FFmpeg
-npm run worker          # http://127.0.0.1:8790
+npm run worker          # terminal 1: http://127.0.0.1:8790
+npm run dev:local       # terminal 2: http://localhost:5175
 npm run test:worker
 ```
 

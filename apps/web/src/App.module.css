@@ -50,6 +50,8 @@
 }
 
 .nav {
+  display: flex;
+  gap: var(--space-1);
   margin-left: auto;
 }
 

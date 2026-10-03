@@ -15,6 +15,8 @@ interface TranscriptReaderProps {
   actions: LineActions;
   /** Id of the element explaining "May need review". */
   reviewDescriptionId: string;
+  /** When set, learning actions are disabled and described by this element. */
+  lockedDescriptionId?: string | undefined;
   ref?: Ref<HTMLOListElement>;
 }
 
@@ -29,6 +31,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   lines,
   actions,
   reviewDescriptionId,
+  lockedDescriptionId,
   ref,
 }: TranscriptReaderProps) {
   if (segments.length === 0) {
@@ -52,6 +55,7 @@ export const TranscriptReader = memo(function TranscriptReader({
               view={view}
               actions={actions}
               reviewDescriptionId={reviewDescriptionId}
+              lockedDescriptionId={lockedDescriptionId}
             />
           </li>
         );

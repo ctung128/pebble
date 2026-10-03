@@ -14,6 +14,7 @@ interface SegmentRowProps {
   view: LineView;
   actions: LineActions;
   reviewDescriptionId: string;
+  lockedDescriptionId?: string | undefined;
 }
 
 export const SegmentRow = memo(function SegmentRow({
@@ -24,7 +25,13 @@ export const SegmentRow = memo(function SegmentRow({
   view,
   actions,
   reviewDescriptionId,
+  lockedDescriptionId,
 }: SegmentRowProps) {
+  // Locked actions stay focusable and visible (discoverable) but do nothing.
+  const locked = lockedDescriptionId !== undefined;
+  const lockProps = locked
+    ? ({ "aria-disabled": true, "aria-describedby": lockedDescriptionId } as const)
+    : {};
   const time = formatTime(segment.startMs);
   const translationId = `translation-${segment.id}`;
   const translationOpen = view.translation?.open ?? false;
@@ -73,6 +80,7 @@ export const SegmentRow = memo(function SegmentRow({
           className={styles.action}
           aria-pressed={view.pinyin.visible}
           title="Pinyin (P)"
+          {...lockProps}
           onClick={() => actions.togglePinyin(segment)}
         >
           <span aria-hidden="true" className={styles.glyph}>
@@ -86,6 +94,7 @@ export const SegmentRow = memo(function SegmentRow({
           aria-expanded={translationOpen}
           aria-controls={translationOpen ? translationId : undefined}
           title="English (T)"
+          {...lockProps}
           onClick={() => actions.toggleTranslation(segment)}
         >
           <span aria-hidden="true" className={styles.glyph}>
@@ -98,6 +107,7 @@ export const SegmentRow = memo(function SegmentRow({
           className={styles.action}
           aria-pressed={view.saved}
           title={view.saved ? "Saved as a learning item (S)" : "Save as a learning item (S)"}
+          {...lockProps}
           onClick={() => actions.toggleSave(segment)}
         >
           <Icon name={view.saved ? "bookmarkFilled" : "bookmark"} size={18} />
@@ -109,6 +119,7 @@ export const SegmentRow = memo(function SegmentRow({
           className={styles.action}
           aria-pressed={view.editing}
           title="Edit line"
+          {...lockProps}
           onClick={() => (view.editing ? actions.cancelEdit() : actions.startEdit(segment))}
         >
           <Icon name="edit" size={18} />

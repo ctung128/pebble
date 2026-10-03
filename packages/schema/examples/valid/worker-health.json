@@ -1,8 +1,13 @@
 {
-  "schemaVersion": "1.2",
+  "schemaVersion": "1.3",
   "workerVersion": "0.1.0",
   "status": "ok",
   "dataDirWritable": true,
+  "dataDir": {
+    "path": "~/.pebble",
+    "writable": true,
+    "hint": null
+  },
   "tools": {
     "ffmpeg": {
       "available": true,

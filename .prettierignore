@@ -7,3 +7,4 @@ fixtures/demo/**/*.m4a
 services/worker/.venv
 .pytest_cache
 .ruff_cache
+dist-local

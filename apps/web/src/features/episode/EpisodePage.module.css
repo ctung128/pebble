@@ -175,3 +175,31 @@
     display: none;
   }
 }
+
+/* Persistent while reading: mock transcripts must never pass for real ones. */
+.previewBanner {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-m);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: var(--text-sm);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.06);
+}
+
+.previewBanner p {
+  margin: 0;
+}
+
+.previewBannerNote {
+  opacity: 0.85;
+}
+
+.toolButton[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

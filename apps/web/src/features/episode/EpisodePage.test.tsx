@@ -352,3 +352,72 @@ describe("EpisodePage — storage unavailable", () => {
     );
   });
 });
+
+describe("EpisodePage — mock (preview) transcripts", () => {
+  const mockTranscript = {
+    ...testTranscript,
+    provenance: { ...testTranscript.provenance, kind: "mock" as const, provider: "mock" },
+  };
+  const mockSource = () =>
+    fakeSource({
+      getTranscript: async () => mockTranscript,
+      getEpisode: async (id) => ({
+        ...testEpisode,
+        id,
+        demo: undefined,
+        audioProvenance: { kind: "user-provided", publishable: false, notes: "Yours." },
+        audioUrl: "http://127.0.0.1:8790/episodes/x/audio",
+      }),
+    });
+
+  it("shows the persistent preview banner and the translation capability note", async () => {
+    renderPage({ source: mockSource() });
+    await playButtons();
+    const banner = screen.getByRole("note", { name: "Preview transcript" });
+    expect(banner).toHaveTextContent(
+      "Preview transcript: This is placeholder text used to test local audio processing. It is not a transcription of your audio.",
+    );
+    expect(banner).toHaveTextContent(
+      "Translation will be available after a real transcription and translation provider are connected.",
+    );
+  });
+
+  it("keeps learning tools visible but disabled, with an accessible explanation", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    const store = new MemoryLearningStore();
+    renderPage({ source: mockSource(), translation: provider, store });
+    const line = await lineActions(0);
+    const explanation = screen.getByText(
+      "Learning tools become available after Pebble creates a real transcript.",
+    );
+    for (const name of ["Pinyin", "English", "Save", "Edit"]) {
+      const button = line.getByRole("button", { name });
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      expect(button).toHaveAttribute("aria-describedby", explanation.id);
+      await userEvent.click(button);
+    }
+    const toolbar = screen.getByRole("button", { name: "Show pinyin" });
+    expect(toolbar).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(toolbar);
+    await userEvent.keyboard("pts");
+
+    expect(screen.queryByText(/dì yī jù/)).not.toBeInTheDocument(); // no pinyin generated
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument(); // no correction editor
+    expect(translate).not.toHaveBeenCalled();
+    expect(await store.listItems()).toEqual([]);
+  });
+
+  it("still plays and navigates lines", async () => {
+    renderPage({ source: mockSource() });
+    const rows = await playButtons();
+    await userEvent.click(rows[1]!);
+    expect(activeText()).toContain("第二句。");
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  });
+
+  it("loads worker audio with CORS so the worker's origin check can pass", async () => {
+    renderPage({ source: mockSource() });
+    await playButtons();
+    expect(document.querySelector("audio")).toHaveAttribute("crossorigin", "anonymous");
+  });
+});

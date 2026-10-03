@@ -9,7 +9,8 @@ M0A (static demo reader) and M0B (pinyin, on-demand translation, simulated revie
 corrections, learning items, Anki CSV export, browser-side LearningStore) are done. **Do not start a milestone without the
 user's explicit go-ahead.** Roadmap and scope: `docs/ARCHITECTURE.md`.
 
-M0C-1 (local worker, `services/worker`) is built; M0C-2 (web local mode) waits for review.
+M0C-1 (local worker, `services/worker`) is committed; M0C-2 (web local mode, `apps/web/src/local`,
+`npm run dev:local` on 5175) waits for review. Do not propose M1 before approval.
 Worker: `npm run worker`, `npm run worker:doctor`, `npm run test:worker`. Default port 8790
 (8765 is AnkiConnect's). Read `docs/LOCAL_MODE.md` before changing the worker.
 
@@ -30,6 +31,9 @@ Worker: `npm run worker`, `npm run worker:doctor`, `npm run test:worker`. Defaul
 - Worker binds 127.0.0.1 only; keep the Host/Origin checks and the explicit origin allowlist;
   never serve paths outside the data directory. Mock output is `mock`, never `asr`.
 - No FunASR/Torch/ModelScope/models until M1 is approved.
+- Mock transcripts (`provenance.kind === "mock"`) are learning-locked: no pinyin, translation,
+  saving, export or corrections. Keep the preview banner. Never call it "transcription".
+- Local-mode code must stay out of the demo build (`__PEBBLE_LOCAL__`, check-demo-bundle).
 
 ## Conventions
 

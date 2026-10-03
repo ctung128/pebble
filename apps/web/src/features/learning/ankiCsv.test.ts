@@ -198,3 +198,15 @@ describe("toAnkiCsv column integrity", () => {
     expect(bytes.slice(0, 3)).not.toEqual(new Uint8Array([0xef, 0xbb, 0xbf])); // no BOM
   });
 });
+
+describe("mock content", () => {
+  it("is never exported", () => {
+    const mock = item({
+      text: "（模拟转写）第 1-1 段",
+      provenance: { ...item().provenance, transcriptKind: "mock" },
+    });
+    const csv = toAnkiCsv([mock, item({ id: "real" })]);
+    expect(csv).not.toContain("模拟转写");
+    expect(csv).toContain("第一句。");
+  });
+});

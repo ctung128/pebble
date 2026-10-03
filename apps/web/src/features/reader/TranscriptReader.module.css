@@ -254,3 +254,13 @@
     transition: none;
   }
 }
+
+.action[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action[aria-disabled="true"]:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
