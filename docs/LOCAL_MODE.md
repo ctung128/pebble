@@ -4,8 +4,10 @@ Local mode turns audio **you own or are authorized to use** into a timestamped t
 your own computer. A small Python worker does the processing; the Pebble web app talks to it
 over `127.0.0.1` only. Nothing is uploaded to the internet.
 
-> **Status: M0C-2.** The worker, its job pipeline, the **mock** transcription provider and the
-> web app's local mode are built.
+> **Status: M1-A (in progress).** The worker, its job pipeline, the **mock** transcription
+> provider and the web app's local mode are built. FunASR can be installed as an optional extra
+> and its pinned models downloaded and verified ([MODELS.md](MODELS.md)), but the FunASR
+> provider is not connected yet.
 
 > [!IMPORTANT]
 > **Current limitation:** the worker processes your real local audio through probe,
@@ -20,7 +22,9 @@ from URLs or apps, and it does not work around any platform's content protection
 
 - macOS or Linux, Python 3.12+, [uv](https://docs.astral.sh/uv/), and FFmpeg (`ffmpeg` and
   `ffprobe` on `PATH`).
-- No models, GPU, accounts or API keys.
+- No GPU, accounts or API keys. The mock worker needs no models.
+- Optional, for real speech recognition (M1): the worker's `funasr` extra (~231 MB download,
+  ~0.9 GB installed) and the three pinned models (~1.30 GB). See [MODELS.md](MODELS.md).
 
 ## Commands
 
@@ -30,11 +34,15 @@ From the repository root:
 npm run worker:doctor   # check Python, FFmpeg, the data directory, database and provider
 npm run worker          # start on http://127.0.0.1:8790 (Ctrl+C to stop)
 npm run test:worker     # pytest + ruff
+npm run worker:models -- list|verify|pull   # pinned speech models (see MODELS.md)
 ```
 
 `uv` creates the worker's private environment in `services/worker/.venv` on first use, using
 your installed Python. (Set `UV_PYTHON_DOWNLOADS=never` if you want uv to refuse to download a
-Python build.)
+Python build.) The npm scripts set `UV_CACHE_DIR=~/.pebble/uv-cache`, so packages uv downloads
+for Pebble are cached inside Pebble's data directory; set it yourself when you run `uv`
+directly, for example `UV_CACHE_DIR=~/.pebble/uv-cache uv sync --extra funasr` in
+`services/worker`.
 
 Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765. If the port is busy, the worker says so and exits; choose another with `PEBBLE_PORT`.
 
@@ -81,6 +89,24 @@ after Pebble creates a real transcript."_ Placeholder text never generates pinyi
 becomes a learning item, and is never exported to Anki (both are also enforced in code, not
 just in the UI).
 
+## Speech models (M1)
+
+Real transcription will use three pinned FunASR models: SeACo-Paraformer (speech), FSMN-VAD
+(voice activity) and CT-Transformer (Mandarin punctuation). [MODELS.md](MODELS.md) has the
+details; in short:
+
+- The manifest in `services/worker/src/pebble_worker/models/manifest.py` is the source of
+  truth: full model IDs at exact tags, with the size and SHA-256 of every runtime file. Pebble
+  never uses a floating "latest" model reference.
+- The FunASR toolkit is MIT-licensed. Every selected model card reports **Apache-2.0**. The
+  selected cards do not link the FunASR Model Open Source License, so Pebble records
+  Apache-2.0 as the applicable license for these exact checkpoints.
+- Attribution keeps the full original model names and their provenance: Alibaba Tongyi Lab,
+  published by the `iic` organization on ModelScope.
+- Weights are local-only: downloaded by you with `npm run worker:models -- pull` into
+  `~/.pebble/models`, and never committed, bundled into the public demo, or served by the
+  worker.
+
 ## Local data
 
 ### What is stored, and why
@@ -96,6 +122,9 @@ repository:
 | `episodes/<id>/work/chunks/*.wav`   | Slices of the normalized audio                     | Long audio is transcribed piece by piece                 |
 | `logs/worker.log`                   | Job transitions (ids, stages, error codes)         | Diagnosing failures; never contains audio or transcripts |
 | `tmp/`                              | Upload spool while a file is being received        | Keeps in-flight uploads inside the private directory     |
+| `models/iic/<name>/`                | Pinned speech model files (after `models pull`)    | Local transcription; never committed, bundled or served  |
+| `models/.modelscope/`               | ModelScope's settings and session directory        | Keeps the model hub's state out of your home directory   |
+| `uv-cache/`                         | uv's package download cache                        | Keeps Pebble's package downloads in one removable place  |
 
 The directory and every file in it are private to your macOS user (`0700` directories,
 `0600` files). The worker never serves a file outside this directory: every path is resolved
@@ -118,10 +147,14 @@ outside the repository is safer.
 - **Everything:** stop the worker, then:
 
   ```bash
-  rm -rf ~/.pebble          # or your PEBBLE_DATA_DIR
+  rm -rf ~/.pebble               # or your PEBBLE_DATA_DIR
+  rm -rf services/worker/.venv   # optional: the isolated worker Python environment
   ```
 
-  The next start creates an empty directory. Learner data in the browser (corrections,
+  `rm -rf ~/.pebble` removes Pebble's audio, chunks, database, logs, downloaded models,
+  ModelScope state, benchmark artifacts and the uv cache. The worker environment lives in the
+  repository at `services/worker/.venv` and is removed separately. The next start creates an
+  empty directory. Learner data in the browser (corrections,
   learning items) is separate; clear it with **Reset demo data** in the app.
 
 ## Pipeline
@@ -227,6 +260,7 @@ Errors use `{ "error": { "code", "message", "hint"? } }`. Uploads must confirm o
 | Variable                          | Default                  | Notes                                     |
 | --------------------------------- | ------------------------ | ----------------------------------------- |
 | `PEBBLE_DATA_DIR`                 | `~/.pebble`              | See [Local data](#local-data)             |
+| `UV_CACHE_DIR`                    | `~/.pebble/uv-cache`     | Set by the npm worker scripts             |
 | `PEBBLE_PORT`                     | `8790`                   |                                           |
 | `PEBBLE_HOST`                     | `127.0.0.1`              | Anything else is refused                  |
 | `PEBBLE_ALLOWED_ORIGINS`          | Vite dev/preview origins | Local http origins only                   |

@@ -11,6 +11,16 @@ dependencies = [
     "uvicorn==0.54.0",
 ]
 
+[project.optional-dependencies]
+# Real speech recognition (M1). Install with: UV_CACHE_DIR=~/.pebble/uv-cache uv sync --extra funasr
+# torch and torchaudio are a deliberately matched pair. See docs/MODELS.md.
+funasr = [
+    "funasr==1.4.16",
+    "modelscope==1.40.1",
+    "torch==2.11.0",
+    "torchaudio==2.11.0",
+]
+
 [project.scripts]
 pebble-worker = "pebble_worker.cli:main"
 
@@ -40,3 +50,10 @@ dev = [
     "pytest==9.1.1",
     "ruff==0.16.10",
 ]
+
+[tool.uv]
+# funasr declares `transformers` with no lower bound, and the resolver would otherwise fall back to
+# ancient releases that need a Rust source build. FunASR imports transformers during package
+# initialization because optional FunASR modules use it; Pebble's selected Paraformer, FSMN-VAD
+# and ct-punc-c paths do not require Transformers model features at runtime. Constraint only.
+constraint-dependencies = ["transformers>=4.32.0,<5"]

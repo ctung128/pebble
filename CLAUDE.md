@@ -9,10 +9,30 @@ M0A (static demo reader) and M0B (pinyin, on-demand translation, simulated revie
 corrections, learning items, Anki CSV export, browser-side LearningStore) are done. **Do not start a milestone without the
 user's explicit go-ahead.** Roadmap and scope: `docs/ARCHITECTURE.md`.
 
-M0C-1 (local worker, `services/worker`) is committed; M0C-2 (web local mode, `apps/web/src/local`,
-`npm run dev:local` on 5175) waits for review. Do not propose M1 before approval.
-Worker: `npm run worker`, `npm run worker:doctor`, `npm run test:worker`. Default port 8790
-(8765 is AnkiConnect's). Read `docs/LOCAL_MODE.md` before changing the worker.
+M0C-1 (local worker, `services/worker`) and M0C-2 (web local mode, `apps/web/src/local`,
+`npm run dev:local` on 5175) are committed. Worker: `npm run worker`, `npm run worker:doctor`,
+`npm run test:worker`, `npm run worker:models -- list|verify|pull`. Default port 8790 (8765 is
+AnkiConnect's). Read `docs/LOCAL_MODE.md` and `docs/MODELS.md` before changing the worker.
+
+**M1-A (FunASR setup, smoke test, provider integration) is in progress.** Dependency setup is
+approved: the worker's optional `funasr` extra (`funasr==1.4.16`, `modelscope==1.40.1`,
+`torch==2.11.0` + `torchaudio==2.11.0` as a matched pair) plus the resolver constraint
+`transformers>=4.32.0,<5` (never a direct dependency; don't block or patch it — FunASR imports
+it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-A proceeds in
+review stops: don't build the FunASR provider or run a smoke transcription until the user
+approves that step and provides a clip. **M1-B (benchmark) and M1-C (web/UI) must not start
+until the user reviews M1-A.**
+
+Approved models — exactly these, pinned in `services/worker/src/pebble_worker/models/manifest.py`
+(the source of truth; never a floating "latest"):
+
+- `iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch` @ `v2.0.9`
+- `iic/speech_fsmn_vad_zh-cn-16k-common-pytorch` @ `v2.0.4`
+- `iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch` @ `v2.0.4`
+
+Not approved: the larger Chinese-English punctuation model, any other FunASR model, speaker
+diarization, MPS support/configuration, cloud or API transcription, a translation provider,
+and model weights in Git, the public demo, or any deployment artifact.
 
 ## Hard boundaries
 
@@ -30,7 +50,11 @@ Worker: `npm run worker`, `npm run worker:doctor`, `npm run test:worker`. Defaul
 - No git commits unless the user asks.
 - Worker binds 127.0.0.1 only; keep the Host/Origin checks and the explicit origin allowlist;
   never serve paths outside the data directory. Mock output is `mock`, never `asr`.
-- No FunASR/Torch/ModelScope/models until M1 is approved.
+- FunASR provider (when built): `PEBBLE_PROVIDER=funasr` explicit, no fallback to mock, CPU
+  only, lazy loading, local model paths with update checks off, `confidence` always `null`.
+  English translation stays hidden in local real-ASR mode until a real provider exists.
+- Model weights live only in `~/.pebble/models` (downloaded by `models pull`); never commit,
+  bundle or serve them. Smoke-test audio and outputs stay out of the repository.
 - Mock transcripts (`provenance.kind === "mock"`) are learning-locked: no pinyin, translation,
   saving, export or corrections. Keep the preview banner. Never call it "transcription".
 - Local-mode code must stay out of the demo build (`__PEBBLE_LOCAL__`, check-demo-bundle).

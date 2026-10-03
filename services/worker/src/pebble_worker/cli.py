@@ -1,4 +1,4 @@
-"""`pebble-worker serve` and `pebble-worker doctor`."""
+"""`pebble-worker serve`, `pebble-worker doctor` and `pebble-worker models list|verify|pull`."""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     serve.add_argument("--host", help="must be 127.0.0.1 (anything else is refused)")
     serve.add_argument("--port", type=int)
     commands.add_parser("doctor", help="check FFmpeg, the data directory and providers")
+    models = commands.add_parser("models", help="list, verify or download the pinned models")
+    models.add_argument("action", choices=("list", "verify", "pull"))
     args = parser.parse_args(argv)
 
     overrides: dict[str, object] = {}
@@ -42,6 +44,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     os.umask(0o077)  # everything the worker creates is private to this user
     if args.command == "doctor":
         return doctor(settings)
+    if args.command == "models":
+        return models_command(settings, args.action)
     return run_server(settings)
 
 
@@ -117,6 +121,12 @@ def doctor(settings: Settings) -> int:
     healthy = all(ok for _, _, ok in rows)
     print("All checks passed." if healthy else "Some checks failed.")
     return 0 if healthy else 1
+
+
+def models_command(settings: Settings, action: str) -> int:
+    from .models import commands
+
+    return commands.run(Storage(settings.data_dir), action)
 
 
 def _port_available(host: str, port: int) -> bool:
