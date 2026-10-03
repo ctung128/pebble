@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "demo-001",
+  "language": "zh-CN",
+  "script": "simplified",
+  "durationMs": 34358,
+  "segments": [
+    {
+      "id": "seg-0001",
+      "index": 0,
+      "startMs": 300,
+      "endMs": 3162,
+      "text": "你好，欢迎收听今天的节目。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0002",
+      "index": 1,
+      "startMs": 3612,
+      "endMs": 6163,
+      "text": "你好！今天我们聊点什么？",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0003",
+      "index": 2,
+      "startMs": 6613,
+      "endMs": 10216,
+      "text": "我想聊聊下班路上捡到的一颗小石子。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0004",
+      "index": 3,
+      "startMs": 10666,
+      "endMs": 13180,
+      "text": "一颗石子？听起来有点意思。",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0005",
+      "index": 4,
+      "startMs": 13630,
+      "endMs": 17325,
+      "text": "它很圆，很光滑，放在手里凉凉的。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0006",
+      "index": 5,
+      "startMs": 17775,
+      "endMs": 19324,
+      "text": "你怎么会注意到它呢？",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0007",
+      "index": 6,
+      "startMs": 19774,
+      "endMs": 23203,
+      "text": "因为那天我走得很慢，没有看手机。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0008",
+      "index": 7,
+      "startMs": 23653,
+      "endMs": 26576,
+      "text": "慢下来，好像就能看到更多东西。",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0009",
+      "index": 8,
+      "startMs": 27026,
+      "endMs": 30095,
+      "text": "对，所以我把它放在了书桌上。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0010",
+      "index": 9,
+      "startMs": 30545,
+      "endMs": 33758,
+      "text": "好，今天就聊到这里，我们下次见！",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    }
+  ],
+  "provenance": {
+    "kind": "fixture",
+    "provider": "fixture",
+    "model": null,
+    "createdAt": "2026-10-03T19:02:18.318Z",
+    "notes": "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio)."
+  }
+}

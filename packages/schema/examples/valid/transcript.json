@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "example-001",
+  "language": "zh-CN",
+  "script": "simplified",
+  "durationMs": 9000,
+  "segments": [
+    {
+      "id": "seg-0001",
+      "index": 0,
+      "startMs": 0,
+      "endMs": 2800,
+      "text": "你好，欢迎收听。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0002",
+      "index": 1,
+      "startMs": 3200,
+      "endMs": 5600,
+      "text": "今天我们聊点什么？",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0003",
+      "index": 2,
+      "startMs": 6000,
+      "endMs": 8900,
+      "text": "聊聊路上捡到的一颗石子。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    }
+  ],
+  "provenance": {
+    "kind": "fixture",
+    "provider": "fixture",
+    "model": null,
+    "createdAt": "2026-10-03T00:00:00Z",
+    "notes": "Hand-written contract example."
+  },
+  "futureField": "Unknown fields are ignored by 1.x readers."
+}

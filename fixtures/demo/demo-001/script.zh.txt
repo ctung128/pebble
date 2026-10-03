@@ -1,0 +1,12 @@
+# Original script written for the Pebble demo. One line per transcript segment.
+# Format: SPEAKER: text   (speakers map to voices in scripts/build-demo-fixture.mjs)
+A: 你好，欢迎收听今天的节目。
+B: 你好！今天我们聊点什么？
+A: 我想聊聊下班路上捡到的一颗小石子。
+B: 一颗石子？听起来有点意思。
+A: 它很圆，很光滑，放在手里凉凉的。
+B: 你怎么会注意到它呢？
+A: 因为那天我走得很慢，没有看手机。
+B: 慢下来，好像就能看到更多东西。
+A: 对，所以我把它放在了书桌上。
+B: 好，今天就聊到这里，我们下次见！

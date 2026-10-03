@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "episodes": [
+    {
+      "id": "example-001",
+      "title": "Example episode",
+      "titleZh": "示例节目",
+      "description": "A minimal manifest entry used by the contract tests.",
+      "language": "zh-CN",
+      "durationMs": 9000,
+      "audio": { "src": "example-001/audio.m4a", "mimeType": "audio/mp4" },
+      "transcript": { "src": "example-001/transcript.json" },
+      "audioProvenance": {
+        "kind": "self-recorded",
+        "publishable": true,
+        "notes": "Recorded by the project author."
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "episodes": [
+    {
+      "id": "demo-001",
+      "title": "A Pebble on the Way Home",
+      "titleZh": "回家路上的一颗石子",
+      "description": "A short two-voice conversation written for the Pebble demo.",
+      "language": "zh-CN",
+      "durationMs": 34358,
+      "audio": {
+        "src": "demo-001/audio.m4a",
+        "mimeType": "audio/mp4"
+      },
+      "transcript": {
+        "src": "demo-001/transcript.json"
+      },
+      "audioProvenance": {
+        "kind": "tts-placeholder",
+        "publishable": false,
+        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+      }
+    }
+  ]
+}

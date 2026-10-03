@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.vite/
+*.log
+.DS_Store
+
+# Copied from fixtures/demo at dev/build time
+apps/web/public/demo/
