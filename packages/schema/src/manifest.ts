@@ -31,6 +31,16 @@ export const EpisodeSchema = z.object({
   }),
   transcript: z.object({ src: RelativePathSchema }),
   audioProvenance: AudioProvenanceSchema,
+  /**
+   * Demo-only sample content (added in 1.1). Absent outside the demo; real sources
+   * provide translations and uncertainty through their own providers.
+   */
+  demo: z
+    .object({
+      translations: RelativePathSchema.optional(),
+      illustrativeUncertainty: RelativePathSchema.optional(),
+    })
+    .optional(),
 });
 
 export const ManifestSchema = z

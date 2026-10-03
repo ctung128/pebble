@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "id": "8f0c2a4e-0d6b-4b8e-9a51-6f1f3c2b7d10",
+  "kind": "segment",
+  "episodeId": "example-001",
+  "episodeTitle": "Example episode",
+  "segmentId": "seg-0003",
+  "startMs": 6000,
+  "endMs": 8900,
+  "text": "聊聊路上捡到的一颗小石子。",
+  "originalText": "聊聊路上捡到的一颗石子。",
+  "pinyin": "liáo liáo lù shàng jiǎn dào de yì kē xiǎo shí zǐ。",
+  "translation": null,
+  "note": "小石子 = small pebble.\nHeard \"小\" on replay.",
+  "savedAt": "2026-10-03T12:01:00Z",
+  "updatedAt": "2026-10-03T12:05:00Z",
+  "provenance": {
+    "transcriptKind": "fixture",
+    "transcriptProvider": "fixture",
+    "corrected": true,
+    "audioKind": "self-recorded"
+  }
+}

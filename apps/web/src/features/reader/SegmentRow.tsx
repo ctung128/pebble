@@ -1,6 +1,9 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { Segment } from "@pebble/schema";
+import { Icon } from "../../components/Icon.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
+import { CorrectionEditor } from "../corrections/CorrectionEditor.tsx";
+import type { LineActions, LineView } from "./lineView.ts";
 import styles from "./TranscriptReader.module.css";
 
 interface SegmentRowProps {
@@ -8,7 +11,9 @@ interface SegmentRowProps {
   state: "past" | "active" | "upcoming";
   showSpeaker: boolean;
   language: string;
-  onSelect: (segment: Segment) => void;
+  view: LineView;
+  actions: LineActions;
+  reviewDescriptionId: string;
 }
 
 export const SegmentRow = memo(function SegmentRow({
@@ -16,27 +21,194 @@ export const SegmentRow = memo(function SegmentRow({
   state,
   showSpeaker,
   language,
-  onSelect,
+  view,
+  actions,
+  reviewDescriptionId,
 }: SegmentRowProps) {
+  const time = formatTime(segment.startMs);
+  const translationId = `translation-${segment.id}`;
+  const translationOpen = view.translation?.open ?? false;
+  // "Expanded" lines keep their actions visible; a review flag alone doesn't expand a line.
+  const expanded =
+    view.correction !== null ||
+    view.pinyin.visible ||
+    translationOpen ||
+    view.editing ||
+    view.confirmingUnsave;
+  const hasDetails = expanded || view.needsReview;
+
+  // Return focus to the Edit button when the editor closes.
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(view.editing);
+  useEffect(() => {
+    if (wasEditing.current && !view.editing) editButton.current?.focus();
+    wasEditing.current = view.editing;
+  }, [view.editing]);
+
   return (
-    <button
-      type="button"
-      className={styles.row}
-      data-state={state}
-      aria-current={state === "active" ? "true" : undefined}
-      onClick={() => onSelect(segment)}
-    >
-      <span className={styles.meta}>
-        <span className={styles.time}>{formatTime(segment.startMs)}</span>
-        {showSpeaker && segment.speaker ? (
-          <span className={styles.speaker} aria-label={`Speaker ${segment.speaker}`}>
-            {segment.speaker}
+    <div className={styles.row} data-state={state} data-open={expanded || undefined}>
+      <button
+        type="button"
+        className={styles.play}
+        aria-current={state === "active" ? "true" : undefined}
+        aria-describedby={view.needsReview ? reviewDescriptionId : undefined}
+        onClick={() => actions.select(segment)}
+      >
+        <span className={styles.meta}>
+          <span className={styles.time}>{time}</span>
+          {showSpeaker && segment.speaker ? (
+            <span className={styles.speaker} aria-label={`Speaker ${segment.speaker}`}>
+              {segment.speaker}
+            </span>
+          ) : null}
+        </span>
+        <span className={styles.text} lang={language} data-review={view.needsReview || undefined}>
+          {view.text}
+        </span>
+      </button>
+
+      <div className={styles.actions} role="group" aria-label={`Line at ${time}`}>
+        <button
+          type="button"
+          className={styles.action}
+          aria-pressed={view.pinyin.visible}
+          title="Pinyin (P)"
+          onClick={() => actions.togglePinyin(segment)}
+        >
+          <span aria-hidden="true" className={styles.glyph}>
+            ā
           </span>
-        ) : null}
-      </span>
-      <span className={styles.text} lang={language}>
-        {segment.text}
-      </span>
-    </button>
+          <span className={styles.visuallyHidden}>Pinyin</span>
+        </button>
+        <button
+          type="button"
+          className={styles.action}
+          aria-expanded={translationOpen}
+          aria-controls={translationOpen ? translationId : undefined}
+          title="English (T)"
+          onClick={() => actions.toggleTranslation(segment)}
+        >
+          <span aria-hidden="true" className={styles.glyph}>
+            EN
+          </span>
+          <span className={styles.visuallyHidden}>English</span>
+        </button>
+        <button
+          type="button"
+          className={styles.action}
+          aria-pressed={view.saved}
+          title={view.saved ? "Saved as a learning item (S)" : "Save as a learning item (S)"}
+          onClick={() => actions.toggleSave(segment)}
+        >
+          <Icon name={view.saved ? "bookmarkFilled" : "bookmark"} size={18} />
+          <span className={styles.visuallyHidden}>{view.saved ? "Saved" : "Save"}</span>
+        </button>
+        <button
+          ref={editButton}
+          type="button"
+          className={styles.action}
+          aria-pressed={view.editing}
+          title="Edit line"
+          onClick={() => (view.editing ? actions.cancelEdit() : actions.startEdit(segment))}
+        >
+          <Icon name="edit" size={18} />
+          <span className={styles.visuallyHidden}>Edit</span>
+        </button>
+      </div>
+
+      {hasDetails ? (
+        <div className={styles.details}>
+          {view.pinyin.visible ? (
+            <p className={styles.pinyin} lang="zh-Latn-pinyin">
+              {view.pinyin.status === "ready" ? (
+                view.pinyin.text
+              ) : view.pinyin.status === "loading" ? (
+                <span className={styles.muted}>Loading pinyin…</span>
+              ) : (
+                <span className={styles.muted}>
+                  Pinyin couldn't load.{" "}
+                  <button type="button" className={styles.link} onClick={actions.retryPinyin}>
+                    Try again
+                  </button>
+                </span>
+              )}
+            </p>
+          ) : null}
+
+          {view.needsReview ? <span className={styles.reviewTag}>May need review</span> : null}
+
+          {translationOpen && view.translation ? (
+            <div id={translationId} className={styles.translation} aria-live="polite">
+              {view.translation.status === "loading" ? (
+                <span className={styles.muted}>Loading translation…</span>
+              ) : view.translation.status === "ready" ? (
+                <p lang="en">{view.translation.text}</p>
+              ) : (
+                <p className={styles.muted}>
+                  {view.translation.message}{" "}
+                  {view.translation.retryable ? (
+                    <button
+                      type="button"
+                      className={styles.link}
+                      onClick={() => actions.retryTranslation(segment)}
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {view.correction && !view.editing ? (
+            <div className={styles.edited}>
+              <span className={styles.editedTag}>Edited by you</span>
+              <button
+                type="button"
+                className={styles.link}
+                aria-expanded={view.showOriginal}
+                onClick={() => actions.toggleOriginal(segment)}
+              >
+                {view.showOriginal ? "Hide original" : "Show original"}
+              </button>
+              <button type="button" className={styles.link} onClick={() => actions.revert(segment)}>
+                Revert
+              </button>
+              {view.showOriginal ? (
+                <p className={styles.original}>
+                  Original transcript: <span lang={language}>{view.correction.originalText}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {view.editing ? (
+            <CorrectionEditor
+              initialText={view.text}
+              language={language}
+              onSave={(text) => actions.saveEdit(segment, text)}
+              onCancel={actions.cancelEdit}
+            />
+          ) : null}
+
+          {view.confirmingUnsave ? (
+            <p className={styles.confirm} role="group" aria-label="Confirm removal">
+              Remove this learning item and its note?{" "}
+              <button type="button" className={styles.link} onClick={actions.cancelUnsave}>
+                Cancel
+              </button>{" "}
+              <button
+                type="button"
+                className={styles.link}
+                autoFocus
+                onClick={() => actions.confirmUnsave(segment)}
+              >
+                Remove
+              </button>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 });

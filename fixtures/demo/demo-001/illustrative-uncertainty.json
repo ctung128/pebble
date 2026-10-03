@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "demo-001",
+  "kind": "illustrative",
+  "purpose": "Simulated review flags that exercise the 'May need review' UI before a real ASR provider supplies meaningful signals. Not derived from any recognizer; the transcript's confidence values remain null.",
+  "segments": [
+    {
+      "segmentId": "seg-0005"
+    },
+    {
+      "segmentId": "seg-0008"
+    }
+  ]
+}

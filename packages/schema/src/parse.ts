@@ -1,5 +1,9 @@
 import type { z } from "zod";
+import { CorrectionSchema, type Correction } from "./correction.ts";
+import { IllustrativeUncertaintySchema, type IllustrativeUncertainty } from "./illustrative.ts";
+import { LearningItemSchema, type LearningItem } from "./learningItem.ts";
 import { ManifestSchema, type Manifest } from "./manifest.ts";
+import { DemoTranslationsSchema, type DemoTranslations } from "./translations.ts";
 import { TranscriptSchema, type Transcript } from "./transcript.ts";
 import { checkSchemaVersion, SUPPORTED_MAJOR } from "./version.ts";
 
@@ -49,3 +53,17 @@ export const parseManifest = (payload: unknown): ParseResult<Manifest> =>
 
 export const parseTranscript = (payload: unknown): ParseResult<Transcript> =>
   parseWith(TranscriptSchema, payload, "Transcript");
+
+export const parseDemoTranslations = (payload: unknown): ParseResult<DemoTranslations> =>
+  parseWith(DemoTranslationsSchema, payload, "Translations");
+
+export const parseIllustrativeUncertainty = (
+  payload: unknown,
+): ParseResult<IllustrativeUncertainty> =>
+  parseWith(IllustrativeUncertaintySchema, payload, "Illustrative uncertainty");
+
+export const parseCorrection = (payload: unknown): ParseResult<Correction> =>
+  parseWith(CorrectionSchema, payload, "Correction");
+
+export const parseLearningItem = (payload: unknown): ParseResult<LearningItem> =>
+  parseWith(LearningItemSchema, payload, "Learning item");

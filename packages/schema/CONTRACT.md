@@ -13,26 +13,34 @@ worker. Both are tested against `examples/`.
   `INVALID_PAYLOAD` with a list of `{ path, message }` issues.
 - Breaking changes (removing/renaming fields, changing meaning) require a new major.
 
+## Changelog
+
+- **1.1** — Manifest episodes may carry an optional `demo` object (prepared translations and
+  illustrative review flags). New payload types: demo translations, illustrative uncertainty,
+  correction, learning item (each at `1.0`).
+- **1.0** — Manifest and transcript.
+
 ## Manifest
 
 `manifest.json` lists episodes. Paths are relative to the manifest; absolute paths, URL
 schemes and `..` are rejected.
 
-| Field                         | Type                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `schemaVersion`               | `"1.x"`                                                                    |
-| `episodes[]`                  | Episode, unique `id`                                                       |
-| `episode.id`                  | lowercase slug                                                             |
-| `episode.title`               | non-empty string                                                           |
-| `episode.titleZh`             | string, optional                                                           |
-| `episode.description`         | string                                                                     |
-| `episode.language`            | BCP 47 tag, e.g. `zh-CN`                                                   |
-| `episode.durationMs`          | positive integer                                                           |
-| `episode.audio`               | `{ src: relative path, mimeType: "audio/*" }`                              |
-| `episode.transcript`          | `{ src: relative path }`                                                   |
-| `episode.audioProvenance`     | `{ kind, publishable, notes }`                                             |
-| `audioProvenance.kind`        | `tts-placeholder` \| `self-recorded` \| `licensed` \| `permission-granted` |
-| `audioProvenance.publishable` | `false` until rights to distribute publicly are documented                 |
+| Field                         | Type                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `schemaVersion`               | `"1.x"`                                                                      |
+| `episodes[]`                  | Episode, unique `id`                                                         |
+| `episode.id`                  | lowercase slug                                                               |
+| `episode.title`               | non-empty string                                                             |
+| `episode.titleZh`             | string, optional                                                             |
+| `episode.description`         | string                                                                       |
+| `episode.language`            | BCP 47 tag, e.g. `zh-CN`                                                     |
+| `episode.durationMs`          | positive integer                                                             |
+| `episode.audio`               | `{ src: relative path, mimeType: "audio/*" }`                                |
+| `episode.transcript`          | `{ src: relative path }`                                                     |
+| `episode.audioProvenance`     | `{ kind, publishable, notes }`                                               |
+| `audioProvenance.kind`        | `tts-placeholder` \| `self-recorded` \| `licensed` \| `permission-granted`   |
+| `audioProvenance.publishable` | `false` until rights to distribute publicly are documented                   |
+| `episode.demo`                | optional (1.1): `{ translations?, illustrativeUncertainty? }` relative paths |
 
 ## Transcript
 
@@ -69,3 +77,46 @@ Segments may overlap slightly (merged ASR chunks); they must be ordered by `star
 - `confidence` is never synthesized. Fixture transcripts use `null`.
 - Any future illustrative uncertainty data (M0B demo) must be distinguishable from provider
   output in the data itself, not only in the UI.
+
+## Demo translations (`translations.en.json`)
+
+`{ schemaVersion, episodeId, kind: "prepared-sample", language, translations: { [segmentId]: text } }`
+
+Written by a person for the demo; `kind` cannot claim model output. Translations apply to the
+segment's **original** text only.
+
+## Illustrative uncertainty (`illustrative-uncertainty.json`)
+
+`{ schemaVersion, episodeId, kind: "illustrative", purpose, segments: [{ segmentId }] }`
+
+A **simulated** review state used to build and test the "May need review" UI before a real ASR
+provider supplies meaningful signals. It carries no numeric confidence by design and does not
+change transcript `confidence` (which stays `null`). Apps keep its origin as
+`source: "illustrative"`; provider confidence below the review threshold is `source: "provider"`.
+
+## Correction
+
+| Field           | Type                                      |
+| --------------- | ----------------------------------------- |
+| `episodeId`     | episode id                                |
+| `segmentId`     | segment id; one correction per segment    |
+| `originalText`  | transcript text at the time of correction |
+| `correctedText` | non-empty learner text                    |
+| `updatedAt`     | ISO 8601                                  |
+
+## Learning item
+
+| Field                           | Type / rule                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
+| `id`                            | unique string (UUID)                                           |
+| `kind`                          | `"segment"` (phrases may be added later as a new kind)         |
+| `episodeId`, `episodeTitle`     | source episode                                                 |
+| `segmentId`, `startMs`, `endMs` | source segment and timing                                      |
+| `text`                          | Chinese as displayed when saved (corrected text if edited)     |
+| `originalText`                  | transcript text if the line was corrected, else `null`         |
+| `pinyin`, `translation`         | only if generated / resolved before saving, else `null`        |
+| `note`                          | learner note or `null`                                         |
+| `savedAt`, `updatedAt`          | ISO 8601                                                       |
+| `provenance`                    | `{ transcriptKind, transcriptProvider, corrected, audioKind }` |
+
+`originalText` must be set exactly when `provenance.corrected` is true.

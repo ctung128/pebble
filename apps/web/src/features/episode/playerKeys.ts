@@ -1,4 +1,5 @@
-export type PlayerKeyAction = "toggle" | "replay" | "previous" | "next";
+export type PlayerKeyAction =
+  "toggle" | "replay" | "previous" | "next" | "pinyin" | "translate" | "save";
 
 interface KeyLike {
   key: string;
@@ -30,6 +31,15 @@ export function resolvePlayerKey(event: KeyLike): PlayerKeyAction | null {
     case "r":
     case "R":
       return "replay";
+    case "p":
+    case "P":
+      return "pinyin";
+    case "t":
+    case "T":
+      return "translate";
+    case "s":
+    case "S":
+      return "save";
     case "ArrowLeft":
     case "ArrowRight": {
       const onSlider = event.target instanceof HTMLInputElement && event.target.type === "range";

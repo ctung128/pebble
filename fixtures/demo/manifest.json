@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "episodes": [
     {
       "id": "demo-001",
@@ -19,6 +19,10 @@
         "kind": "tts-placeholder",
         "publishable": false,
         "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+      },
+      "demo": {
+        "translations": "demo-001/translations.en.json",
+        "illustrativeUncertainty": "demo-001/illustrative-uncertainty.json"
       }
     }
   ]

@@ -1,4 +1,5 @@
 import {
+  parseIllustrativeUncertainty,
   parseManifest,
   parseTranscript,
   type Episode,
@@ -6,7 +7,12 @@ import {
   type ParseResult,
   type Transcript,
 } from "@pebble/schema";
-import { SourceError, type EpisodeSource, type ResolvedEpisode } from "./EpisodeSource.ts";
+import {
+  SourceError,
+  type EpisodeSource,
+  type ResolvedEpisode,
+  type ReviewHint,
+} from "./EpisodeSource.ts";
 
 type FetchLike = (input: string) => Promise<Response>;
 
@@ -48,6 +54,22 @@ export class DemoFixtureSource implements EpisodeSource {
     return transcript;
   }
 
+  async getReviewHints(episodeId: string): Promise<ReviewHint[]> {
+    const path = (await this.getEpisode(episodeId)).demo?.illustrativeUncertainty;
+    if (!path) return [];
+    const flags = unwrap(parseIllustrativeUncertainty(await this.fetchJson(path)));
+    if (flags.episodeId !== episodeId) {
+      throw new SourceError("INVALID_PAYLOAD", `Review hints belong to "${flags.episodeId}".`);
+    }
+    return flags.segments.map(({ segmentId }) => ({ segmentId, source: "illustrative" }));
+  }
+
+  /** Absolute URL of the episode's prepared demo translations, or null if it has none. */
+  async getDemoTranslationsUrl(episodeId: string): Promise<string | null> {
+    const path = (await this.getEpisode(episodeId)).demo?.translations;
+    return path ? this.resolve(path) : null;
+  }
+
   private loadManifest(): Promise<Manifest> {
     this.manifest ??= this.fetchJson("manifest.json")
       .then((json) => unwrap(parseManifest(json)))
@@ -85,6 +107,6 @@ function unwrap<T>(result: ParseResult<T>): T {
   throw new SourceError(result.code, result.message, { details: result.issues });
 }
 
-export function createDefaultSource(): EpisodeSource {
+export function createDefaultSource(): DemoFixtureSource {
   return new DemoFixtureSource(new URL(`${import.meta.env.BASE_URL}demo/`, document.baseURI).href);
 }

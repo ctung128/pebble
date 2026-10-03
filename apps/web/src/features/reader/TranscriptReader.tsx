@@ -1,6 +1,7 @@
 import { memo, type Ref } from "react";
 import type { Segment } from "@pebble/schema";
 import { StatusView } from "../../components/StatusView.tsx";
+import type { LineActions, LineView } from "./lineView.ts";
 import { SegmentRow } from "./SegmentRow.tsx";
 import styles from "./TranscriptReader.module.css";
 
@@ -9,20 +10,25 @@ interface TranscriptReaderProps {
   /** From findActiveSegmentIndex; -1 when nothing is active yet. */
   activeIndex: number;
   language: string;
-  /** Click/tap on a line. The parent decides what that means (seek + play). */
-  onSelectSegment: (segment: Segment) => void;
+  /** Per-segment display state, keyed by segment id. */
+  lines: ReadonlyMap<string, LineView>;
+  actions: LineActions;
+  /** Id of the element explaining "May need review". */
+  reviewDescriptionId: string;
   ref?: Ref<HTMLOListElement>;
 }
 
 /**
- * Presentational, fully controlled transcript. It never touches audio or fetches data,
- * so it renders identically for demo fixtures and (later) worker transcripts.
+ * Presentational, fully controlled transcript. It never touches audio, storage or the
+ * network, so it renders identically for demo fixtures and (later) worker transcripts.
  */
 export const TranscriptReader = memo(function TranscriptReader({
   segments,
   activeIndex,
   language,
-  onSelectSegment,
+  lines,
+  actions,
+  reviewDescriptionId,
   ref,
 }: TranscriptReaderProps) {
   if (segments.length === 0) {
@@ -33,17 +39,38 @@ export const TranscriptReader = memo(function TranscriptReader({
 
   return (
     <ol ref={ref} className={styles.list} aria-label="Transcript">
-      {segments.map((segment, i) => (
-        <li key={segment.id} data-segment-index={i}>
-          <SegmentRow
-            segment={segment}
-            state={i === activeIndex ? "active" : i < activeIndex ? "past" : "upcoming"}
-            showSpeaker={segment.speaker !== segments[i - 1]?.speaker}
-            language={language}
-            onSelect={onSelectSegment}
-          />
-        </li>
-      ))}
+      {segments.map((segment, i) => {
+        const view = lines.get(segment.id);
+        if (!view) return null;
+        return (
+          <li key={segment.id} data-segment-index={i}>
+            <SegmentRow
+              segment={segment}
+              state={i === activeIndex ? "active" : i < activeIndex ? "past" : "upcoming"}
+              showSpeaker={segment.speaker !== segments[i - 1]?.speaker}
+              language={language}
+              view={view}
+              actions={actions}
+              reviewDescriptionId={reviewDescriptionId}
+            />
+          </li>
+        );
+      })}
     </ol>
   );
 });
+
+/** A LineView for a segment with no learner state — for tests and simple callers. */
+export function plainLineView(segment: Segment): LineView {
+  return {
+    text: segment.text,
+    correction: null,
+    showOriginal: false,
+    needsReview: false,
+    pinyin: { visible: false },
+    translation: undefined,
+    saved: false,
+    confirmingUnsave: false,
+    editing: false,
+  };
+}

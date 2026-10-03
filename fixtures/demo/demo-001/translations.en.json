@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "demo-001",
+  "kind": "prepared-sample",
+  "language": "en",
+  "translations": {
+    "seg-0001": "Hi, welcome to today's show.",
+    "seg-0002": "Hi! So what are we talking about today?",
+    "seg-0003": "I want to talk about a little pebble I picked up on my way home from work.",
+    "seg-0004": "A pebble? That sounds kind of interesting.",
+    "seg-0005": "It's really round and smooth, and it feels cool in your hand.",
+    "seg-0006": "How did you end up noticing it?",
+    "seg-0007": "Because that day I was walking slowly and wasn't looking at my phone.",
+    "seg-0008": "When you slow down, it seems like you notice more things.",
+    "seg-0009": "Right, so I put it on my desk.",
+    "seg-0010": "OK, that's all for today. See you next time!"
+  }
+}

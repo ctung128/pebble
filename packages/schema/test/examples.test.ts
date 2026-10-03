@@ -1,15 +1,37 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseManifest, parseTranscript, type ContractErrorCode } from "../src/index.ts";
+import {
+  parseCorrection,
+  parseDemoTranslations,
+  parseIllustrativeUncertainty,
+  parseLearningItem,
+  parseManifest,
+  parseTranscript,
+  type ContractErrorCode,
+  type ParseResult,
+} from "../src/index.ts";
 
 const examplesDir = new URL("../examples/", import.meta.url);
 const load = (relative: string): unknown =>
   JSON.parse(readFileSync(new URL(relative, examplesDir), "utf8"));
-const parserFor = (file: string) => (file.startsWith("manifest") ? parseManifest : parseTranscript);
+const PARSERS: [prefix: string, parse: (payload: unknown) => ParseResult<unknown>][] = [
+  ["manifest", parseManifest],
+  ["transcript", parseTranscript],
+  ["demo-translations", parseDemoTranslations],
+  ["illustrative-uncertainty", parseIllustrativeUncertainty],
+  ["correction", parseCorrection],
+  ["learning-item", parseLearningItem],
+];
+const parserFor = (file: string) => {
+  const entry = PARSERS.find(([prefix]) => file.startsWith(prefix));
+  if (!entry) throw new Error(`No parser for example ${file}`);
+  return entry[1];
+};
 
 describe("valid examples", () => {
-  it("accepts the manifest example", () => {
-    expect(parseManifest(load("valid/manifest.json")).ok).toBe(true);
+  it.each(readdirSync(new URL("valid/", examplesDir)).sort())("accepts %s", (file) => {
+    const result = parserFor(file)(load(`valid/${file}`));
+    expect(result.ok ? [] : result.issues).toEqual([]);
   });
 
   it("accepts the transcript example and drops unknown fields", () => {
@@ -49,6 +71,31 @@ const invalidCases: Record<string, { code: ContractErrorCode; path: string; mess
     code: "INVALID_PAYLOAD",
     path: "segments.1.text",
     message: /must not be empty/,
+  },
+  "demo-translations-model-kind.json": {
+    code: "INVALID_PAYLOAD",
+    path: "kind",
+    message: /./,
+  },
+  "illustrative-uncertainty-wrong-kind.json": {
+    code: "INVALID_PAYLOAD",
+    path: "kind",
+    message: /./,
+  },
+  "correction-empty-text.json": {
+    code: "INVALID_PAYLOAD",
+    path: "correctedText",
+    message: /must not be empty/,
+  },
+  "learning-item-corrected-without-original.json": {
+    code: "INVALID_PAYLOAD",
+    path: "originalText",
+    message: /exactly when the item was corrected/,
+  },
+  "learning-item-phrase-kind.json": {
+    code: "INVALID_PAYLOAD",
+    path: "kind",
+    message: /./,
   },
   "manifest-path-traversal.json": {
     code: "INVALID_PAYLOAD",

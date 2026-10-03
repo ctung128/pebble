@@ -2,3 +2,7 @@ export * from "./version.ts";
 export * from "./manifest.ts";
 export * from "./transcript.ts";
 export * from "./parse.ts";
+export * from "./translations.ts";
+export * from "./illustrative.ts";
+export * from "./correction.ts";
+export * from "./learningItem.ts";

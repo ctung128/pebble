@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "example-001",
+  "kind": "prepared-sample",
+  "language": "en",
+  "translations": {
+    "seg-0001": "Hello, welcome.",
+    "seg-0002": "What shall we talk about today?"
+  }
+}

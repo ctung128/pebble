@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { testEpisode, testTranscript } from "../test/fixtures.ts";
+import { testEpisode, testTranscript } from "../test/fixtures.tsx";
 import { DemoFixtureSource } from "./DemoFixtureSource.ts";
 import { SourceError } from "./EpisodeSource.ts";
 
@@ -93,6 +93,32 @@ describe("DemoFixtureSource", () => {
       "manifest.json": () => json({ ...manifest, schemaVersion: "2.0" }),
     });
     expect((await errorFrom(source.listEpisodes())).code).toBe("UNSUPPORTED_VERSION");
+  });
+
+  it("returns no review hints for an episode without demo flags", async () => {
+    const { source } = sourceWith({ "manifest.json": () => json(manifest) });
+    expect(await source.getReviewHints("test-001")).toEqual([]);
+  });
+
+  it("marks demo review flags as illustrative", async () => {
+    const flagged = {
+      ...manifest,
+      episodes: [{ ...testEpisode, demo: { illustrativeUncertainty: "test-001/flags.json" } }],
+    };
+    const { source } = sourceWith({
+      "manifest.json": () => json(flagged),
+      "test-001/flags.json": () =>
+        json({
+          schemaVersion: "1.0",
+          episodeId: "test-001",
+          kind: "illustrative",
+          purpose: "UI testing",
+          segments: [{ segmentId: "seg-2" }],
+        }),
+    });
+    expect(await source.getReviewHints("test-001")).toEqual([
+      { segmentId: "seg-2", source: "illustrative" },
+    ]);
   });
 
   it("rejects a transcript that belongs to another episode", async () => {

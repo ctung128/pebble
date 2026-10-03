@@ -2,12 +2,14 @@
 
 ## demo-001 — "A Pebble on the Way Home" (回家路上的一颗石子)
 
-| Item       | Source                                                                                                           |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| Script     | Original text written for Pebble (`demo-001/script.zh.txt`). Not derived from any podcast.                       |
-| Audio      | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs`. |
-| Transcript | The script text, with timings measured from the per-line renders. **Not ASR output.**                            |
-| Confidence | `null` for every segment — no recognizer was involved.                                                           |
+| Item         | Source                                                                                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script       | Original text written for Pebble (`demo-001/script.zh.txt`). Not derived from any podcast.                                                                            |
+| Audio        | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs`.                                                      |
+| Transcript   | The script text, with timings measured from the per-line renders. **Not ASR output.**                                                                                 |
+| Confidence   | `null` for every segment — no recognizer was involved.                                                                                                                |
+| Translations | `demo-001/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.                                                   |
+| Review marks | `demo-001/illustrative-uncertainty.json`: **simulated** "May need review" flags on two lines, chosen arbitrarily to exercise the UI. Not derived from any recognizer. |
 
 ### ⚠️ Development placeholder — not for public deployment
 

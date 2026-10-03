@@ -1,24 +1,28 @@
 import {
   createHashRouter,
   Link,
+  NavLink,
   Outlet,
   RouterProvider,
   useParams,
   type RouteObject,
 } from "react-router";
 import { StatusView } from "./components/StatusView.tsx";
+import { StorageNotice } from "./components/StorageNotice.tsx";
+import { useLearning } from "./features/learning/LearningContext.tsx";
+import { LearningItemsPage } from "./features/learning/LearningItemsPage.tsx";
 import { EpisodePage } from "./features/episode/EpisodePage.tsx";
 import { LibraryPage } from "./features/library/LibraryPage.tsx";
+import logoMark from "./assets/logo-mark.png";
 import styles from "./App.module.css";
 
 function Layout() {
+  const { items } = useLearning();
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
-          <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
-            <ellipse cx="16" cy="17" rx="13" ry="10" fill="currentColor" />
-          </svg>
+          <img className={styles.logo} src={logoMark} alt="" width={32} height={32} />
           Pebble
         </Link>
         <span
@@ -27,7 +31,14 @@ function Layout() {
         >
           Demo
         </span>
+        <nav className={styles.nav} aria-label="Main">
+          <NavLink to="/items" className={styles.navLink}>
+            Learning items
+            {items.length > 0 ? <span className={styles.count}>{items.length}</span> : null}
+          </NavLink>
+        </nav>
       </header>
+      <StorageNotice />
       <main className={styles.main}>
         <Outlet />
       </main>
@@ -54,6 +65,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <LibraryPage /> },
       { path: "episodes/:episodeId", element: <EpisodeRoute /> },
+      { path: "items", element: <LearningItemsPage /> },
       { path: "*", element: <NotFound /> },
     ],
   },

@@ -20,6 +20,9 @@ describe("resolvePlayerKey", () => {
     expect(press("R")).toBe("replay");
     expect(press("ArrowLeft")).toBe("previous");
     expect(press("ArrowRight")).toBe("next");
+    expect(press("p")).toBe("pinyin");
+    expect(press("T")).toBe("translate");
+    expect(press("s")).toBe("save");
     expect(press("x")).toBeNull();
   });
 
@@ -34,6 +37,7 @@ describe("resolvePlayerKey", () => {
 
   it("ignores text entry", () => {
     expect(press("r", element("input", { type: "text" }))).toBeNull();
+    expect(press("s", element("textarea"))).toBeNull();
     expect(press(" ", element("textarea"))).toBeNull();
     expect(press("ArrowLeft", element("select"))).toBeNull();
   });

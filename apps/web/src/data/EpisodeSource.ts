@@ -8,12 +8,23 @@ export interface ResolvedEpisode extends Episode {
   audioUrl: string;
 }
 
+/**
+ * A segment flagged for learner review. `source` keeps simulated flags distinguishable from
+ * real provider signals in the data, even though the learner-facing copy is the same.
+ */
+export interface ReviewHint {
+  segmentId: string;
+  source: "illustrative" | "provider";
+}
+
 /** Everything the UI needs from a content backend. Implementations validate payloads. */
 export interface EpisodeSource {
   readonly mode: SourceMode;
   listEpisodes(): Promise<Episode[]>;
   getEpisode(id: string): Promise<ResolvedEpisode>;
   getTranscript(episodeId: string): Promise<Transcript>;
+  /** Review hints that do not come from the transcript itself (e.g. demo fixtures). */
+  getReviewHints(episodeId: string): Promise<ReviewHint[]>;
 }
 
 export type SourceErrorCode = "NOT_FOUND" | "NETWORK" | "INVALID_PAYLOAD" | "UNSUPPORTED_VERSION";

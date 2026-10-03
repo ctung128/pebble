@@ -1,0 +1,27 @@
+.notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  max-width: var(--content-width);
+  margin: 0 auto var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.notice p {
+  margin: 0;
+}
+
+.dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}

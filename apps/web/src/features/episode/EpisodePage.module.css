@@ -66,7 +66,7 @@
 .sectionHead {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
@@ -82,9 +82,64 @@
 }
 
 .keys {
-  margin: 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--text-xs);
+  line-height: 2;
   color: var(--text-faint);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolButton {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.toolButton[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.toolButton[aria-busy="true"] {
+  cursor: progress;
+}
+
+.infoButton {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font:
+    italic 600 0.75rem / 1 Georgia,
+    serif;
+  cursor: pointer;
+}
+
+.help {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.reviewSample {
+  margin-right: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
 }
 
 .keys kbd {

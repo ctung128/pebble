@@ -1,24 +1,46 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Link } from "react-router";
-import type { Segment, Transcript } from "@pebble/schema";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router";
+import type { Transcript } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
-import { describeSourceError, type ResolvedEpisode } from "../../data/EpisodeSource.ts";
+import {
+  describeSourceError,
+  type ResolvedEpisode,
+  type ReviewHint,
+} from "../../data/EpisodeSource.ts";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import { useAsync } from "../../lib/useAsync.ts";
+import { buildLearningItem } from "../learning/buildLearningItem.ts";
+import { useLearning } from "../learning/LearningContext.tsx";
+import { usePinyin } from "../pinyin/usePinyin.ts";
 import { PlayerBar } from "../player/PlayerBar.tsx";
 import { useAudioPlayer } from "../player/useAudioPlayer.ts";
 import { findActiveSegmentIndex } from "../reader/activeSegment.ts";
+import type { LineActions, LineView } from "../reader/lineView.ts";
 import { TranscriptReader } from "../reader/TranscriptReader.tsx";
 import { useFollowActive } from "../reader/useFollowActive.ts";
-import { resolvePlayerKey } from "./playerKeys.ts";
+import { useTranslationProvider } from "../translation/TranslationContext.tsx";
+import { useLineTranslations } from "../translation/useLineTranslations.ts";
+import { deriveReviewHints } from "../uncertainty/reviewHints.ts";
+import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
 import styles from "./EpisodePage.module.css";
+
+const REVIEW_HELP_ID = "review-help";
 
 export function EpisodePage({ episodeId }: { episodeId: string }) {
   const source = useEpisodeSource();
   const load = useCallback(
-    () => Promise.all([source.getEpisode(episodeId), source.getTranscript(episodeId)]),
+    () =>
+      Promise.all([
+        source.getEpisode(episodeId),
+        source.getTranscript(episodeId),
+        // Review hints are an enhancement; the transcript must still load without them.
+        source.getReviewHints(episodeId).catch((error: unknown) => {
+          console.warn("Pebble: review hints unavailable.", error);
+          return [];
+        }),
+      ]),
     [source, episodeId],
   );
   const state = useAsync(load);
@@ -33,8 +55,8 @@ export function EpisodePage({ episodeId }: { episodeId: string }) {
       </div>
     );
   }
-  const [episode, transcript] = state.data;
-  return <EpisodeView episode={episode} transcript={transcript} />;
+  const [episode, transcript, reviewHints] = state.data;
+  return <EpisodeView episode={episode} transcript={transcript} reviewHints={reviewHints} />;
 }
 
 function BackLink() {
@@ -46,13 +68,13 @@ function BackLink() {
   );
 }
 
-function EpisodeView({
-  episode,
-  transcript,
-}: {
+interface EpisodeViewProps {
   episode: ResolvedEpisode;
   transcript: Transcript;
-}) {
+  reviewHints: ReviewHint[];
+}
+
+function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const { segments } = transcript;
   const [audioRef, player] = useAudioPlayer(episode.durationMs);
   const { seek, toggle } = player;
@@ -60,12 +82,149 @@ function EpisodeView({
   const readerRef = useRef<HTMLOListElement>(null);
   const { isFollowing, resume } = useFollowActive(readerRef, activeIndex);
 
-  const playSegment = useCallback(
-    (segment: Segment) => {
-      resume();
-      seek(segment.startMs, { play: true });
-    },
-    [resume, seek],
+  const learning = useLearning();
+  const pinyin = usePinyin();
+  const translations = useLineTranslations(episode.id);
+  const translationProvider = useTranslationProvider();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [originalShown, setOriginalShown] = useState<ReadonlySet<string>>(new Set());
+  const [confirmUnsaveId, setConfirmUnsaveId] = useState<string | null>(null);
+  const [pinyinInfoOpen, setPinyinInfoOpen] = useState(false);
+
+  const {
+    showAll: pinyinShowAll,
+    revealed: pinyinRevealed,
+    status: pinyinStatus,
+    convert: pinyinConvert,
+  } = pinyin;
+  const flagged = useMemo(() => deriveReviewHints(segments, reviewHints), [segments, reviewHints]);
+
+  const lines = useMemo(() => {
+    const map = new Map<string, LineView>();
+    for (const segment of segments) {
+      const correction = learning.correctionFor(episode.id, segment.id);
+      const text = correction?.correctedText ?? segment.text;
+      const translation = translations.lines.get(segment.id);
+      const pinyinVisible = pinyinShowAll || pinyinRevealed.has(segment.id);
+      map.set(segment.id, {
+        text,
+        correction,
+        showOriginal: originalShown.has(segment.id),
+        needsReview: flagged.has(segment.id),
+        pinyin: pinyinVisible
+          ? {
+              visible: true,
+              status:
+                pinyinStatus === "ready" ? "ready" : pinyinStatus === "error" ? "error" : "loading",
+              text: pinyinConvert ? pinyinConvert(text) : null,
+            }
+          : { visible: false },
+        // A translation of the previous text doesn't describe an edited line.
+        translation: translation?.forText === text ? translation : undefined,
+        saved: learning.itemForSegment(episode.id, segment.id) !== null,
+        confirmingUnsave: confirmUnsaveId === segment.id,
+        editing: editingId === segment.id,
+      });
+    }
+    return map;
+  }, [
+    segments,
+    episode.id,
+    learning,
+    translations.lines,
+    pinyinShowAll,
+    pinyinRevealed,
+    pinyinStatus,
+    pinyinConvert,
+    originalShown,
+    flagged,
+    confirmUnsaveId,
+    editingId,
+  ]);
+
+  // Row actions read the latest state through a ref so their identities stay stable and
+  // memoized rows don't re-render on every playback frame.
+  const latest = useRef({ lines, learning, pinyin, translations, episode, transcript });
+  useLayoutEffect(() => {
+    latest.current = { lines, learning, pinyin, translations, episode, transcript };
+  });
+
+  const toggleOriginalShown = useCallback((segmentId: string, show?: boolean) => {
+    setOriginalShown((current) => {
+      const next = new Set(current);
+      if (show ?? !next.has(segmentId)) next.add(segmentId);
+      else next.delete(segmentId);
+      return next;
+    });
+  }, []);
+
+  const actions = useMemo<LineActions>(
+    () => ({
+      select: (segment) => {
+        resume();
+        seek(segment.startMs, { play: true });
+      },
+      togglePinyin: (segment) => latest.current.pinyin.toggleLine(segment.id),
+      retryPinyin: () => latest.current.pinyin.retry(),
+      toggleTranslation: (segment) => {
+        const view = latest.current.lines.get(segment.id);
+        if (view) latest.current.translations.toggle(segment, view.text, view.translation);
+      },
+      retryTranslation: (segment) => {
+        const view = latest.current.lines.get(segment.id);
+        if (view) latest.current.translations.retry(segment, view.text);
+      },
+      toggleSave: (segment) => {
+        const { learning, lines, pinyin, episode, transcript } = latest.current;
+        const existing = learning.itemForSegment(episode.id, segment.id);
+        if (existing) {
+          if (existing.note) setConfirmUnsaveId(segment.id);
+          else learning.removeItem(existing.id);
+          return;
+        }
+        const text = lines.get(segment.id)?.text ?? segment.text;
+        learning.saveItem(
+          buildLearningItem({
+            episode,
+            transcript,
+            segment,
+            correction: learning.correctionFor(episode.id, segment.id),
+            pinyin: pinyin.convert ? pinyin.convert(text) : null,
+            translation:
+              translationProvider.peek({
+                episodeId: episode.id,
+                segmentId: segment.id,
+                text,
+                sourceText: segment.text,
+              })?.text ?? null,
+          }),
+        );
+      },
+      confirmUnsave: (segment) => {
+        const { learning, episode } = latest.current;
+        const existing = learning.itemForSegment(episode.id, segment.id);
+        if (existing) learning.removeItem(existing.id);
+        setConfirmUnsaveId(null);
+      },
+      cancelUnsave: () => setConfirmUnsaveId(null),
+      startEdit: (segment) => setEditingId(segment.id),
+      cancelEdit: () => setEditingId(null),
+      saveEdit: (segment, text) => {
+        const result = latest.current.learning.saveCorrection(
+          latest.current.episode.id,
+          segment,
+          text,
+        );
+        if (result !== "empty") setEditingId(null);
+        return result;
+      },
+      revert: (segment) => {
+        latest.current.learning.revertCorrection(latest.current.episode.id, segment.id);
+        toggleOriginalShown(segment.id, false);
+      },
+      toggleOriginal: (segment) => toggleOriginalShown(segment.id),
+    }),
+    [resume, seek, translationProvider, toggleOriginalShown],
   );
 
   const goToIndex = useCallback(
@@ -79,20 +238,28 @@ function EpisodeView({
     [segments, resume, seek],
   );
 
+  const currentSegment = segments[Math.max(activeIndex, 0)];
   const replay = useCallback(() => {
-    const segment = segments[Math.max(activeIndex, 0)];
-    if (segment) playSegment(segment);
-  }, [segments, activeIndex, playSegment]);
+    if (currentSegment) actions.select(currentSegment);
+  }, [currentSegment, actions]);
   const previous = useCallback(() => goToIndex(activeIndex - 1), [goToIndex, activeIndex]);
   const next = useCallback(() => goToIndex(activeIndex + 1), [goToIndex, activeIndex]);
 
   useEffect(() => {
-    const actions = { toggle, replay, previous, next };
+    const keyActions: Record<PlayerKeyAction, () => void> = {
+      toggle,
+      replay,
+      previous,
+      next,
+      pinyin: () => currentSegment && actions.togglePinyin(currentSegment),
+      translate: () => currentSegment && actions.toggleTranslation(currentSegment),
+      save: () => currentSegment && actions.toggleSave(currentSegment),
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       const action = resolvePlayerKey(event);
       if (!action) return;
       event.preventDefault(); // stops Space from scrolling or activating a focused button
-      if (!event.repeat || action !== "toggle") actions[action]();
+      if (!event.repeat) keyActions[action]();
     };
     // A focused button activates on Space keyup, so that default is cancelled too.
     const onKeyUp = (event: KeyboardEvent) => {
@@ -104,14 +271,20 @@ function EpisodeView({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [toggle, replay, previous, next]);
+  }, [toggle, replay, previous, next, currentSegment, actions]);
+
+  // Arriving from a learning item (#/episodes/:id?segment=…) cues up that line.
+  const [searchParams] = useSearchParams();
+  const cueSegmentId = searchParams.get("segment");
+  useEffect(() => {
+    const segment = segments.find((s) => s.id === cueSegmentId);
+    if (segment) seek(segment.startMs);
+  }, [cueSegmentId, segments, seek]);
 
   const isPlaceholderAudio = episode.audioProvenance.kind === "tts-placeholder";
   const isAuthoredTranscript = transcript.provenance.kind === "fixture";
-  const lineCount = useMemo(
-    () => `${segments.length} ${segments.length === 1 ? "line" : "lines"}`,
-    [segments],
-  );
+  const hasPreparedTranslations = Boolean(episode.demo?.translations);
+  const lineCount = `${segments.length} ${segments.length === 1 ? "line" : "lines"}`;
 
   return (
     <article className={styles.page}>
@@ -131,7 +304,7 @@ function EpisodeView({
         </p>
       </header>
 
-      {isPlaceholderAudio || isAuthoredTranscript ? (
+      {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
         <aside className={styles.notice} aria-label="About this sample">
           {isPlaceholderAudio ? (
             <p>
@@ -145,6 +318,9 @@ function EpisodeView({
               output, so it doesn't reflect transcription accuracy.
             </p>
           ) : null}
+          {hasPreparedTranslations ? (
+            <p>Translations in this demo are prepared sample content.</p>
+          ) : null}
         </aside>
       ) : null}
 
@@ -153,18 +329,54 @@ function EpisodeView({
           <h2 id="transcript-heading" className={styles.sectionTitle}>
             Transcript
           </h2>
-          <p className={styles.keys} aria-label="Keyboard shortcuts">
-            <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay line · <kbd>←</kbd>
-            <kbd>→</kbd> previous/next line
-          </p>
+          <div className={styles.toolbar}>
+            <button
+              type="button"
+              className={styles.toolButton}
+              aria-pressed={pinyin.showAll}
+              aria-busy={pinyin.status === "loading" || undefined}
+              onClick={pinyin.toggleAll}
+            >
+              {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
+            </button>
+            <button
+              type="button"
+              className={styles.infoButton}
+              aria-expanded={pinyinInfoOpen}
+              aria-controls="pinyin-info"
+              aria-label="About pinyin"
+              onClick={() => setPinyinInfoOpen((open) => !open)}
+            >
+              i
+            </button>
+          </div>
         </div>
+        {pinyinInfoOpen ? (
+          <p id="pinyin-info" className={styles.help}>
+            Pronunciation is generated automatically and may be imperfect for some words.
+          </p>
+        ) : null}
+        {flagged.size > 0 ? (
+          <p id={REVIEW_HELP_ID} className={styles.help}>
+            <span className={styles.reviewSample}>May need review</span> Speech transcripts can
+            occasionally mishear accents, names, or fast conversation. Listen again or edit this
+            line if it looks wrong.
+          </p>
+        ) : null}
         <TranscriptReader
           ref={readerRef}
           segments={segments}
           activeIndex={activeIndex}
           language={transcript.language}
-          onSelectSegment={playSegment}
+          lines={lines}
+          actions={actions}
+          reviewDescriptionId={REVIEW_HELP_ID}
         />
+        <p className={styles.keys} aria-label="Keyboard shortcuts">
+          <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay · <kbd>←</kbd>
+          <kbd>→</kbd> previous/next · <kbd>P</kbd> pinyin · <kbd>T</kbd> English · <kbd>S</kbd>{" "}
+          save line
+        </p>
       </section>
 
       {!isFollowing && activeIndex >= 0 ? (

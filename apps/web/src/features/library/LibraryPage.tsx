@@ -5,6 +5,7 @@ import { describeSourceError } from "../../data/EpisodeSource.ts";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import { useAsync } from "../../lib/useAsync.ts";
+import { ResetDemoData } from "../learning/ResetDemoData.tsx";
 import styles from "./LibraryPage.module.css";
 
 export function LibraryPage() {
@@ -64,6 +65,8 @@ export function LibraryPage() {
           ))}
         </ul>
       ) : null}
+
+      <ResetDemoData />
     </div>
   );
 }
