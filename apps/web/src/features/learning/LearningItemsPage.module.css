@@ -22,24 +22,6 @@
   color: var(--text-muted);
 }
 
-.export {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.export:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .list {
   display: grid;
   gap: var(--space-3);

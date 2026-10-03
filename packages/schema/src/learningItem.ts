@@ -29,7 +29,7 @@ export const LearningItemSchema = z
     originalText: NonEmptyTextSchema.nullable(),
     /** Pinyin generated for `text`, if pinyin had been generated in the session. */
     pinyin: z.string().min(1).nullable(),
-    /** Translation of `text`, if one had been resolved in the session. */
+    /** Translation of `text`, if resolved when saving or later (e.g. on export). */
     translation: z.string().min(1).nullable(),
     note: z.string().nullable(),
     savedAt: IsoDateTimeSchema,

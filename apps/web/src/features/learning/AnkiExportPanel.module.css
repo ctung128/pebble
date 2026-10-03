@@ -1,0 +1,107 @@
+.panel {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.export {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.export:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.status:empty {
+  display: none;
+}
+
+.status p {
+  margin: 0;
+}
+
+.success {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.oneTime,
+.instruction,
+.aside {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.instruction {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.instruction code,
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.help {
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+.help summary {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.help h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.help ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.code {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  white-space: pre;
+  user-select: all;
+}
+
+.aside {
+  margin: var(--space-3) 0 0;
+}

@@ -7,6 +7,20 @@ import { formatTime } from "../../lib/formatTime.ts";
  */
 export const ANKI_COLUMNS = ["Chinese", "Pinyin", "Translation", "Note", "Source", "Tags"] as const;
 
+/** UTF-8, so Chinese text survives the round trip into Anki. */
+export const ANKI_CSV_TYPE = "text/csv;charset=utf-8";
+
+/** The recommended Anki note type (see docs/ANKI_EXPORT.md). Not referenced by the CSV. */
+export const ANKI_NOTE_TYPE = "Pebble Mandarin";
+export const ANKI_NOTE_FIELDS = ["Chinese", "Pinyin", "Translation", "Note", "Source"] as const;
+
+export const ANKI_BACK_TEMPLATE = `{{FrontSide}}
+<hr id="answer">
+{{#Pinyin}}<div class="pinyin">{{Pinyin}}</div>{{/Pinyin}}
+{{#Translation}}<div class="translation">{{Translation}}</div>{{/Translation}}
+{{#Note}}<div class="note">{{Note}}</div>{{/Note}}
+<div class="source">{{Source}}</div>`;
+
 const NEEDS_QUOTING = /[",\r\n]/;
 
 /** RFC 4180 quoting; also quotes leading "#" (Anki header syntax) and edge whitespace. */

@@ -100,3 +100,101 @@ describe("toAnkiCsv", () => {
     );
   });
 });
+
+/** Minimal RFC 4180 parser for verifying exported rows field by field. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+  if (field || row.length) rows.push([...row, field]);
+  return rows;
+}
+
+const dataRows = (csv: string) => parseCsv(csv).filter((row) => !row[0]?.startsWith("#"));
+
+describe("toAnkiCsv column integrity", () => {
+  it("keeps Translation as its own third column", () => {
+    const [row] = dataRows(
+      toAnkiCsv([item({ pinyin: "dì yī jù。", translation: "The first sentence.", note: "n" })]),
+    );
+    expect(row).toEqual([
+      "第一句。",
+      "dì yī jù。",
+      "The first sentence.",
+      "n",
+      "Test episode · 0:00",
+      "pebble pebble::test-001",
+    ]);
+  });
+
+  it("leaves a missing translation blank without shifting later columns", () => {
+    const [row] = dataRows(toAnkiCsv([item({ pinyin: "dì yī jù。", note: "Remember this" })]));
+    expect(row).toHaveLength(6);
+    expect(row![2]).toBe("");
+    expect(row![3]).toBe("Remember this");
+    expect(row![4]).toBe("Test episode · 0:00");
+  });
+
+  it("round-trips commas, quotes and multiline notes into the right columns", () => {
+    const tricky = item({
+      translation: 'Hello, "world"',
+      note: "line one\nline two, with comma",
+    });
+    const [row] = dataRows(toAnkiCsv([tricky]));
+    expect(row).toHaveLength(6);
+    expect(row![2]).toBe('Hello, "world"');
+    expect(row![3]).toBe("line one\nline two, with comma");
+  });
+
+  it("gives every row the same number of columns as the header declares", () => {
+    const csv = toAnkiCsv([
+      item({ id: "1" }),
+      item({ id: "2", translation: "x, y", note: "a\nb" }),
+      item({ id: "3", pinyin: "p" }),
+    ]);
+    const declared = csv.match(/^#columns:(.*)$/m)![1]!.split(",");
+    expect(declared).toEqual(["Chinese", "Pinyin", "Translation", "Note", "Source", "Tags"]);
+    for (const row of dataRows(csv)) expect(row).toHaveLength(declared.length);
+  });
+
+  it("declares a comma separator, plain text and the tags column, with no note type", () => {
+    const header = toAnkiCsv([]).trimEnd().split("\n");
+    expect(header).toContain("#separator:Comma");
+    expect(header).toContain("#html:false");
+    expect(header).toContain("#tags column:6");
+    expect(header.some((line) => line.startsWith("#notetype"))).toBe(false);
+  });
+
+  it("encodes Chinese text as UTF-8 that decodes unchanged", () => {
+    const csv = toAnkiCsv([item({ translation: "One, “quoted”" })]);
+    const bytes = new TextEncoder().encode(csv);
+    expect(new TextDecoder("utf-8", { fatal: true }).decode(bytes)).toBe(csv);
+    expect(bytes.slice(0, 3)).not.toEqual(new Uint8Array([0xef, 0xbb, 0xbf])); // no BOM
+  });
+});

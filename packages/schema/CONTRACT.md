@@ -106,17 +106,18 @@ change transcript `confidence` (which stays `null`). Apps keep its origin as
 
 ## Learning item
 
-| Field                           | Type / rule                                                    |
-| ------------------------------- | -------------------------------------------------------------- |
-| `id`                            | unique string (UUID)                                           |
-| `kind`                          | `"segment"` (phrases may be added later as a new kind)         |
-| `episodeId`, `episodeTitle`     | source episode                                                 |
-| `segmentId`, `startMs`, `endMs` | source segment and timing                                      |
-| `text`                          | Chinese as displayed when saved (corrected text if edited)     |
-| `originalText`                  | transcript text if the line was corrected, else `null`         |
-| `pinyin`, `translation`         | only if generated / resolved before saving, else `null`        |
-| `note`                          | learner note or `null`                                         |
-| `savedAt`, `updatedAt`          | ISO 8601                                                       |
-| `provenance`                    | `{ transcriptKind, transcriptProvider, corrected, audioKind }` |
+| Field                           | Type / rule                                                        |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `id`                            | unique string (UUID)                                               |
+| `kind`                          | `"segment"` (phrases may be added later as a new kind)             |
+| `episodeId`, `episodeTitle`     | source episode                                                     |
+| `segmentId`, `startMs`, `endMs` | source segment and timing                                          |
+| `text`                          | Chinese as displayed when saved (corrected text if edited)         |
+| `originalText`                  | transcript text if the line was corrected, else `null`             |
+| `pinyin`                        | generated pinyin if available when saved, else `null`              |
+| `translation`                   | English if resolved (when saving, or later on export), else `null` |
+| `note`                          | learner note or `null`                                             |
+| `savedAt`, `updatedAt`          | ISO 8601                                                           |
+| `provenance`                    | `{ transcriptKind, transcriptProvider, corrected, audioKind }`     |
 
 `originalText` must be set exactly when `provenance.corrected` is true.

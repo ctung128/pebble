@@ -2,10 +2,9 @@ import { useId, useState } from "react";
 import { Link } from "react-router";
 import type { LearningItem } from "@pebble/schema";
 import { ConfirmButton } from "../../components/ConfirmButton.tsx";
-import { Icon } from "../../components/Icon.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
-import { downloadText } from "../../lib/downloadText.ts";
-import { ankiCsvFilename, itemSource, toAnkiCsv } from "./ankiCsv.ts";
+import { itemSource } from "./ankiCsv.ts";
+import { AnkiExportPanel } from "./AnkiExportPanel.tsx";
 import { useLearning } from "./LearningContext.tsx";
 import { ResetDemoData } from "./ResetDemoData.tsx";
 import styles from "./LearningItemsPage.module.css";
@@ -23,18 +22,9 @@ export function LearningItemsPage() {
             Lines you saved while listening. Export them to Anki as CSV.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.export}
-          disabled={items.length === 0}
-          onClick={() =>
-            downloadText(ankiCsvFilename(), toAnkiCsv(items), "text/csv;charset=utf-8")
-          }
-        >
-          <Icon name="download" size={18} />
-          Export CSV for Anki
-        </button>
       </header>
+
+      <AnkiExportPanel items={items} />
 
       {persistence.mode === "loading" ? (
         <StatusView kind="loading" title="Loading learning items…" />
