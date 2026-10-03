@@ -15,6 +15,10 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.2** — Transcript provenance `kind` adds `"mock"` (placeholder output, never `"asr"`).
+  Audio provenance `kind` adds `"user-provided"` (local-mode files). New payloads: job and
+  worker health. Invalid-example expectations move to `examples/expectations.json`, shared
+  by the Zod and Pydantic tests.
 - **1.1** — Manifest episodes may carry an optional `demo` object (prepared translations and
   illustrative review flags). New payload types: demo translations, illustrative uncertainty,
   correction, learning item (each at `1.0`).
@@ -121,3 +125,35 @@ change transcript `confidence` (which stays `null`). Apps keep its origin as
 | `provenance`                    | `{ transcriptKind, transcriptProvider, corrected, audioKind }`             |
 
 `originalText` must be set exactly when `provenance.corrected` is true.
+
+## Job (1.2)
+
+| Field                             | Type / rule                                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `episodeId`, `episodeTitle` | job and episode identity                                                                                                                      |
+| `status`                          | `queued` \| `running` \| `completed` \| `failed` \| `cancelled`                                                                               |
+| `stage`                           | `probing` \| `normalizing` \| `chunking` \| `transcribing` \| `merging` \| `null` (current stage while running; last stage reached otherwise) |
+| `attempt`                         | integer ≥ 1; increases on retry                                                                                                               |
+| `progress`                        | `{ completedChunks, totalChunks }` once chunking has finished, else `null`; `completedChunks ≤ totalChunks`                                   |
+| `failure`                         | `{ stage, code, message, retryable, hint }`; set exactly when `status` is `failed` or `cancelled`                                             |
+| `provider`                        | `{ id, kind: "mock" \| "asr" }`                                                                                                               |
+| `createdAt`, `updatedAt`          | ISO 8601                                                                                                                                      |
+
+Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDIO_TOO_LONG`,
+`STORAGE_ERROR`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ERROR`, `WORKER_RESTARTED`, `CANCELLED`,
+`INTERNAL_ERROR`. See [docs/LOCAL_MODE.md](../../docs/LOCAL_MODE.md#failures).
+
+## Worker health (1.2)
+
+`{ schemaVersion, workerVersion, status: "ok" | "degraded", dataDirWritable, tools: { ffmpeg,
+ffprobe: { available, version } }, providers: [{ id, kind, available, detail }] }`. Never
+contains filesystem paths.
+
+## Validation in two languages
+
+The worker validates with Pydantic (`services/worker/src/pebble_worker/contract.py`) for the
+payloads it produces or reads: manifest/episode, transcript, job and worker health. Both
+validators run against every file in `examples/`, and the expected code, path and message for
+each invalid example live in `examples/expectations.json`. Browser-only payloads
+(translations, illustrative uncertainty, corrections, learning items) are validated by Zod
+only.

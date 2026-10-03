@@ -4,3 +4,6 @@ coverage
 package-lock.json
 apps/web/public/demo
 fixtures/demo/**/*.m4a
+services/worker/.venv
+.pytest_cache
+.ruff_cache

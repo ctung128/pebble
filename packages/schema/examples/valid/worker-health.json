@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.2",
+  "workerVersion": "0.1.0",
+  "status": "ok",
+  "dataDirWritable": true,
+  "tools": {
+    "ffmpeg": {
+      "available": true,
+      "version": "8.0"
+    },
+    "ffprobe": {
+      "available": true,
+      "version": "8.0"
+    }
+  },
+  "providers": [
+    {
+      "id": "mock",
+      "kind": "mock",
+      "available": true,
+      "detail": "Placeholder text for pipeline testing; not speech recognition."
+    }
+  ]
+}

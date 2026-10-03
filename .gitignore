@@ -7,3 +7,19 @@ coverage/
 
 # Copied from fixtures/demo at dev/build time
 apps/web/public/demo/
+
+# Python worker
+services/worker/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local worker data (default ~/.pebble lives outside the repo; these guard against
+# PEBBLE_DATA_DIR pointing inside it)
+.pebble/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.2",
+  "episodeId": "example-001",
+  "language": "zh-CN",
+  "script": "simplified",
+  "durationMs": 9000,
+  "segments": [
+    {
+      "id": "seg-0001",
+      "index": 0,
+      "startMs": 0,
+      "endMs": 2800,
+      "text": "（模拟转写）第 1-1 段",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0002",
+      "index": 1,
+      "startMs": 3200,
+      "endMs": 5600,
+      "text": "（模拟转写）第 1-2 段",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0003",
+      "index": 2,
+      "startMs": 6000,
+      "endMs": 8900,
+      "text": "（模拟转写）第 1-3 段",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null
+    }
+  ],
+  "provenance": {
+    "kind": "mock",
+    "provider": "mock",
+    "model": null,
+    "createdAt": "2026-10-03T12:05:00Z",
+    "notes": "Placeholder text from the mock provider; not a transcription of the audio."
+  }
+}

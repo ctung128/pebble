@@ -54,15 +54,22 @@ opened or a write fails, the app continues session-only and shows a notice. Corr
 stored separately from transcripts, keyed by episode + segment; fixture files are never
 modified. Translations are cached for the session only (`SessionCachedTranslationProvider`).
 
+## Local worker (M0C-1)
+
+See [LOCAL_MODE.md](LOCAL_MODE.md). FastAPI on `127.0.0.1:8790`; SQLite and audio under
+`~/.pebble`; one job at a time through probe → normalize → chunk → transcribe → merge; mock
+provider only. The web app is not connected yet (M0C-2).
+
 ## Roadmap
 
-| Milestone  | Scope                                                                                                                                                                |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M0A** ✅ | Static demo shell, fixture contract, library/episode views, player, synced reader, keyboard                                                                          |
-| **M0B** ✅ | Pinyin reveal, prepared demo translations, simulated review marks, corrections/revert, learning items, Anki CSV export                                               |
-| M0C        | FastAPI worker, SQLite, FFmpeg probe/normalize/chunk, mock provider, polling, truthful progress, structured failures, local audio picker with ownership confirmation |
-| M1         | FunASR/Paraformer provider: health checks, setup docs, model/version/license docs, benchmark command + report format, graceful fallback. No speed/accuracy promises. |
-| M3         | Service worker/installable PWA, deploy config, publishable-audio guard                                                                                               |
+| Milestone    | Scope                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **M0A** ✅   | Static demo shell, fixture contract, library/episode views, player, synced reader, keyboard                                                                                                                        |
+| **M0B** ✅   | Pinyin reveal, prepared demo translations, simulated review marks, corrections/revert, learning items, Anki CSV export                                                                                             |
+| **M0C-1** ✅ | Python worker (uv), SQLite + migrations, FFmpeg probe/normalize/silence-aware chunking/merge, mock provider, structured failures, cancel + conservative retry, doctor, localhost security, Pydantic contract tests |
+| M0C-2        | Web local mode: worker client, LocalWorkerSource, Add Audio page with ownership confirmation, upload progress, job polling UI, worker-not-running state, mock-transcript safeguards                                |
+| M1           | FunASR/Paraformer provider: health checks, setup docs, model/version/license docs, benchmark command + report format, graceful fallback. No speed/accuracy promises.                                               |
+| M3           | Service worker/installable PWA, deploy config, publishable-audio guard                                                                                                                                             |
 
 Out of scope for V1: SRS/FSRS/flashcards, word segmentation, CC-CEDICT, accounts, cloud
 processing, URL ingestion, platform integrations.
@@ -73,3 +80,4 @@ processing, URL ingestion, platform integrations.
 - [ADR 0002 — Versioned JSON contract without code generation](adr/0002-versioned-json-contract-without-codegen.md)
 - [ADR 0003 — Public demo uses authorized fixtures only](adr/0003-public-demo-uses-authorized-fixtures-only.md)
 - [ADR 0004 — Learner data is browser-owned for now](adr/0004-browser-owned-learning-store.md)
+- [ADR 0005 — Job pipeline and failure model](adr/0005-job-pipeline-and-failure-model.md)

@@ -70,6 +70,21 @@ unavailable storage, `?translation=fail` makes translations fail. Put them befor
 | `npm run format`         | Prettier                                                       |
 | `npm run fixtures:build` | Regenerate the placeholder demo fixture (macOS `say` + FFmpeg) |
 
+## Local mode (in progress)
+
+A private worker on your own computer turns audio you provide into a transcript. The worker
+and its pipeline are built (M0C-1) with a **mock** provider that produces placeholder text —
+not real transcription yet — and the web app is not connected to it yet. See
+[docs/LOCAL_MODE.md](docs/LOCAL_MODE.md):
+
+```bash
+npm run worker:doctor   # requires uv and FFmpeg
+npm run worker          # http://127.0.0.1:8790
+npm run test:worker
+```
+
+Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765.
+
 ## Repository layout
 
 ```
@@ -77,6 +92,7 @@ apps/web/          React + TypeScript app (Vite, hash routing)
 packages/schema/   Versioned JSON contract: Zod schemas, examples, CONTRACT.md
 apps/web/src/assets/  Pebble logo (original + cropped mark and favicon)
 fixtures/demo/     Demo manifest, transcript and audio + PROVENANCE.md
+services/worker/   Local worker (Python, FastAPI, SQLite, FFmpeg) — see docs/LOCAL_MODE.md
 scripts/           Fixture generation
 docs/              Architecture and decision records
 ```

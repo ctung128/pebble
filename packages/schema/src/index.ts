@@ -6,3 +6,5 @@ export * from "./translations.ts";
 export * from "./illustrative.ts";
 export * from "./correction.ts";
 export * from "./learningItem.ts";
+export * from "./job.ts";
+export * from "./health.ts";

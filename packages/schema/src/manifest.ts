@@ -12,7 +12,14 @@ export const AudioProvenanceSchema = z.object({
    * "tts-placeholder": synthetic speech for local development only.
    * The others are acceptable for public use once rights are documented.
    */
-  kind: z.enum(["tts-placeholder", "self-recorded", "licensed", "permission-granted"]),
+  kind: z.enum([
+    "tts-placeholder",
+    "self-recorded",
+    "licensed",
+    "permission-granted",
+    // 1.2: a local file the user chose in local mode, with ownership confirmed at upload.
+    "user-provided",
+  ]),
   /** False until the audio's rights are documented as allowing public distribution. */
   publishable: z.boolean(),
   notes: z.string(),

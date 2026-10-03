@@ -37,9 +37,10 @@ export const SegmentSchema = z.object({
 export const TranscriptProvenanceSchema = z.object({
   /**
    * "fixture": authored text with measured timings — not ASR output.
-   * "asr": produced by a transcription provider.
+   * "asr": produced by a speech-recognition provider.
+   * "mock": placeholder text from the mock provider (1.2) — never a transcription of the audio.
    */
-  kind: z.enum(["fixture", "asr"]),
+  kind: z.enum(["fixture", "asr", "mock"]),
   provider: z.string().min(1),
   model: z.string().min(1).nullable(),
   createdAt: IsoDateTimeSchema,

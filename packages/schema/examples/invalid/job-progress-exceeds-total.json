@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.2",
+  "id": "job-3f9a2c7d1e4b",
+  "episodeId": "ep-3f9a2c7d1e4b",
+  "episodeTitle": "Morning walk",
+  "status": "running",
+  "stage": "transcribing",
+  "attempt": 1,
+  "progress": {
+    "completedChunks": 13,
+    "totalChunks": 12
+  },
+  "failure": null,
+  "provider": {
+    "id": "mock",
+    "kind": "mock"
+  },
+  "createdAt": "2026-10-03T12:00:00Z",
+  "updatedAt": "2026-10-03T12:01:30Z"
+}

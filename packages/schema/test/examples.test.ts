@@ -4,9 +4,11 @@ import {
   parseCorrection,
   parseDemoTranslations,
   parseIllustrativeUncertainty,
+  parseJob,
   parseLearningItem,
   parseManifest,
   parseTranscript,
+  parseWorkerHealth,
   type ContractErrorCode,
   type ParseResult,
 } from "../src/index.ts";
@@ -21,6 +23,8 @@ const PARSERS: [prefix: string, parse: (payload: unknown) => ParseResult<unknown
   ["illustrative-uncertainty", parseIllustrativeUncertainty],
   ["correction", parseCorrection],
   ["learning-item", parseLearningItem],
+  ["job", parseJob],
+  ["worker-health", parseWorkerHealth],
 ];
 const parserFor = (file: string) => {
   const entry = PARSERS.find(([prefix]) => file.startsWith(prefix));
@@ -41,68 +45,14 @@ describe("valid examples", () => {
   });
 });
 
-const invalidCases: Record<string, { code: ContractErrorCode; path: string; message: RegExp }> = {
-  "transcript-unsorted.json": {
-    code: "INVALID_PAYLOAD",
-    path: "segments.2.startMs",
-    message: /ordered by startMs/,
-  },
-  "transcript-end-before-start.json": {
-    code: "INVALID_PAYLOAD",
-    path: "segments.1.endMs",
-    message: /after startMs/,
-  },
-  "transcript-duplicate-ids.json": {
-    code: "INVALID_PAYLOAD",
-    path: "segments.1.id",
-    message: /duplicate segment id/,
-  },
-  "transcript-unsupported-version.json": {
-    code: "UNSUPPORTED_VERSION",
-    path: "schemaVersion",
-    message: /unsupported/,
-  },
-  "transcript-confidence-out-of-range.json": {
-    code: "INVALID_PAYLOAD",
-    path: "segments.0.confidence",
-    message: /./,
-  },
-  "transcript-empty-text.json": {
-    code: "INVALID_PAYLOAD",
-    path: "segments.1.text",
-    message: /must not be empty/,
-  },
-  "demo-translations-model-kind.json": {
-    code: "INVALID_PAYLOAD",
-    path: "kind",
-    message: /./,
-  },
-  "illustrative-uncertainty-wrong-kind.json": {
-    code: "INVALID_PAYLOAD",
-    path: "kind",
-    message: /./,
-  },
-  "correction-empty-text.json": {
-    code: "INVALID_PAYLOAD",
-    path: "correctedText",
-    message: /must not be empty/,
-  },
-  "learning-item-corrected-without-original.json": {
-    code: "INVALID_PAYLOAD",
-    path: "originalText",
-    message: /exactly when the item was corrected/,
-  },
-  "learning-item-phrase-kind.json": {
-    code: "INVALID_PAYLOAD",
-    path: "kind",
-    message: /./,
-  },
-  "manifest-path-traversal.json": {
-    code: "INVALID_PAYLOAD",
-    path: "episodes.0.audio.src",
-    message: /relative path/,
-  },
-};
+interface Expectation {
+  code: ContractErrorCode;
+  path: string;
+  message: string;
+}
+/** Shared with the Python worker's contract tests. */
+const expectations = load("expectations.json") as { invalid: Record<string, Expectation> };
+const invalidCases = expectations.invalid;
 
 describe("invalid examples", () => {
   it("has an expectation for every file in examples/invalid", () => {
@@ -117,7 +67,7 @@ describe("invalid examples", () => {
     expect(result.code).toBe(expected.code);
     expect(result.issues).toContainEqual({
       path: expected.path,
-      message: expect.stringMatching(expected.message),
+      message: expect.stringMatching(new RegExp(expected.message)),
     });
   });
 });

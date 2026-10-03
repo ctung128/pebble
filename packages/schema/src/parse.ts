@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import { CorrectionSchema, type Correction } from "./correction.ts";
+import { WorkerHealthSchema, type WorkerHealth } from "./health.ts";
 import { IllustrativeUncertaintySchema, type IllustrativeUncertainty } from "./illustrative.ts";
+import { JobSchema, type Job } from "./job.ts";
 import { LearningItemSchema, type LearningItem } from "./learningItem.ts";
 import { ManifestSchema, type Manifest } from "./manifest.ts";
 import { DemoTranslationsSchema, type DemoTranslations } from "./translations.ts";
@@ -67,3 +69,9 @@ export const parseCorrection = (payload: unknown): ParseResult<Correction> =>
 
 export const parseLearningItem = (payload: unknown): ParseResult<LearningItem> =>
   parseWith(LearningItemSchema, payload, "Learning item");
+
+export const parseJob = (payload: unknown): ParseResult<Job> =>
+  parseWith(JobSchema, payload, "Job");
+
+export const parseWorkerHealth = (payload: unknown): ParseResult<WorkerHealth> =>
+  parseWith(WorkerHealthSchema, payload, "Worker health");

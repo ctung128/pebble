@@ -18,7 +18,10 @@
     "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "fixtures:build": "node scripts/build-demo-fixture.mjs"
+    "fixtures:build": "node scripts/build-demo-fixture.mjs",
+    "worker": "uv run --project services/worker pebble-worker serve",
+    "worker:doctor": "uv run --project services/worker pebble-worker doctor",
+    "test:worker": "cd services/worker && uv run pytest && uv run ruff check . && uv run ruff format --check ."
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
