@@ -1,4 +1,4 @@
-"""`pebble-worker serve`, `pebble-worker doctor` and `pebble-worker models list|verify|pull`."""
+"""`pebble-worker serve`, `doctor`, `models list|verify|pull` and `bench run|report`."""
 
 from __future__ import annotations
 
@@ -28,6 +28,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands.add_parser("doctor", help="check FFmpeg, the data directory and providers")
     models = commands.add_parser("models", help="list, verify or download the pinned models")
     models.add_argument("action", choices=("list", "verify", "pull"))
+    from .bench.commands import add_parser as add_bench_parser
+
+    add_bench_parser(commands)
     args = parser.parse_args(argv)
 
     overrides: dict[str, object] = {}
@@ -46,6 +49,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return doctor(settings)
     if args.command == "models":
         return models_command(settings, args.action)
+    if args.command == "bench":
+        from .bench.commands import run_command as bench_command
+
+        return bench_command(settings, args)
     return run_server(settings)
 
 

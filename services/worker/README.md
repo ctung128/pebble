@@ -16,6 +16,7 @@ uv run pebble-worker serve
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 uv run pebble-worker models list|verify|pull   # needs the funasr extra only for pull
+uv run --extra funasr pebble-worker bench run|report   # private benchmarks (docs/BENCHMARKS.md)
 ```
 
 Set `UV_CACHE_DIR=~/.pebble/uv-cache` when running `uv` here directly (the npm scripts do).
@@ -37,6 +38,7 @@ src/pebble_worker/
   pipeline/       tools (subprocess + cancel), probe, normalize, chunk, merge, review flags
   providers/      base protocol, mock, funasr (sentence normalization), factory
   models/         pinned model manifest, verify (offline) and pull (ModelScope)
+  bench/          private FunASR benchmarks: bench run|report (docs/BENCHMARKS.md)
 scripts/          check_funasr_env.py: offline FunASR environment proof
 tests/            generated audio only — no binary fixtures
 ```

@@ -310,6 +310,10 @@ class FunASRProvider:
                 retryable=False,
             ) from error
 
+    def load(self) -> None:
+        """Verifies (if needed) and loads the models now rather than on the first chunk."""
+        self._ensure_loaded()
+
     def _ensure_loaded(self) -> GenerateModel:
         with self._lock:
             if self._model is not None:

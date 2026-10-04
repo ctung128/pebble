@@ -108,6 +108,8 @@ def no_network(monkeypatch):
 
 def test_real_models_produce_valid_sentence_segments_offline(storage, speech, no_network):
     provider = FunASRProvider(storage)
+    assert provider.health().state == "checking"  # verification runs in the background
+    provider.prepare(wait=True)
     assert provider.health().available
 
     segments = provider.transcribe(speech, lambda: False)

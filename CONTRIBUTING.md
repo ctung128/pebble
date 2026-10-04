@@ -28,7 +28,7 @@
    # Staged audio, model weights, databases, logs, environments or build output:
    git diff --cached --name-only | grep -Ei '\.(m4a|mp3|wav|flac|ogg|opus|aac|webm|pt|bin|db|sqlite|log)$|\.venv/|/dist|uv-cache'
    # Local data paths, real episode/job IDs and home-directory paths in the staged text:
-   git diff --cached | grep -nE '\.pebble/(smoke|episodes|models/iic/.+/)|/Users/|/home/|(ep|job)-[0-9a-f]{12}'
+   git diff --cached | grep -nE '\.pebble/(smoke|episodes|benchmarks|models/iic/.+/)|/Users/|/home/|(ep|job)-[0-9a-f]{12}'
    ```
 
    Read every hit. Expected ones are the committed demo fixture audio
