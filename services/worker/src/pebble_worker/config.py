@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import ConfigError
+from .pipeline.review import ReviewConfig
 
 LOOPBACK_HOST = "127.0.0.1"
 # Not 8765: that's AnkiConnect's default, and Pebble users often run Anki.
@@ -18,6 +19,8 @@ DEFAULT_ORIGINS: tuple[str, ...] = tuple(
     f"http://{host}:{port}" for port in (5173, 5175, 4173) for host in ("localhost", "127.0.0.1")
 )
 ALLOWED_HOST_NAMES: tuple[str, ...] = ("127.0.0.1", "localhost")
+#: Transcription providers. There is no automatic fallback from one to another.
+PROVIDERS: tuple[str, ...] = ("mock", "funasr")
 _LOCAL_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1):\d{1,5}$")
 
 
@@ -45,6 +48,8 @@ class Settings:
     port: int = DEFAULT_PORT
     allowed_origins: tuple[str, ...] = DEFAULT_ORIGINS
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
+    provider: str = "mock"
+    review: ReviewConfig = field(default_factory=ReviewConfig)
     max_audio_seconds: float = 4 * 3600
     max_upload_bytes: int = 2 * 1024**3
     ffmpeg_path: str = "ffmpeg"
@@ -67,6 +72,11 @@ class Settings:
                     f"Allowed origin {origin!r} is not a local http origin "
                     "(http://localhost:PORT or http://127.0.0.1:PORT)."
                 )
+        if self.provider not in PROVIDERS:
+            raise ConfigError(
+                f"Unknown provider {self.provider!r}. Set PEBBLE_PROVIDER to one of: "
+                f"{', '.join(PROVIDERS)}."
+            )
         if self.max_upload_bytes <= 0 or self.max_audio_seconds <= 0:
             raise ConfigError("Upload and duration limits must be positive.")
 
@@ -99,6 +109,12 @@ class Settings:
                 max_seconds=num("PEBBLE_CHUNK_MAX_SECONDS", 240),
                 silence_min_seconds=num("PEBBLE_SILENCE_MIN_SECONDS", 0.4),
                 silence_noise_db=num("PEBBLE_SILENCE_NOISE_DB", -35),
+            ),
+            "provider": (env.get("PEBBLE_PROVIDER") or "mock").strip().lower(),
+            "review": ReviewConfig(
+                long_segment_ms=int(num("PEBBLE_REVIEW_LONG_SEGMENT_MS", 7000)),
+                short_fragment_ms=int(num("PEBBLE_REVIEW_SHORT_FRAGMENT_MS", 800)),
+                speech_gap_ms=int(num("PEBBLE_REVIEW_SPEECH_GAP_MS", 2000)),
             ),
             "max_audio_seconds": num("PEBBLE_MAX_AUDIO_SECONDS", 4 * 3600),
             "max_upload_bytes": int(num("PEBBLE_MAX_UPLOAD_MB", 2048) * 1024 * 1024),

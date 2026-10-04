@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SourceError } from "../../data/EpisodeSource.ts";
 import {
   fakeSource,
@@ -419,5 +419,101 @@ describe("EpisodePage — mock (preview) transcripts", () => {
     renderPage({ source: mockSource() });
     await playButtons();
     expect(document.querySelector("audio")).toHaveAttribute("crossorigin", "anonymous");
+  });
+});
+
+describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
+  // ASR transcripts only exist in the local-mode build.
+  beforeEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", true));
+  afterEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", false));
+
+  // Invented text; ASR provenance as the local worker writes it.
+  const asrTranscript = {
+    ...testTranscript,
+    segments: testTranscript.segments.map((segment) => ({
+      ...segment,
+      speaker: null,
+      chunkIndex: 0,
+      review: { flags: segment.index === 0 ? ["long_segment" as const] : [] },
+    })),
+    provenance: {
+      kind: "asr" as const,
+      provider: "funasr",
+      model: "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      createdAt: "2026-10-03T00:00:00Z",
+      notes: "Transcribed on this computer with FunASR Paraformer",
+    },
+  };
+  const asrSource = () =>
+    fakeSource({
+      getTranscript: async () => asrTranscript,
+      getEpisode: async (id) => ({
+        ...testEpisode,
+        id,
+        demo: undefined,
+        audioProvenance: { kind: "user-provided", publishable: false, notes: "Yours." },
+        audioUrl: "http://127.0.0.1:8790/episodes/x/audio",
+      }),
+    });
+
+  it("shows the local transcript notice instead of mock or demo notices", async () => {
+    renderPage({ source: asrSource() });
+    await playButtons();
+    const notice = screen.getByRole("complementary", { name: "Local transcript" });
+    expect(within(notice).getByRole("heading", { name: "Local transcript" })).toBeInTheDocument();
+    expect(notice).toHaveTextContent(
+      "Transcribed on this computer with FunASR Paraformer. Generated transcripts can mishear names, accents, or fast conversation—replay or edit any line that looks wrong.",
+    );
+    expect(notice).not.toHaveTextContent(/iic\/|\.pebble|\.m4a|\.wav/);
+    expect(screen.queryByRole("note", { name: "Preview transcript" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/prepared sample content/)).not.toBeInTheDocument();
+  });
+
+  it("has no English controls and never requests a translation", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    renderPage({ source: asrSource(), translation: provider });
+    const list = await screen.findByRole("list", { name: "Transcript" });
+    await playButtons();
+    expect(within(list).queryByRole("button", { name: "English" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /English/ })).not.toBeInTheDocument();
+    await userEvent.keyboard("t");
+    const shortcuts = screen.getByLabelText("Keyboard shortcuts");
+    expect(shortcuts).not.toHaveTextContent("English");
+    expect(shortcuts).toHaveTextContent("pinyin");
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it("keeps pinyin, editing and saving, with no translation on saved items", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    const store = new MemoryLearningStore();
+    renderPage({ source: asrSource(), translation: provider, store });
+    const line = await lineActions(1);
+
+    const pinyin = line.getByRole("button", { name: "Pinyin" });
+    expect(pinyin).not.toHaveAttribute("aria-disabled");
+    await userEvent.click(pinyin);
+    expect(await screen.findByText("dì èr jù。")).toBeInTheDocument();
+
+    await userEvent.click(line.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(line.getByRole("button", { name: "Save" }));
+    await waitFor(async () => expect(await store.listItems()).toHaveLength(1));
+    expect((await store.listItems())[0]).toMatchObject({
+      text: "第二句。",
+      pinyin: "dì èr jù。",
+      translation: null,
+      provenance: { transcriptKind: "asr", transcriptProvider: "funasr", corrected: false },
+    });
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it("does not show structural review flags to learners", async () => {
+    renderPage({ source: asrSource() });
+    await playButtons();
+    expect(
+      screen.queryByText(/long_segment|long segment|May need review/i),
+    ).not.toBeInTheDocument();
   });
 });

@@ -17,6 +17,8 @@ interface TranscriptReaderProps {
   reviewDescriptionId: string;
   /** When set, learning actions are disabled and described by this element. */
   lockedDescriptionId?: string | undefined;
+  /** False removes the English action entirely (no translation exists for this transcript). */
+  showTranslation?: boolean;
   ref?: Ref<HTMLOListElement>;
 }
 
@@ -32,6 +34,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   actions,
   reviewDescriptionId,
   lockedDescriptionId,
+  showTranslation = true,
   ref,
 }: TranscriptReaderProps) {
   if (segments.length === 0) {
@@ -56,6 +59,7 @@ export const TranscriptReader = memo(function TranscriptReader({
               actions={actions}
               reviewDescriptionId={reviewDescriptionId}
               lockedDescriptionId={lockedDescriptionId}
+              showTranslation={showTranslation}
             />
           </li>
         );

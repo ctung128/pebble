@@ -18,10 +18,10 @@ AnkiConnect's). Read `docs/LOCAL_MODE.md` and `docs/MODELS.md` before changing t
 approved: the worker's optional `funasr` extra (`funasr==1.4.16`, `modelscope==1.40.1`,
 `torch==2.11.0` + `torchaudio==2.11.0` as a matched pair) plus the resolver constraint
 `transformers>=4.32.0,<5` (never a direct dependency; don't block or patch it — FunASR imports
-it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-A proceeds in
-review stops: don't build the FunASR provider or run a smoke transcription until the user
-approves that step and provides a clip. **M1-B (benchmark) and M1-C (web/UI) must not start
-until the user reviews M1-A.**
+it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-A3 (FunASR
+provider, `npm run worker:funasr`, ADR 0006) is built and awaits review. **M1-B (benchmark) and
+M1-C (web/UI) must not start until the user reviews M1-A.** Never put recognized transcript
+text, private audio or private clip paths in the repository, tests, docs or commits.
 
 Approved models — exactly these, pinned in `services/worker/src/pebble_worker/models/manifest.py`
 (the source of truth; never a floating "latest"):
@@ -50,9 +50,11 @@ and model weights in Git, the public demo, or any deployment artifact.
 - No git commits unless the user asks.
 - Worker binds 127.0.0.1 only; keep the Host/Origin checks and the explicit origin allowlist;
   never serve paths outside the data directory. Mock output is `mock`, never `asr`.
-- FunASR provider (when built): `PEBBLE_PROVIDER=funasr` explicit, no fallback to mock, CPU
-  only, lazy loading, local model paths with update checks off, `confidence` always `null`.
-  English translation stays hidden in local real-ASR mode until a real provider exists.
+- FunASR provider: `PEBBLE_PROVIDER=funasr` explicit, no fallback to mock, CPU only, lazy
+  loading, verified local model paths with update checks off, `confidence` always `null`.
+  Segments come only from `sentence_info`; fail rather than guess. Review flags are not
+  confidence and never rewrite text. English translation stays hidden in local real-ASR mode
+  until a real provider exists (M1-C).
 - Model weights live only in `~/.pebble/models` (downloaded by `models pull`); never commit,
   bundle or serve them. Smoke-test audio and outputs stay out of the repository.
 - Mock transcripts (`provenance.kind === "mock"`) are learning-locked: no pinyin, translation,
@@ -77,3 +79,5 @@ and model weights in Git, the public demo, or any deployment artifact.
 ## Verify before reporting
 
 `npm run typecheck && npm run lint && npm test && npm run build && npm run test:worker`
+
+Before any commit, run the privacy check in `CONTRIBUTING.md` and stage files explicitly.

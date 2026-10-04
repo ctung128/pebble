@@ -18,6 +18,7 @@ export const JobFailureCodeSchema = z.enum([
   "STORAGE_ERROR",
   "PROVIDER_UNAVAILABLE",
   "PROVIDER_ERROR",
+  "NO_SPEECH_DETECTED",
   "WORKER_RESTARTED",
   "CANCELLED",
   "INTERNAL_ERROR",

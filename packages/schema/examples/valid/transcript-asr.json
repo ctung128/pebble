@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.4",
+  "episodeId": "example-001",
+  "language": "zh-CN",
+  "script": "simplified",
+  "durationMs": 12000,
+  "segments": [
+    {
+      "id": "seg-0001",
+      "index": 0,
+      "startMs": 600,
+      "endMs": 1900,
+      "text": "今天天气很好，",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null,
+      "chunkIndex": 0,
+      "review": {
+        "flags": []
+      }
+    },
+    {
+      "id": "seg-0002",
+      "index": 1,
+      "startMs": 2100,
+      "endMs": 9400,
+      "text": "我们一起去公园散步，看看湖边的花有没有开。",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null,
+      "chunkIndex": 0,
+      "review": {
+        "flags": ["long_segment"]
+      }
+    },
+    {
+      "id": "seg-0003",
+      "index": 2,
+      "startMs": 11500,
+      "endMs": 11900,
+      "text": "好。",
+      "speaker": null,
+      "confidence": null,
+      "tokens": null,
+      "chunkIndex": 0,
+      "review": {
+        "flags": ["short_fragment", "timestamp_alignment_anomaly", "speech_gap"]
+      }
+    }
+  ],
+  "provenance": {
+    "kind": "asr",
+    "provider": "funasr",
+    "model": "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+    "createdAt": "2026-10-03T12:00:00Z",
+    "notes": "Transcribed on this computer with FunASR Paraformer",
+    "models": [
+      {
+        "role": "asr",
+        "id": "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        "revision": "v2.0.9"
+      },
+      {
+        "role": "vad",
+        "id": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+        "revision": "v2.0.4"
+      },
+      {
+        "role": "punctuation",
+        "id": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+        "revision": "v2.0.4"
+      }
+    ],
+    "runtime": {
+      "funasr": "1.4.16",
+      "torch": "2.11.0",
+      "torchaudio": "2.11.0",
+      "modelscope": "1.40.1",
+      "device": "cpu"
+    },
+    "review": {
+      "thresholds": {
+        "longSegmentMs": 7000,
+        "shortFragmentMs": 800,
+        "speechGapMs": 2000
+      }
+    }
+  }
+}

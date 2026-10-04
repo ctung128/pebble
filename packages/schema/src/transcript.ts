@@ -17,6 +17,20 @@ export const TokenSchema = z.object({
   endMs: TimeMsSchema,
 });
 
+/**
+ * Structural review flags (1.4): non-probabilistic notes about a segment's shape, recorded for
+ * review and benchmarking. They are not confidence, never displayed as such, and never used to
+ * rewrite text. Thresholds are recorded in `provenance.review.thresholds`.
+ */
+export const ReviewFlagSchema = z.enum([
+  "long_segment",
+  "short_fragment",
+  "timestamp_alignment_anomaly",
+  "speech_gap",
+]);
+
+export const SegmentReviewSchema = z.object({ flags: z.array(ReviewFlagSchema) });
+
 export const SegmentSchema = z.object({
   id: z.string().min(1),
   index: z.number().int().nonnegative(),
@@ -32,6 +46,25 @@ export const SegmentSchema = z.object({
   confidence: z.number().min(0).max(1).nullable(),
   /** Sub-segment timings (e.g. per character), when the provider supplies them. */
   tokens: z.array(TokenSchema).nullable(),
+  /** Worker ASR output (1.4): the 0-based processing chunk that produced this segment. */
+  chunkIndex: z.number().int().nonnegative().optional(),
+  /** Worker ASR output (1.4): internal structural review metadata. Not confidence. */
+  review: SegmentReviewSchema.optional(),
+});
+
+/** One pretrained model used to produce an ASR transcript (1.4). */
+export const ProvenanceModelSchema = z.object({
+  role: z.enum(["asr", "vad", "punctuation"]),
+  id: z.string().min(1),
+  revision: z.string().min(1),
+});
+
+export const ProvenanceReviewSchema = z.object({
+  thresholds: z.object({
+    longSegmentMs: z.number().int().positive(),
+    shortFragmentMs: z.number().int().positive(),
+    speechGapMs: z.number().int().positive(),
+  }),
 });
 
 export const TranscriptProvenanceSchema = z.object({
@@ -45,6 +78,12 @@ export const TranscriptProvenanceSchema = z.object({
   model: z.string().min(1).nullable(),
   createdAt: IsoDateTimeSchema,
   notes: z.string().optional(),
+  /** ASR transcripts (1.4): every model involved, at its exact revision. */
+  models: z.array(ProvenanceModelSchema).optional(),
+  /** ASR transcripts (1.4): runtime versions and device, e.g. `{ funasr: "1.4.16", device: "cpu" }`. */
+  runtime: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /** ASR transcripts (1.4): how segment review flags were computed. */
+  review: ProvenanceReviewSchema.optional(),
 });
 
 export const TranscriptSchema = z
@@ -102,6 +141,8 @@ export const TranscriptSchema = z
     });
   });
 
+export type ReviewFlag = z.infer<typeof ReviewFlagSchema>;
+export type ProvenanceModel = z.infer<typeof ProvenanceModelSchema>;
 export type Token = z.infer<typeof TokenSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type TranscriptProvenance = z.infer<typeof TranscriptProvenanceSchema>;

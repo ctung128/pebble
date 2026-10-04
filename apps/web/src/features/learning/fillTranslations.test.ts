@@ -19,6 +19,21 @@ const item = (index: number, overrides: Partial<LearningItem> = {}): LearningIte
 });
 
 describe("fillTranslations", () => {
+  it("never requests English for items from local speech-recognition transcripts", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    const asr = item(0, {
+      id: "item-asr",
+      provenance: { ...item(0).provenance, transcriptKind: "asr", transcriptProvider: "funasr" },
+    });
+    const result = await fillTranslations([asr, item(1)], provider);
+    expect(translate).toHaveBeenCalledTimes(1);
+    expect(translate).toHaveBeenCalledWith(expect.objectContaining({ segmentId: "seg-2" }));
+    expect(result.items[0]!.translation).toBeNull();
+    expect(result.filled.map((i) => i.id)).toEqual(["item-1"]);
+    expect(result.missingUnavailable).toBe(0); // not reported as a failed translation
+    expect(result.missingEdited).toBe(0);
+  });
+
   it("fills missing translations and reports which items changed", async () => {
     const { provider, translate } = fakeTranslationProvider();
     const input = [item(0), item(1)];

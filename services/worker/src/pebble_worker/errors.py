@@ -14,6 +14,7 @@ class FailureCode(StrEnum):
     STORAGE_ERROR = "STORAGE_ERROR"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_ERROR = "PROVIDER_ERROR"
+    NO_SPEECH_DETECTED = "NO_SPEECH_DETECTED"
     WORKER_RESTARTED = "WORKER_RESTARTED"
     CANCELLED = "CANCELLED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -28,6 +29,7 @@ RETRYABLE: dict[FailureCode, bool] = {
     FailureCode.STORAGE_ERROR: True,
     FailureCode.PROVIDER_UNAVAILABLE: True,
     FailureCode.PROVIDER_ERROR: True,
+    FailureCode.NO_SPEECH_DETECTED: False,  # the same audio gives the same result
     FailureCode.WORKER_RESTARTED: True,
     FailureCode.CANCELLED: True,
     FailureCode.INTERNAL_ERROR: True,

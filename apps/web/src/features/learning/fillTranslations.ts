@@ -1,4 +1,5 @@
 import type { LearningItem } from "@pebble/schema";
+import { canRequestTranslation } from "../episode/transcriptCapabilities.ts";
 import { TranslationError, type TranslationProvider } from "../translation/TranslationProvider.ts";
 
 export interface FillTranslationsResult {
@@ -14,7 +15,8 @@ export interface FillTranslationsResult {
 
 /**
  * Resolves English for items that don't have it yet, in parallel. Runs only on an explicit
- * export, so translations are still never requested in the background.
+ * export, so translations are still never requested in the background. Items from transcripts
+ * without English (local speech recognition) are left as they are and never requested.
  */
 export async function fillTranslations(
   items: readonly LearningItem[],
@@ -27,7 +29,7 @@ export async function fillTranslations(
 
   const results = await Promise.all(
     items.map(async (item) => {
-      if (item.translation) return item;
+      if (item.translation || !canRequestTranslation(item.provenance.transcriptKind)) return item;
       try {
         const translation = await provider.translate({
           episodeId: item.episodeId,

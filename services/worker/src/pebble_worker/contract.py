@@ -26,7 +26,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.3"
+CURRENT_SCHEMA_VERSION = "1.4"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -160,7 +160,15 @@ class Token(Model):
     end_ms: TimeMs
 
 
+ReviewFlag = Literal["long_segment", "short_fragment", "timestamp_alignment_anomaly", "speech_gap"]
+
+
+class SegmentReview(Model):
+    flags: list[ReviewFlag]
+
+
 class Segment(Model):
+    _omit_when_none = frozenset({"chunk_index", "review"})
     id: NonEmptyStr
     index: Annotated[int, Field(ge=0)]
     start_ms: TimeMs
@@ -169,15 +177,36 @@ class Segment(Model):
     speaker: NonEmptyStr | None
     confidence: Annotated[float, Field(ge=0, le=1)] | None
     tokens: list[Token] | None
+    chunk_index: Annotated[int, Field(ge=0)] | None = None  # 1.4, worker ASR output
+    review: SegmentReview | None = None  # 1.4, structural review metadata; not confidence
+
+
+class ProvenanceModel(Model):
+    role: Literal["asr", "vad", "punctuation"]
+    id: NonEmptyStr
+    revision: NonEmptyStr
+
+
+class ReviewThresholds(Model):
+    long_segment_ms: Annotated[int, Field(gt=0)]
+    short_fragment_ms: Annotated[int, Field(gt=0)]
+    speech_gap_ms: Annotated[int, Field(gt=0)]
+
+
+class ProvenanceReview(Model):
+    thresholds: ReviewThresholds
 
 
 class TranscriptProvenance(Model):
-    _omit_when_none = frozenset({"notes"})
+    _omit_when_none = frozenset({"notes", "models", "runtime", "review"})
     kind: Literal["fixture", "asr", "mock"]
     provider: NonEmptyStr
     model: NonEmptyStr | None
     created_at: IsoDateTime
     notes: str | None = None
+    models: list[ProvenanceModel] | None = None  # 1.4
+    runtime: dict[NonEmptyStr, NonEmptyStr] | None = None  # 1.4
+    review: ProvenanceReview | None = None  # 1.4
 
 
 class Transcript(Model):
@@ -206,6 +235,7 @@ class JobFailure(Model):
         "STORAGE_ERROR",
         "PROVIDER_UNAVAILABLE",
         "PROVIDER_ERROR",
+        "NO_SPEECH_DETECTED",
         "WORKER_RESTARTED",
         "CANCELLED",
         "INTERNAL_ERROR",

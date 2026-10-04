@@ -15,6 +15,7 @@ interface SegmentRowProps {
   actions: LineActions;
   reviewDescriptionId: string;
   lockedDescriptionId?: string | undefined;
+  showTranslation?: boolean;
 }
 
 export const SegmentRow = memo(function SegmentRow({
@@ -26,6 +27,7 @@ export const SegmentRow = memo(function SegmentRow({
   actions,
   reviewDescriptionId,
   lockedDescriptionId,
+  showTranslation = true,
 }: SegmentRowProps) {
   // Locked actions stay focusable and visible (discoverable) but do nothing.
   const locked = lockedDescriptionId !== undefined;
@@ -34,7 +36,7 @@ export const SegmentRow = memo(function SegmentRow({
     : {};
   const time = formatTime(segment.startMs);
   const translationId = `translation-${segment.id}`;
-  const translationOpen = view.translation?.open ?? false;
+  const translationOpen = showTranslation && (view.translation?.open ?? false);
   // "Expanded" lines keep their actions visible; a review flag alone doesn't expand a line.
   const expanded =
     view.correction !== null ||
@@ -88,20 +90,22 @@ export const SegmentRow = memo(function SegmentRow({
           </span>
           <span className={styles.visuallyHidden}>Pinyin</span>
         </button>
-        <button
-          type="button"
-          className={styles.action}
-          aria-expanded={translationOpen}
-          aria-controls={translationOpen ? translationId : undefined}
-          title="English (T)"
-          {...lockProps}
-          onClick={() => actions.toggleTranslation(segment)}
-        >
-          <span aria-hidden="true" className={styles.glyph}>
-            EN
-          </span>
-          <span className={styles.visuallyHidden}>English</span>
-        </button>
+        {showTranslation ? (
+          <button
+            type="button"
+            className={styles.action}
+            aria-expanded={translationOpen}
+            aria-controls={translationOpen ? translationId : undefined}
+            title="English (T)"
+            {...lockProps}
+            onClick={() => actions.toggleTranslation(segment)}
+          >
+            <span aria-hidden="true" className={styles.glyph}>
+              EN
+            </span>
+            <span className={styles.visuallyHidden}>English</span>
+          </button>
+        ) : null}
         <button
           type="button"
           className={styles.action}

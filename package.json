@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "fixtures:build": "node scripts/build-demo-fixture.mjs",
     "worker": "UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker pebble-worker serve",
+    "worker:funasr": "PEBBLE_PROVIDER=funasr UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker --extra funasr pebble-worker serve",
     "worker:doctor": "UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker pebble-worker doctor",
     "worker:models": "UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker pebble-worker models",
     "test:worker": "cd services/worker && export UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" && uv run pytest && uv run ruff check . && uv run ruff format --check .",

@@ -15,7 +15,7 @@ from .config import Settings
 from .db import MIGRATIONS, Database
 from .errors import ConfigError
 from .pipeline.tools import tool_version
-from .providers.mock import MockProvider
+from .providers.factory import build_provider
 from .storage import Storage
 
 
@@ -101,8 +101,9 @@ def doctor(settings: Settings) -> int:
     except OSError as error:
         rows.append(("Data directory", f"{storage.root}: {error}", False))
 
-    mock = MockProvider().health()
-    rows.append(("Provider", f"mock — {mock.detail}", mock.available))
+    provider = build_provider(settings, storage)
+    health = provider.health()
+    rows.append(("Provider", f"{provider.id} — {health.detail}", health.available))
     rows.append(("Binding", f"{settings.host}:{settings.port} (loopback only)", True))
     rows.append(("Allowed origins", ", ".join(settings.allowed_origins), True))
     chunking = settings.chunking

@@ -4,16 +4,20 @@ Local mode turns audio **you own or are authorized to use** into a timestamped t
 your own computer. A small Python worker does the processing; the Pebble web app talks to it
 over `127.0.0.1` only. Nothing is uploaded to the internet.
 
-> **Status: M1-A (in progress).** The worker, its job pipeline, the **mock** transcription
-> provider and the web app's local mode are built. FunASR can be installed as an optional extra
-> and its pinned models downloaded and verified ([MODELS.md](MODELS.md)), but the FunASR
-> provider is not connected yet.
+> **Status: M1-A3.** The worker, its job pipeline, the mock provider, the web app's local mode
+> and the **FunASR provider** are built. FunASR runs only when selected
+> (`npm run worker:funasr`); `npm run worker` still uses the mock. See
+> [MODELS.md](MODELS.md) for setup, models and the provider's rules.
 
 > [!IMPORTANT]
-> **Current limitation:** the worker processes your real local audio through probe,
-> normalization and chunking, but its M0C transcript output is **mock placeholder text**
-> (such as `（模拟转写）第 1-1 段`), not recognized speech. The mock never listens to the
-> audio. Real Mandarin speech recognition (FunASR) arrives in M1.
+> **Current limitations:**
+>
+> - With the default `npm run worker`, transcripts are **mock placeholder text** (such as
+>   `（模拟转写）第 1-1 段`), not recognized speech. The mock never listens to the audio.
+> - The local web app is not yet updated for FunASR transcripts (M1-C). It only locks learning
+>   tools for mock transcripts, so a FunASR transcript opened there would show Pinyin, Save,
+>   Edit and English controls (English has no provider and fails). Until M1-C, use FunASR
+>   transcripts for review only.
 
 Pebble starts at a local audio file you choose. It does not fetch, download or scrape audio
 from URLs or apps, and it does not work around any platform's content protections.
@@ -32,7 +36,8 @@ From the repository root:
 
 ```bash
 npm run worker:doctor   # check Python, FFmpeg, the data directory, database and provider
-npm run worker          # start on http://127.0.0.1:8790 (Ctrl+C to stop)
+npm run worker          # start on http://127.0.0.1:8790 (Ctrl+C to stop), mock provider
+npm run worker:funasr   # the same, with FunASR speech recognition (see MODELS.md)
 npm run test:worker     # pytest + ruff
 npm run worker:models -- list|verify|pull   # pinned speech models (see MODELS.md)
 ```
@@ -89,9 +94,22 @@ after Pebble creates a real transcript."_ Placeholder text never generates pinyi
 becomes a learning item, and is never exported to Anki (both are also enforced in code, not
 just in the UI).
 
-## Speech models (M1)
+## Speech recognition with FunASR (M1)
 
-Real transcription will use three pinned FunASR models: SeACo-Paraformer (speech), FSMN-VAD
+```bash
+npm run worker:funasr     # PEBBLE_PROVIDER=funasr, with the funasr extra
+```
+
+The provider is chosen only by `PEBBLE_PROVIDER` (`mock`, the default, or `funasr`); an
+unknown value stops the worker at startup, and Pebble never falls back from FunASR to the
+mock. On the first job the worker verifies the model files and loads them (CPU only), which
+takes noticeably longer than later jobs. Each recognized sentence becomes one transcript line
+with its own start and end time; `confidence` stays `null`. FunASR transcripts also carry
+structural review flags (long line, short fragment, long gap, timestamp mismatch) — internal
+evidence for review, not confidence, and not shown to learners. Details, thresholds and every
+failure state: [MODELS.md](MODELS.md#the-funasr-provider).
+
+Transcription uses three pinned FunASR models: SeACo-Paraformer (speech), FSMN-VAD
 (voice activity) and CT-Transformer (Mandarin punctuation). [MODELS.md](MODELS.md) has the
 details; in short:
 
@@ -199,10 +217,15 @@ Every failure is reported as `{ stage, code, message, retryable, hint }`:
 | `AUDIO_TOO_LONG`       | no        | Longer than `PEBBLE_MAX_AUDIO_SECONDS`       |
 | `STORAGE_ERROR`        | yes       | Disk full or not writable                    |
 | `PROVIDER_UNAVAILABLE` | yes       | The transcription provider isn't set up      |
-| `PROVIDER_ERROR`       | yes       | The provider failed on a chunk               |
+| `PROVIDER_ERROR`       | yes¹      | The provider failed on a chunk               |
+| `NO_SPEECH_DETECTED`   | no        | FunASR found no speech in the whole audio    |
 | `WORKER_RESTARTED`     | yes       | The worker stopped while the job was running |
 | `CANCELLED`            | yes       | You cancelled the job                        |
 | `INTERNAL_ERROR`       | yes       | Unexpected; details in `logs/worker.log`     |
+
+¹ Except when FunASR's output can't be turned into timed lines without guessing (for example
+a sentence without an end time): that `PROVIDER_ERROR` is not retryable. See
+[MODELS.md](MODELS.md#health-and-failures) for every FunASR failure state.
 
 ### Cancel and retry: what is kept, what is redone
 
@@ -262,6 +285,10 @@ Errors use `{ "error": { "code", "message", "hint"? } }`. Uploads must confirm o
 | `PEBBLE_DATA_DIR`                 | `~/.pebble`              | See [Local data](#local-data)             |
 | `UV_CACHE_DIR`                    | `~/.pebble/uv-cache`     | Set by the npm worker scripts             |
 | `PEBBLE_PORT`                     | `8790`                   |                                           |
+| `PEBBLE_PROVIDER`                 | `mock`                   | `mock` or `funasr`; no fallback           |
+| `PEBBLE_REVIEW_LONG_SEGMENT_MS`   | `7000`                   | FunASR review flag threshold              |
+| `PEBBLE_REVIEW_SHORT_FRAGMENT_MS` | `800`                    | FunASR review flag threshold              |
+| `PEBBLE_REVIEW_SPEECH_GAP_MS`     | `2000`                   | FunASR review flag threshold              |
 | `PEBBLE_HOST`                     | `127.0.0.1`              | Anything else is refused                  |
 | `PEBBLE_ALLOWED_ORIGINS`          | Vite dev/preview origins | Local http origins only                   |
 | `PEBBLE_MAX_AUDIO_SECONDS`        | `14400`                  | 4 hours                                   |

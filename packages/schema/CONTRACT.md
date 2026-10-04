@@ -6,7 +6,7 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.0`.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.4`.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -15,6 +15,10 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.4** — ASR transcripts from the local worker may carry, all optional: segment
+  `chunkIndex` and `review: { flags }` (structural review flags, **not confidence**), and
+  provenance `models` (`{ role, id, revision }` for every model), `runtime` (package versions
+  and device) and `review.thresholds`. Job failures add `NO_SPEECH_DETECTED`.
 - **1.3** — Worker health may include `dataDir: { path, writable, hint }` (optional) so the
   local app can explain data-folder problems. `path` is the only filesystem path in any
   payload, abbreviated with `~` under the home folder.
@@ -51,18 +55,21 @@ schemes and `..` are rejected.
 
 ## Transcript
 
-| Field                  | Type                                                                   |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `schemaVersion`        | `"1.x"`                                                                |
-| `episodeId`            | must match the episode it is loaded for                                |
-| `language`             | BCP 47 tag                                                             |
-| `script`               | `simplified` \| `traditional` \| `unknown`                             |
-| `durationMs`           | positive integer                                                       |
-| `segments[]`           | Segment                                                                |
-| `provenance`           | `{ kind, provider, model, createdAt, notes? }`                         |
-| `provenance.kind`      | `fixture` (authored text, measured timings) \| `asr` (provider output) |
-| `provenance.model`     | string or `null`                                                       |
-| `provenance.createdAt` | ISO 8601                                                               |
+| Field                  | Type                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `schemaVersion`        | `"1.x"`                                                                           |
+| `episodeId`            | must match the episode it is loaded for                                           |
+| `language`             | BCP 47 tag                                                                        |
+| `script`               | `simplified` \| `traditional` \| `unknown`                                        |
+| `durationMs`           | positive integer                                                                  |
+| `segments[]`           | Segment                                                                           |
+| `provenance`           | `{ kind, provider, model, createdAt, notes? }`                                    |
+| `provenance.kind`      | `fixture` (authored text, measured timings) \| `asr` (provider output)            |
+| `provenance.model`     | string or `null`                                                                  |
+| `provenance.createdAt` | ISO 8601                                                                          |
+| `provenance.models`    | optional (1.4): `{ role: asr \| vad \| punctuation, id, revision }[]`             |
+| `provenance.runtime`   | optional (1.4): string map, e.g. `{ funasr, torch, device }`                      |
+| `provenance.review`    | optional (1.4): `{ thresholds: { longSegmentMs, shortFragmentMs, speechGapMs } }` |
 
 ### Segment
 
@@ -76,12 +83,19 @@ schemes and `..` are rejected.
 | `speaker`    | string or `null`                       | opaque label; `null` without diarization            |
 | `confidence` | number in [0, 1] or `null`             | **only** provider-reported values; `null` = unknown |
 | `tokens`     | `{ text, startMs, endMs }[]` or `null` | sub-segment timings when the provider has them      |
+| `chunkIndex` | optional integer ≥ 0 (1.4)             | worker processing chunk that produced the segment   |
+| `review`     | optional `{ flags }` (1.4)             | structural review flags; see below                  |
 
 Segments may overlap slightly (merged ASR chunks); they must be ordered by `startMs`.
 
 ### Honesty rules
 
 - `confidence` is never synthesized. Fixture transcripts use `null`.
+- `review.flags` (1.4) are deterministic notes about a segment's shape, never confidence:
+  `long_segment`, `short_fragment`, `speech_gap` (computed from timing against
+  `provenance.review.thresholds`) and `timestamp_alignment_anomaly` (the provider's
+  sub-segment timings don't match the text). They must not be presented as confidence or used
+  to rewrite text.
 - Any future illustrative uncertainty data (M0B demo) must be distinguishable from provider
   output in the data itself, not only in the UI.
 
@@ -143,7 +157,8 @@ change transcript `confidence` (which stays `null`). Apps keep its origin as
 | `createdAt`, `updatedAt`          | ISO 8601                                                                                                                                      |
 
 Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDIO_TOO_LONG`,
-`STORAGE_ERROR`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ERROR`, `WORKER_RESTARTED`, `CANCELLED`,
+`STORAGE_ERROR`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ERROR`, `NO_SPEECH_DETECTED` (1.4),
+`WORKER_RESTARTED`, `CANCELLED`,
 `INTERNAL_ERROR`. See [docs/LOCAL_MODE.md](../../docs/LOCAL_MODE.md#failures).
 
 ## Worker health (1.2)

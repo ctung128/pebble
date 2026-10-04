@@ -80,6 +80,11 @@
       "code": "INVALID_PAYLOAD",
       "path": "tools",
       "message": "."
+    },
+    "transcript-unknown-review-flag.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "segments.0.review.flags.0",
+      "message": "."
     }
   }
 }

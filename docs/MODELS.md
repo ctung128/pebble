@@ -6,10 +6,11 @@ records exactly which weights those are, where they come from, under what licens
 they are downloaded, verified and removed.
 
 > [!IMPORTANT]
-> **Status: M1-A.** The packages and model tooling exist. The FunASR provider is **not
-> connected yet**: local transcripts are still mock placeholder text
-> ([LOCAL_MODE.md](LOCAL_MODE.md)). No model has been downloaded as part of the repository,
-> and none ever will be.
+> **Status: M1-A3.** The packages, model tooling and the FunASR provider exist. The provider
+> runs only when you select it (`PEBBLE_PROVIDER=funasr`, or `npm run worker:funasr`); the
+> default worker still uses the mock. The local web app is **not yet updated** for FunASR
+> transcripts (M1-C). No model has been downloaded as part of the repository, and none ever
+> will be.
 
 ## Source of truth
 
@@ -141,9 +142,114 @@ list|pull|verify`.
 
 Starting the worker, `doctor`, `models list` and `models verify` make no network calls and do
 not import FunASR, ModelScope or PyTorch. This is tested with all sockets blocked
-(`services/worker/tests/test_funasr_env.py`). When the FunASR provider is built, it will load
-models from their local directories with FunASR's update check disabled, so normal
-transcription stays offline too.
+(`services/worker/tests/test_funasr_env.py`). The FunASR provider loads models from their
+local directories with FunASR's update check disabled, so transcription stays offline too
+(`tests/test_funasr_integration.py` runs it with sockets blocked).
+
+## The FunASR provider
+
+`services/worker/src/pebble_worker/providers/funasr.py`, selected only with
+`PEBBLE_PROVIDER=funasr` (`npm run worker:funasr`). There is no automatic fallback to the
+mock: if FunASR or its models are unavailable, the worker reports it and jobs fail with a
+clear reason.
+
+- **CPU only.** `device="cpu"`; MPS is not configured.
+- **Lazy loading.** Starting the worker imports nothing heavy. On the first transcription
+  the provider verifies every manifest file (size and SHA-256), then loads the three models
+  from their local folders with `disable_update=True` (no PyPI version check) and
+  `check_latest=False`. FunASR only contacts a hub for a model path that doesn't exist
+  locally, so normal operation is offline. Models stay loaded until the worker stops.
+- **Input.** Each 16 kHz mono 16-bit WAV chunk is read with Python's `wave` module and passed
+  to FunASR as float32 samples, with `sentence_timestamp=True`.
+
+### Output shape (privacy-safe summary)
+
+Observed for these pinned models on one 55-second Mandarin clip (structure only; no
+transcript text is recorded anywhere in the repository):
+
+| Field                       | Shape                                                         |
+| --------------------------- | ------------------------------------------------------------- |
+| result                      | a list with one item per input                                |
+| `key`                       | string                                                        |
+| `text`                      | the whole chunk's punctuated text                             |
+| `timestamp`                 | `[[startMs, endMs], …]` integers, one pair per character/word |
+| `sentence_info[]`           | `{ text, start, end, timestamp }`; `start`/`end` integer ms   |
+| `sentence_info[].timestamp` | per-character pairs for that sentence                         |
+| not present                 | `spk` (no diarization), `raw_text`, any confidence value      |
+| empty result                | `[{ key, text: "", timestamp: [] }]` (no `sentence_info`)     |
+
+Times are milliseconds from the start of the chunk. Across a chunk there is one timestamp per
+recognized character, but the split between sentences can be off by one character at a
+punctuation boundary, so per-character timestamps do not reliably belong to the sentence that
+contains the character.
+
+### Normalization rules
+
+`sentence_info` is the only source of segment boundaries:
+
+| Transcript segment | From                                                       |
+| ------------------ | ---------------------------------------------------------- |
+| `startMs`, `endMs` | `sentence_info.start`, `.end`, offset by the chunk start   |
+| `text`             | `sentence_info.text` (whitespace trimmed, otherwise as is) |
+| `confidence`       | always `null`                                              |
+| `speaker`          | always `null`                                              |
+| `tokens`           | always `null` (no word/character timing is exposed)        |
+| `chunkIndex`       | the chunk the sentence came from                           |
+
+The segment's `text` is the original transcript text; learner corrections are stored
+separately in the browser and never overwrite it.
+
+The provider fails the chunk — and with it the job (`PROVIDER_ERROR`, not retryable) —
+rather than guessing, when a sentence has no valid start or end (missing, non-numeric,
+negative or non-finite), has empty text, ends at or before it starts, starts at or after the
+chunk's end or ends more than 500 ms past it, starts before the previous sentence, or overlaps
+the previous sentence by more than 100 ms. It also fails if FunASR returns text with no
+sentence timing. It never rebuilds sentence timing from character timestamps, never merges or
+splits sentences, and never edits the text.
+
+A chunk with no recognized speech yields no segments. If the whole audio yields none, the job
+fails with `NO_SPEECH_DETECTED` ("Pebble didn't find any speech in this audio…") instead of
+completing with an empty transcript.
+
+### Structural review flags
+
+Each FunASR segment carries `review.flags` (schema 1.4) and the transcript records the
+thresholds used in `provenance.review.thresholds`. The flags are deterministic notes about a
+segment's shape. They are **not confidence**, are not shown to learners in M1-A3, and are
+never used to rewrite, merge or split text; they are evidence for review and benchmarking.
+
+| Flag                          | Meaning                                                                                                                                                                 | Default | Variable                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------- |
+| `long_segment`                | duration > threshold                                                                                                                                                    | 7000 ms | `PEBBLE_REVIEW_LONG_SEGMENT_MS`   |
+| `short_fragment`              | duration < threshold                                                                                                                                                    | 800 ms  | `PEBBLE_REVIEW_SHORT_FRAGMENT_MS` |
+| `speech_gap`                  | gap since the previous segment's end (or since 0 ms) > threshold                                                                                                        | 2000 ms | `PEBBLE_REVIEW_SPEECH_GAP_MS`     |
+| `timestamp_alignment_anomaly` | the sentence's per-character timestamps don't match its tokens (one per CJK character and per run of Latin letters/digits), are malformed, or fall outside the sentence | —       | —                                 |
+
+`speech_gap` is computed after chunks are merged, so it also spans chunk boundaries. A gap
+after the last segment is not flagged.
+
+### Health and failures
+
+| Condition                  | Where it shows                                                                                                         | Remediation                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| FunASR environment missing | health: unavailable (`environment_missing`); jobs: `PROVIDER_UNAVAILABLE`                                              | `uv sync --extra funasr` in `services/worker` |
+| Model files missing        | health: unavailable (`models_missing`); jobs: `PROVIDER_UNAVAILABLE`                                                   | `npm run worker:models -- pull`               |
+| Model verification failed  | health: unavailable (`verification_failed`; sizes on every check, hashes before loading); jobs: `PROVIDER_UNAVAILABLE` | `models verify`, then `models pull`           |
+| Provider load failure      | health: unavailable (`load_failed`) after a failed load; jobs: `PROVIDER_UNAVAILABLE` (retried on the next job)        | check `~/.pebble/logs/worker.log`, restart    |
+| Unsupported media          | jobs: `UNSUPPORTED_MEDIA` (at probing for the source file; at transcription if a chunk isn't 16 kHz mono 16-bit)       | use another file / retry                      |
+| No speech / empty output   | jobs: `NO_SPEECH_DETECTED` (not retryable)                                                                             | check the audio contains speech               |
+| Provider execution failure | jobs: `PROVIDER_ERROR` (retryable); normalization failures are `PROVIDER_ERROR`, not retryable                         | retry; see the log                            |
+
+Health checks are cheap (file presence and sizes, no hashing or imports), so the app can poll
+them. The worker log records each chunk's output shape (keys and counts) and never any
+recognized text.
+
+### Observations (one clip, not a benchmark)
+
+On this Apple Silicon Mac, one 55-second clip: verifying, importing and loading took about
+18 s on the first job; transcription took about 4 s; the worker's physical memory footprint
+peaked at about 3.3 GB and stayed at about 1.9 GB with the models loaded. These are single
+observations, not performance claims; M1-B will measure properly.
 
 ## Where things go, and how to remove them
 

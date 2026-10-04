@@ -63,6 +63,28 @@
   margin: 0;
 }
 
+/* Calm, secondary note about where a local transcript came from. */
+.sourceNote {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.sourceNote p {
+  margin: 0;
+}
+
+.sourceNoteHeading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
 .sectionHead {
   display: flex;
   flex-wrap: wrap;

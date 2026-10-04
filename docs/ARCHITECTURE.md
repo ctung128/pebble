@@ -91,3 +91,4 @@ processing, URL ingestion, platform integrations.
 - [ADR 0003 — Public demo uses authorized fixtures only](adr/0003-public-demo-uses-authorized-fixtures-only.md)
 - [ADR 0004 — Learner data is browser-owned for now](adr/0004-browser-owned-learning-store.md)
 - [ADR 0005 — Job pipeline and failure model](adr/0005-job-pipeline-and-failure-model.md)
+- [ADR 0006 — FunASR provider and sentence-level normalization](adr/0006-funasr-provider-and-sentence-normalization.md)

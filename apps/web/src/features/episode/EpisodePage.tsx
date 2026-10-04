@@ -24,6 +24,11 @@ import { useTranslationProvider } from "../translation/TranslationContext.tsx";
 import { useLineTranslations } from "../translation/useLineTranslations.ts";
 import { deriveReviewHints } from "../uncertainty/reviewHints.ts";
 import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
+import {
+  ASR_NOTICE,
+  ASR_NOTICE_HEADING,
+  transcriptCapabilities,
+} from "./transcriptCapabilities.ts";
 import styles from "./EpisodePage.module.css";
 
 const REVIEW_HELP_ID = "review-help";
@@ -104,6 +109,13 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   } = pinyin;
   const flagged = useMemo(() => deriveReviewHints(segments, reviewHints), [segments, reviewHints]);
 
+  // What learners may do depends only on the transcript's provenance (transcriptCapabilities.ts).
+  // Mock transcripts must never feed learning features; ASR transcripts have no English yet.
+  const capabilities = transcriptCapabilities(transcript.provenance.kind);
+  const learningLocked = !capabilities.learning;
+  const translationAvailable = capabilities.translation === "available";
+  const translationHidden = capabilities.translation === "hidden";
+
   const lines = useMemo(() => {
     const map = new Map<string, LineView>();
     for (const segment of segments) {
@@ -125,7 +137,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             }
           : { visible: false },
         // A translation of the previous text doesn't describe an edited line.
-        translation: translation?.forText === text ? translation : undefined,
+        translation:
+          translationAvailable && translation?.forText === text ? translation : undefined,
         saved: learning.itemForSegment(episode.id, segment.id) !== null,
         confirmingUnsave: confirmUnsaveId === segment.id,
         editing: editingId === segment.id,
@@ -145,6 +158,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     flagged,
     confirmUnsaveId,
     editingId,
+    translationAvailable,
   ]);
 
   // Row actions read the latest state through a ref so their identities stay stable and
@@ -163,10 +177,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     });
   }, []);
 
-  // Mock transcripts exist to test the pipeline. They must never feed learning features:
-  // no pinyin, translation, saving, export or corrections.
-  const learningLocked = transcript.provenance.kind === "mock";
-
   const actions = useMemo<LineActions>(
     () => ({
       select: (segment) => {
@@ -178,11 +188,12 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       retryPinyin: () => latest.current.pinyin.retry(),
       toggleTranslation: (segment) => {
-        if (learningLocked) return;
+        if (!translationAvailable) return;
         const view = latest.current.lines.get(segment.id);
         if (view) latest.current.translations.toggle(segment, view.text, view.translation);
       },
       retryTranslation: (segment) => {
+        if (!translationAvailable) return;
         const view = latest.current.lines.get(segment.id);
         if (view) latest.current.translations.retry(segment, view.text);
       },
@@ -203,13 +214,14 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             segment,
             correction: learning.correctionFor(episode.id, segment.id),
             pinyin: pinyin.convert ? pinyin.convert(text) : null,
-            translation:
-              translationProvider.peek({
-                episodeId: episode.id,
-                segmentId: segment.id,
-                text,
-                sourceText: segment.text,
-              })?.text ?? null,
+            translation: translationAvailable
+              ? (translationProvider.peek({
+                  episodeId: episode.id,
+                  segmentId: segment.id,
+                  text,
+                  sourceText: segment.text,
+                })?.text ?? null)
+              : null,
           }),
         );
       },
@@ -239,7 +251,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       toggleOriginal: (segment) => toggleOriginalShown(segment.id),
     }),
-    [resume, seek, translationProvider, toggleOriginalShown, learningLocked],
+    [resume, seek, translationProvider, toggleOriginalShown, learningLocked, translationAvailable],
   );
 
   const goToIndex = useCallback(
@@ -330,6 +342,16 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         </p>
       </header>
 
+      {/* Local-only: ASR transcripts exist only in local mode, so the demo build drops this. */}
+      {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr" ? (
+        <aside className={styles.sourceNote} aria-labelledby="asr-notice-heading">
+          <h2 id="asr-notice-heading" className={styles.sourceNoteHeading}>
+            {ASR_NOTICE_HEADING}
+          </h2>
+          <p>{ASR_NOTICE}</p>
+        </aside>
+      ) : null}
+
       {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
         <aside className={styles.notice} aria-label="About this sample">
           {isPlaceholderAudio ? (
@@ -405,6 +427,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           actions={actions}
           reviewDescriptionId={REVIEW_HELP_ID}
           lockedDescriptionId={learningLocked ? LOCKED_HELP_ID : undefined}
+          showTranslation={!translationHidden}
         />
         <p className={styles.keys} aria-label="Keyboard shortcuts">
           <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay · <kbd>←</kbd>
@@ -412,7 +435,14 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           {learningLocked ? null : (
             <>
               {" "}
-              · <kbd>P</kbd> pinyin · <kbd>T</kbd> English · <kbd>S</kbd> save line
+              · <kbd>P</kbd> pinyin
+              {translationAvailable ? (
+                <>
+                  {" "}
+                  · <kbd>T</kbd> English
+                </>
+              ) : null}{" "}
+              · <kbd>S</kbd> save line
             </>
           )}
         </p>

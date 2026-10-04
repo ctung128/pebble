@@ -1,4 +1,4 @@
-"""The transcription-provider boundary. M0C ships only the mock; FunASR arrives in M1."""
+"""The transcription-provider boundary: the mock (M0C) and FunASR (M1)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,23 @@ class Capabilities:
 class ProviderHealth:
     available: bool
     detail: str | None
+    #: Machine-readable state for logs and doctor; `detail` is the human explanation.
+    state: str = "ready"
+
+
+@dataclass(frozen=True)
+class ModelRef:
+    role: Literal["asr", "vad", "punctuation"]
+    id: str
+    revision: str
+
+
+@dataclass(frozen=True)
+class ProvenanceDetails:
+    """Extra provenance an ASR provider records on every transcript (schema 1.4)."""
+
+    models: tuple[ModelRef, ...]
+    runtime: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -43,6 +60,8 @@ class RawSegment:
     text: str
     confidence: float | None = None  # only when the provider genuinely reports it
     speaker: str | None = None
+    #: Provider-detected structural review flags (see pipeline/review.py). Never confidence.
+    review_flags: tuple[str, ...] = ()
 
 
 class TranscriptionProvider(Protocol):
@@ -54,6 +73,10 @@ class TranscriptionProvider(Protocol):
     provenance_note: str
 
     def health(self) -> ProviderHealth: ...
+
+    def provenance_details(self) -> ProvenanceDetails | None:
+        """Model and runtime provenance for ASR output; None for the mock."""
+        ...
 
     def transcribe(self, chunk: AudioChunk, cancel: CancelCheck) -> list[RawSegment]:
         """Raise PipelineError(PROVIDER_*) on failure, Cancelled when `cancel()` turns true."""

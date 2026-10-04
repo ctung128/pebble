@@ -25,7 +25,7 @@ from .errors import StorageAccessError
 from .health import check_health
 from .jobs import ACTIVE_STATUSES, JobConflict, JobRunner, JobService, Pipeline
 from .providers.base import TranscriptionProvider
-from .providers.mock import MockProvider
+from .providers.factory import build_provider
 from .storage import EPISODE_ID, PRIVATE_DIR, PRIVATE_FILE, Storage
 
 #: Accepted upload extensions → MIME type served back to the browser.
@@ -92,9 +92,7 @@ def create_app(
     tempfile.tempdir = str(storage.tmp_dir)
     db = Database(storage.db_path)
     db.migrate()
-    provider = provider or MockProvider(
-        delay_ms=settings.mock_delay_ms, fail_at_chunk=settings.mock_fail_at_chunk
-    )
+    provider = provider or build_provider(settings, storage)
     service = JobService(db, provider)
     runner = JobRunner(Pipeline(settings, storage, service))
 

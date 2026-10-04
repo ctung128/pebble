@@ -1,5 +1,6 @@
 // Fails the demo build if any local-mode code reached it: the public demo must contain no
-// worker URL, upload UI or upload request code. Skipped for local-mode builds.
+// worker URL, upload UI, upload request code, or local speech-recognition (FunASR) copy or
+// model identifiers. Skipped for local-mode builds.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,10 @@ const FORBIDDEN = [
   "Run processing preview",
   "ownershipConfirmed", // upload request field
   "pebble-worker",
+  "FunASR", // local transcript notice and provider names
+  "Paraformer",
+  "iic/speech_", // model identifiers
+  "iic/punc_",
 ];
 
 const files = [];

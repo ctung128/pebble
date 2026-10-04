@@ -42,7 +42,7 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 # Full-width parentheses are intentional in Chinese text.
-allowed-confusables = ["（", "）", "–"]
+allowed-confusables = ["（", "）", "，", "–"]
 
 [dependency-groups]
 dev = [

@@ -355,7 +355,15 @@ class Pipeline:
                 language=row["language"],
                 chunks=self._completed_chunks(job_id, attempt, expected=len(chunks)),
                 provider=self.service.provider,
+                review=self.settings.review,
             )
+            if not transcript.segments:
+                raise PipelineError(
+                    FailureCode.NO_SPEECH_DETECTED,
+                    "Pebble didn't find any speech in this audio, so there is no transcript.",
+                    hint="Check that the file contains spoken Mandarin. Silence, music or very "
+                    "quiet recordings can produce no transcript.",
+                )
             with self.db.tx() as conn:
                 conn.execute(
                     """INSERT OR REPLACE INTO transcripts (episode_id, job_id, attempt, body,
@@ -427,7 +435,11 @@ class Pipeline:
                 FailureCode.INTERNAL_ERROR, "Not every chunk finished; nothing was merged."
             )
         return [
-            ChunkResult(r["start_ms"], [RawSegment(**s) for s in json.loads(r["segments"])])
+            ChunkResult(
+                r["start_ms"],
+                [_raw_segment(s) for s in json.loads(r["segments"])],
+                index=r["idx"],
+            )
             for r in rows
         ]
 
@@ -479,3 +491,8 @@ class JobRunner:
                 self.pipeline.run(job_id)
             except Exception:  # the runner must survive anything a single job does
                 log.exception("runner: job %s crashed", job_id)
+
+
+def _raw_segment(stored: dict[str, Any]) -> RawSegment:
+    """Rebuilds a chunk's stored segment (JSON turns the flag tuple into a list)."""
+    return RawSegment(**{**stored, "review_flags": tuple(stored.get("review_flags", ()))})

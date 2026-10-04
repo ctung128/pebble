@@ -35,6 +35,9 @@ class MockProvider:
             detail="Placeholder text for pipeline testing; not speech recognition.",
         )
 
+    def provenance_details(self) -> None:
+        return None
+
     def transcribe(self, chunk: AudioChunk, cancel: CancelCheck) -> list[RawSegment]:
         deadline = time.monotonic() + self.delay_ms / 1000
         while time.monotonic() < deadline:

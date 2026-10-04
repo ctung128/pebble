@@ -107,4 +107,5 @@ protections. Acquiring audio — and having the right to process it — is the u
 responsibility. There are no accounts, cloud jobs or public upload endpoints; the public demo
 uses bundled, authorized fixtures only.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/adr/](docs/adr/).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/adr/](docs/adr/). Before committing,
+follow the checks and privacy check in [CONTRIBUTING.md](CONTRIBUTING.md).
