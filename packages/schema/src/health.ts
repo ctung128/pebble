@@ -1,6 +1,19 @@
 import { z } from "zod";
 import { SchemaVersionSchema } from "./common.ts";
 
+/**
+ * Provider readiness (1.5). `ready` is the only usable state; `checking` means the worker is
+ * still verifying local files. Older workers omit it: fall back to `available`.
+ */
+export const ProviderStateSchema = z.enum([
+  "ready",
+  "checking",
+  "environment_missing",
+  "models_missing",
+  "verification_failed",
+  "load_failed",
+]);
+
 const ToolSchema = z.object({ available: z.boolean(), version: z.string().min(1).nullable() });
 
 /**
@@ -25,9 +38,14 @@ export const WorkerHealthSchema = z.object({
       id: z.string().min(1),
       kind: z.enum(["mock", "asr"]),
       available: z.boolean(),
+      /** Developer diagnostics; not meant as the primary learner-facing message. */
       detail: z.string().min(1).nullable(),
+      state: ProviderStateSchema.optional(),
+      /** Plain-language remediation safe to show in the app, with at most one command (1.5). */
+      hint: z.string().min(1).optional(),
     }),
   ),
 });
 
 export type WorkerHealth = z.infer<typeof WorkerHealthSchema>;
+export type ProviderState = z.infer<typeof ProviderStateSchema>;

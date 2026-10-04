@@ -98,6 +98,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        provider.prepare()  # e.g. FunASR model verification, in the background
         if start_runner:
             runner.start()
         yield

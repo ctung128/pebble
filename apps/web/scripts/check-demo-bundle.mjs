@@ -18,6 +18,10 @@ const FORBIDDEN = [
   "Paraformer",
   "iic/speech_", // model identifiers
   "iic/punc_",
+  "Create a transcript locally", // provider-aware local copy
+  "Checking local speech models",
+  "Local transcription is ready",
+  "local transcription needs setup",
 ];
 
 const files = [];

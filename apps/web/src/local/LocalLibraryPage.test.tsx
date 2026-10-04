@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { fakeWorkerClient, makeJob, renderLocal } from "../test/localFixtures.tsx";
+import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
 import { WorkerError } from "./workerClient.ts";
 import { DELETE_PROMPT, LocalLibraryPage } from "./LocalLibraryPage.tsx";
 
@@ -96,5 +96,113 @@ describe("LocalLibraryPage", () => {
     expect(await screen.findByText("Pebble's local worker is not running.")).toBeInTheDocument();
     await waitFor(() => expect(client.listJobs).not.toHaveBeenCalled());
     expect(screen.queryByRole("link", { name: "Process audio locally" })).not.toBeInTheDocument();
+  });
+
+  it("offers the mock's upload action", async () => {
+    renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
+    expect(await screen.findByRole("link", { name: "Process audio locally" })).toHaveAttribute(
+      "href",
+      "/process",
+    );
+  });
+});
+
+describe("LocalLibraryPage — local transcription (FunASR)", () => {
+  const asr = { provider: { id: "funasr", kind: "asr" as const } };
+  const jobs = [
+    makeJob({
+      ...asr,
+      id: "job-aaaaaaaaaaaa",
+      episodeId: "ep-aaaaaaaaaaaa",
+      episodeTitle: "Done",
+      status: "completed",
+      stage: "merging",
+      progress: { completedChunks: 1, totalChunks: 1 },
+    }),
+    makeJob({
+      ...asr,
+      id: "job-bbbbbbbbbbbb",
+      episodeId: "ep-bbbbbbbbbbbb",
+      episodeTitle: "Going",
+      status: "running",
+      stage: "transcribing",
+      progress: { completedChunks: 1, totalChunks: 2 },
+    }),
+    makeJob({
+      ...asr,
+      id: "job-cccccccccccc",
+      episodeId: "ep-cccccccccccc",
+      episodeTitle: "Broke",
+      status: "failed",
+      stage: "merging",
+      failure: {
+        stage: "merging",
+        code: "NO_SPEECH_DETECTED",
+        message: "Pebble didn't find any speech in this audio, so there is no transcript.",
+        retryable: false,
+        hint: null,
+      },
+    }),
+    makeJob({
+      ...asr,
+      id: "job-dddddddddddd",
+      episodeId: "ep-dddddddddddd",
+      episodeTitle: "Stopped",
+      status: "cancelled",
+      stage: "chunking",
+      failure: {
+        stage: "chunking",
+        code: "CANCELLED",
+        message: "Cancelled.",
+        retryable: true,
+        hint: null,
+      },
+    }),
+  ];
+
+  it("lists completed, running, failed and cancelled transcripts once FunASR is ready", async () => {
+    const client = fakeWorkerClient({
+      health: async () => ({ ok: true, data: funasrHealth() }),
+      listJobs: vi.fn(async () => jobs),
+    });
+    renderLocal(<LocalLibraryPage />, { client });
+    expect(await screen.findByText("Local transcription is ready.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create a transcript locally" })).toHaveAttribute(
+      "href",
+      "/process",
+    );
+    const list = await screen.findByRole("list", { name: "Local audio" });
+    const [done, going, broke, stopped] = within(list).getAllByRole("listitem");
+    expect(done).toHaveTextContent("Transcript finished");
+    expect(within(done!).getByRole("link", { name: "Open transcript" })).toHaveAttribute(
+      "href",
+      "/episodes/ep-aaaaaaaaaaaa",
+    );
+    expect(going).toHaveTextContent("Processing section 2 of 2");
+    expect(broke).toHaveTextContent("didn't find any speech");
+    expect(stopped).toHaveTextContent("Cancelled");
+    expect(list).not.toHaveTextContent(/placeholder|preview/i);
+  });
+
+  it("shows the setup state and no library while FunASR needs setup", async () => {
+    const listJobs = vi.fn(async () => jobs);
+    const client = fakeWorkerClient({
+      health: async () => ({
+        ok: true,
+        data: funasrHealth({
+          state: "models_missing",
+          available: false,
+          hint: "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull",
+        }),
+      }),
+      listJobs,
+    });
+    renderLocal(<LocalLibraryPage />, { client });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Pebble's local transcription needs setup.",
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/Developer detail|uv sync|model\.pt/);
+    expect(screen.queryByRole("list", { name: "Local audio" })).not.toBeInTheDocument();
+    expect(listJobs).not.toHaveBeenCalled();
   });
 });

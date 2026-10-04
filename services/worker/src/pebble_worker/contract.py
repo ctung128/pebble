@@ -26,7 +26,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.4"
+CURRENT_SCHEMA_VERSION = "1.5"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -283,11 +283,24 @@ class Tools(Model):
     ffprobe: Tool
 
 
+ProviderState = Literal[
+    "ready",
+    "checking",
+    "environment_missing",
+    "models_missing",
+    "verification_failed",
+    "load_failed",
+]
+
+
 class ProviderStatus(Model):
+    _omit_when_none = frozenset({"state", "hint"})
     id: NonEmptyStr
     kind: Literal["mock", "asr"]
     available: bool
     detail: NonEmptyStr | None
+    state: ProviderState | None = None  # 1.5
+    hint: NonEmptyStr | None = None  # 1.5: plain-language remediation for the app
 
 
 class DataDir(Model):

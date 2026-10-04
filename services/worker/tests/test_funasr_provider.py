@@ -313,6 +313,7 @@ def test_health_reports_a_missing_environment(storage):
     health = provider.health()
     assert (health.available, health.state) == (False, "environment_missing")
     assert "uv sync --extra funasr" in health.detail
+    assert health.hint is not None and "npm run worker:funasr" in health.hint
 
 
 def test_health_reports_missing_models(storage):
@@ -320,21 +321,102 @@ def test_health_reports_missing_models(storage):
     health = provider.health()
     assert (health.available, health.state) == (False, "models_missing")
     assert "6 of 6" in health.detail and "models -- pull" in health.detail
+    assert health.hint is not None and health.hint.endswith("npm run worker:models -- pull")
 
 
 def test_health_reports_wrong_sizes_without_hashing(storage):
     install_models(storage, {**CONTENTS, "model.pt": b"weights!"})
     health = make_provider(storage)[0].health()
     assert (health.available, health.state) == (False, "verification_failed")
+    assert health.hint is not None and "Download them again" in health.hint
 
 
-def test_health_is_ready_before_the_first_load_and_nothing_is_loaded(storage):
+@pytest.mark.parametrize(
+    "state", ["environment_missing", "models_missing", "verification_failed", "load_failed"]
+)
+def test_hints_are_plain_language_with_at_most_one_command(state):
+    from pebble_worker.providers.funasr import HINTS
+
+    hint = HINTS[state]
+    assert hint.count("npm run") + hint.count("uv ") <= 1
+    for jargon in ("UV_CACHE_DIR", "services/worker", "SHA", "FunASR", "manifest", "~/.pebble"):
+        assert jargon not in hint
+
+
+def test_health_is_checking_until_background_verification_passes(storage):
     install_models(storage)
     provider, loads = make_provider(storage)
     health = provider.health()
-    assert (health.available, health.state) == (True, "ready")
+    assert (health.available, health.state, health.hint) == (False, "checking", None)
+    provider.prepare(wait=True)
+    health = provider.health()
+    assert (health.available, health.state, health.hint) == (True, "ready", None)
     assert "first transcription" in health.detail
+    assert loads == []  # verification never loads models
+
+
+def test_health_never_blocks_on_verification(storage, monkeypatch):
+    import threading
+
+    from pebble_worker.providers import funasr
+
+    install_models(storage)
+    release = threading.Event()
+    real_verify = funasr.verify_model
+
+    def slow_verify(storage_, spec):
+        release.wait(5)
+        return real_verify(storage_, spec)
+
+    monkeypatch.setattr(funasr, "verify_model", slow_verify)
+    provider, _ = make_provider(storage)
+    provider.prepare()  # as the worker does at startup
+    for _ in range(3):
+        assert provider.health().state == "checking"  # returns while hashing is blocked
+    release.set()
+    provider.prepare(wait=True)
+    assert provider.health().state == "ready"
+
+
+def test_hash_mismatch_is_reported_by_background_verification(storage):
+    install_models(storage, {**CONTENTS, "model.pt": b"WEIGHTS"})  # same size, wrong content
+    provider, loads = make_provider(storage)
+    provider.prepare(wait=True)
+    health = provider.health()
+    assert (health.available, health.state) == (False, "verification_failed")
+    assert health.hint is not None and "npm run worker:models -- pull" in health.hint
     assert loads == []
+
+
+def test_changed_files_are_verified_again(storage):
+    import os
+
+    install_models(storage)
+    provider, _ = make_provider(storage)
+    provider.prepare(wait=True)
+    assert provider.health().state == "ready"
+    target = model_dir(storage, SPECS["asr"]) / "model.pt"
+    target.write_bytes(b"WEIGHTS")  # same size, different content
+    os.utime(target, ns=(1, 1))
+    assert provider.health().state == "checking"
+    provider.prepare(wait=True)
+    assert provider.health().state == "verification_failed"
+    target.write_bytes(CONTENTS["model.pt"])  # repaired, e.g. by models pull
+    assert provider.health().state == "checking"
+    provider.prepare(wait=True)
+    assert provider.health().state == "ready"
+
+
+def test_first_job_reuses_background_verification(storage, monkeypatch):
+    from pebble_worker.providers import funasr
+
+    install_models(storage)
+    provider, loads = make_provider(storage)
+    provider.prepare(wait=True)
+    calls = []
+    monkeypatch.setattr(funasr, "verify_model", lambda *a: calls.append(a))
+    provider.transcribe(CHUNK, NEVER)
+    assert calls == [] and len(loads) == 1
 
 
 def test_models_load_lazily_once_from_local_folders(storage):
@@ -358,6 +440,21 @@ def test_hash_mismatch_refuses_to_load(storage):
     assert "failed verification" in raised.value.message
     assert loads == []
     assert provider.health().state == "verification_failed"
+
+
+def test_files_changed_after_verification_are_checked_before_loading(storage):
+    import os
+
+    install_models(storage)
+    provider, loads = make_provider(storage)
+    provider.prepare(wait=True)
+    target = model_dir(storage, SPECS["vad"]) / "model.pt"
+    target.write_bytes(b"WEIGHTS")
+    os.utime(target, ns=(1, 1))
+    with pytest.raises(PipelineError) as raised:
+        provider.transcribe(CHUNK, NEVER)
+    assert raised.value.code == FailureCode.PROVIDER_UNAVAILABLE
+    assert loads == []
 
 
 def test_missing_environment_fails_the_job_without_fallback(storage):
@@ -387,6 +484,7 @@ def test_load_failure_is_reported_and_retried_on_the_next_job(storage):
     health = provider.health()
     assert (health.available, health.state) == (False, "load_failed")
     assert "RuntimeError" in health.detail
+    assert health.hint is not None and "RuntimeError" not in health.hint
 
 
 def test_execution_failure_is_a_retryable_provider_error(storage):

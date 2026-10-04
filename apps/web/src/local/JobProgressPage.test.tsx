@@ -128,4 +128,45 @@ describe("JobProgressPage", () => {
     expect(await screen.findByRole("button", { name: "Retry from the start" })).toBeInTheDocument();
     expect(document.getElementById("job-status")).toHaveTextContent("Cancelled");
   });
+
+  it("keeps the mock's preview wording", async () => {
+    renderJob(makeJob({ status: "running", stage: "merging" }));
+    expect(await screen.findByText("Preparing processing preview")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Assembling the preview transcript");
+  });
+});
+
+describe("JobProgressPage — local transcription (FunASR)", () => {
+  const asr = { provider: { id: "funasr", kind: "asr" as const } };
+
+  it("describes creating a transcript, with real section counts only", async () => {
+    renderJob(
+      makeJob({
+        ...asr,
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 0, totalChunks: 3 },
+      }),
+    );
+    expect(await screen.findByText("Creating your transcript")).toBeInTheDocument();
+    expect(screen.getByText("Processing section 1 of 3")).toBeInTheDocument();
+    const stages = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(stages.at(-1)).toBe("Assembling the transcript");
+    expect(document.body.textContent).not.toMatch(/%|preview|placeholder/i);
+  });
+
+  it("opens the real transcript when finished", async () => {
+    renderJob(
+      makeJob({
+        ...asr,
+        status: "completed",
+        stage: "merging",
+        progress: { completedChunks: 1, totalChunks: 1 },
+      }),
+    );
+    const open = await screen.findByRole("link", { name: "Open transcript" });
+    expect(open).toHaveAttribute("href", "/episodes/ep-0123456789ab");
+    expect(screen.getByRole("status")).toHaveTextContent("Transcript finished");
+    expect(screen.queryByText(/preview/i)).not.toBeInTheDocument();
+  });
 });

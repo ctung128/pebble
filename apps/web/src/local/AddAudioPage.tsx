@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { WorkerError } from "./workerClient.ts";
+import { LOCAL_COPY } from "./providerCopy.ts";
 import { useWorker } from "./WorkerContext.tsx";
 import { WorkerStatusCard } from "./WorkerStatusCard.tsx";
 import {
@@ -33,7 +34,8 @@ const UPLOAD_ERRORS: Record<string, string> = {
 };
 
 export function AddAudioPage() {
-  const { client, status, recheck } = useWorker();
+  const { client, status, mode, recheck } = useWorker();
+  const copy = LOCAL_COPY[mode ?? "mock"];
   const navigate = useNavigate();
   const ids = { file: useId(), title: useId(), owner: useId(), errors: useId() };
 
@@ -84,13 +86,10 @@ export function AddAudioPage() {
 
   return (
     <div className={styles.page}>
-      <title>Process audio locally · Pebble</title>
+      <title>{`${copy.uploadHeading} · Pebble`}</title>
       <header className={styles.intro}>
-        <h1 className={styles.heading}>Process audio locally</h1>
-        <p className={styles.lede}>
-          Pebble prepares your audio on this computer. This preview uses placeholder transcript text
-          while Mandarin speech recognition is being connected.
-        </p>
+        <h1 className={styles.heading}>{copy.uploadHeading}</h1>
+        <p className={styles.lede}>{copy.uploadDescription}</p>
       </header>
 
       <WorkerStatusCard status={status} onRecheck={recheck} />
@@ -190,7 +189,7 @@ export function AddAudioPage() {
           </div>
 
           <button type="submit" className={styles.primaryButton} disabled={busy} aria-busy={busy}>
-            {busy ? "Sending…" : "Run processing preview"}
+            {busy ? "Sending…" : copy.submitLabel}
           </button>
         </form>
       ) : null}

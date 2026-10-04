@@ -154,8 +154,9 @@ mock: if FunASR or its models are unavailable, the worker reports it and jobs fa
 clear reason.
 
 - **CPU only.** `device="cpu"`; MPS is not configured.
-- **Lazy loading.** Starting the worker imports nothing heavy. On the first transcription
-  the provider verifies every manifest file (size and SHA-256), then loads the three models
+- **Lazy loading.** Starting the worker imports nothing heavy; it verifies every manifest
+  file (size and SHA-256) in the background. On the first transcription the provider reuses
+  that verification (or verifies again if any file changed), then loads the three models
   from their local folders with `disable_update=True` (no PyPI version check) and
   `check_latest=False`. FunASR only contacts a hub for a model path that doesn't exist
   locally, so normal operation is offline. Models stay loaded until the worker stops.
@@ -230,19 +231,37 @@ after the last segment is not flagged.
 
 ### Health and failures
 
-| Condition                  | Where it shows                                                                                                         | Remediation                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| FunASR environment missing | health: unavailable (`environment_missing`); jobs: `PROVIDER_UNAVAILABLE`                                              | `uv sync --extra funasr` in `services/worker` |
-| Model files missing        | health: unavailable (`models_missing`); jobs: `PROVIDER_UNAVAILABLE`                                                   | `npm run worker:models -- pull`               |
-| Model verification failed  | health: unavailable (`verification_failed`; sizes on every check, hashes before loading); jobs: `PROVIDER_UNAVAILABLE` | `models verify`, then `models pull`           |
-| Provider load failure      | health: unavailable (`load_failed`) after a failed load; jobs: `PROVIDER_UNAVAILABLE` (retried on the next job)        | check `~/.pebble/logs/worker.log`, restart    |
-| Unsupported media          | jobs: `UNSUPPORTED_MEDIA` (at probing for the source file; at transcription if a chunk isn't 16 kHz mono 16-bit)       | use another file / retry                      |
-| No speech / empty output   | jobs: `NO_SPEECH_DETECTED` (not retryable)                                                                             | check the audio contains speech               |
-| Provider execution failure | jobs: `PROVIDER_ERROR` (retryable); normalization failures are `PROVIDER_ERROR`, not retryable                         | retry; see the log                            |
+`/health` reports the FunASR provider's `state` and, when something needs fixing, a
+plain-language `hint` with at most one command (schema 1.5). The local app shows the hint; the
+developer-oriented `detail` stays in the payload and `npm run worker:doctor`.
 
-Health checks are cheap (file presence and sizes, no hashing or imports), so the app can poll
-them. The worker log records each chunk's output shape (keys and counts) and never any
-recognized text.
+| `state`               | When                                                                                                          | App shows                                               | Hint (command)                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------- |
+| `checking`            | after startup (or after model files change) while every file's size and SHA-256 is verified in the background | "Checking local speech models…", re-checks every second | —                               |
+| `ready`               | verification passed for the files as they are now                                                             | "Local transcription is ready."                         | —                               |
+| `environment_missing` | the `funasr` extra isn't installed                                                                            | "Pebble's local transcription needs setup."             | `npm run worker:funasr`         |
+| `models_missing`      | a manifest file is missing                                                                                    | "Pebble's local transcription needs setup."             | `npm run worker:models -- pull` |
+| `verification_failed` | a file has the wrong size, or its hash failed                                                                 | "Pebble's local transcription needs setup."             | `npm run worker:models -- pull` |
+| `load_failed`         | FunASR couldn't load verified models on a job (retried on the next job)                                       | "Pebble's local transcription isn't available."         | `npm run worker:doctor`         |
+
+Verification never blocks the worker: it binds and answers `/health` immediately, hashes in a
+background thread, and never loads models or touches the network. A passing result is cached
+in memory for the files' exact sizes and modification times; the first job reuses it, and any
+change to a file (for example a new `models pull`) triggers verification again — before
+loading, too. Health checks stay cheap (file stats only) so the app can poll them. Models
+still load lazily on the first job.
+
+Job failures:
+
+| Condition                  | Job failure                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Provider unavailable       | `PROVIDER_UNAVAILABLE` (environment, models, verification or load)                                         |
+| Unsupported media          | `UNSUPPORTED_MEDIA` (at probing for the source file; at transcription if a chunk isn't 16 kHz mono 16-bit) |
+| No speech / empty output   | `NO_SPEECH_DETECTED` (not retryable)                                                                       |
+| Provider execution failure | `PROVIDER_ERROR` (retryable); normalization failures are `PROVIDER_ERROR`, not retryable                   |
+
+The worker log records each chunk's output shape (keys and counts) and never any recognized
+text.
 
 ### Observations (one clip, not a benchmark)
 

@@ -20,8 +20,11 @@ class Capabilities:
 class ProviderHealth:
     available: bool
     detail: str | None
-    #: Machine-readable state for logs and doctor; `detail` is the human explanation.
+    #: Machine-readable state (schema 1.5): ready, checking, environment_missing,
+    #: models_missing, verification_failed or load_failed. `detail` is for developers.
     state: str = "ready"
+    #: Plain-language remediation for the local app, with at most one command (schema 1.5).
+    hint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,7 +75,13 @@ class TranscriptionProvider(Protocol):
     capabilities: Capabilities
     provenance_note: str
 
-    def health(self) -> ProviderHealth: ...
+    def health(self) -> ProviderHealth:
+        """Cheap and non-blocking: called on every /health request."""
+        ...
+
+    def prepare(self, *, wait: bool = False) -> None:
+        """Starts any background readiness checks (at worker startup); `wait` blocks for them."""
+        ...
 
     def provenance_details(self) -> ProvenanceDetails | None:
         """Model and runtime provenance for ASR output; None for the mock."""

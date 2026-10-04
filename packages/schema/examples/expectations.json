@@ -85,6 +85,11 @@
       "code": "INVALID_PAYLOAD",
       "path": "segments.0.review.flags.0",
       "message": "."
+    },
+    "worker-health-unknown-provider-state.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "providers.0.state",
+      "message": "."
     }
   }
 }

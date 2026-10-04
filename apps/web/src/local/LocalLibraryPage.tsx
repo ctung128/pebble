@@ -4,6 +4,7 @@ import type { Job } from "@pebble/schema";
 import { ConfirmButton } from "../components/ConfirmButton.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { canRetry, isActive, sectionProgress, statusLabel } from "./jobCopy.ts";
+import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobList } from "./useJobList.ts";
 import { LOCAL_EPISODE_ID, WorkerError } from "./workerClient.ts";
 import { useWorker } from "./WorkerContext.tsx";
@@ -34,7 +35,7 @@ export function LocalLibraryPage() {
         <>
           <p>
             <Link to="/process" className={styles.primaryButton}>
-              Process audio locally
+              {LOCAL_COPY[status.mode].uploadHeading}
             </Link>
           </p>
           {error ? (
@@ -110,7 +111,7 @@ function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
       <div className={styles.rowActions}>
         {job.status === "completed" ? (
           <Link to={`/episodes/${job.episodeId}`} className={styles.secondaryButton}>
-            Open preview
+            {LOCAL_COPY[modeForJob(job)].libraryOpenAction}
           </Link>
         ) : (
           <Link to={`/jobs/${job.id}`} className={styles.secondaryButton}>

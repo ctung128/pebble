@@ -14,13 +14,14 @@ M0C-1 (local worker, `services/worker`) and M0C-2 (web local mode, `apps/web/src
 `npm run test:worker`, `npm run worker:models -- list|verify|pull`. Default port 8790 (8765 is
 AnkiConnect's). Read `docs/LOCAL_MODE.md` and `docs/MODELS.md` before changing the worker.
 
-**M1-A (FunASR setup, smoke test, provider integration) is in progress.** Dependency setup is
-approved: the worker's optional `funasr` extra (`funasr==1.4.16`, `modelscope==1.40.1`,
+**M1-A (FunASR setup, smoke test, provider integration) is committed (5b4538f); M1-C0
+(provider-aware local health and flow copy, health contract 1.5) is the current narrow fix.**
+Dependency setup is approved: the worker's optional `funasr` extra (`funasr==1.4.16`, `modelscope==1.40.1`,
 `torch==2.11.0` + `torchaudio==2.11.0` as a matched pair) plus the resolver constraint
 `transformers>=4.32.0,<5` (never a direct dependency; don't block or patch it — FunASR imports
-it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-A3 (FunASR
-provider, `npm run worker:funasr`, ADR 0006) is built and awaits review. **M1-B (benchmark) and
-M1-C (web/UI) must not start until the user reviews M1-A.** Never put recognized transcript
+it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. **M1-B (benchmark) and
+broader M1-C (web/UI) need a separately approved plan.** Commits need the user's explicit
+"commit" after a shown status/diff/privacy scan. Never put recognized transcript
 text, private audio or private clip paths in the repository, tests, docs or commits.
 
 Approved models — exactly these, pinned in `services/worker/src/pebble_worker/models/manifest.py`

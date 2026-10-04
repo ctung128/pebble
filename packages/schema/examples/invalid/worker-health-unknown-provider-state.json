@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.5",
+  "workerVersion": "0.1.0",
+  "status": "degraded",
+  "dataDirWritable": true,
+  "dataDir": {
+    "path": "~/.pebble",
+    "writable": true,
+    "hint": null
+  },
+  "tools": {
+    "ffmpeg": {
+      "available": true,
+      "version": "8.0"
+    },
+    "ffprobe": {
+      "available": true,
+      "version": "8.0"
+    }
+  },
+  "providers": [
+    {
+      "id": "funasr",
+      "kind": "asr",
+      "available": false,
+      "detail": "Speech model files are missing (14 of 14). Download and verify the models with: npm run worker:models -- pull",
+      "state": "almost_ready",
+      "hint": "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull"
+    }
+  ]
+}

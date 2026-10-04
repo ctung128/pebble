@@ -14,10 +14,9 @@ over `127.0.0.1` only. Nothing is uploaded to the internet.
 >
 > - With the default `npm run worker`, transcripts are **mock placeholder text** (such as
 >   `（模拟转写）第 1-1 段`), not recognized speech. The mock never listens to the audio.
-> - The local web app is not yet updated for FunASR transcripts (M1-C). It only locks learning
->   tools for mock transcripts, so a FunASR transcript opened there would show Pinyin, Save,
->   Edit and English controls (English has no provider and fails). Until M1-C, use FunASR
->   transcripts for review only.
+> - With `npm run worker:funasr`, the local app creates real transcripts. Pinyin, editing,
+>   saving and Anki export work; English stays hidden until a local translation provider
+>   exists.
 
 Pebble starts at a local audio file you choose. It does not fetch, download or scrape audio
 from URLs or apps, and it does not work around any platform's content protections.
@@ -61,15 +60,21 @@ npm run worker          # the worker on 127.0.0.1:8790
 npm run dev:local       # the app in local mode on http://localhost:5175
 ```
 
-Open **http://localhost:5175**. (Port 5175 lets local mode run alongside the demo dev server
+Open **http://localhost:5175**. With `npm run worker:funasr` instead of `npm run worker`, the
+same flow creates real transcripts: **Create a transcript locally** → **Create transcript** →
+**Creating your transcript** → **Open transcript**. Just after the worker starts, the app shows
+"Checking local speech models…" for a few seconds while the worker verifies the model files. (Port 5175 lets local mode run alongside the demo dev server
 on 5173; both are in the worker's default origin allowlist.)
 
-1. **Worker status.** The app calls `/health` first and offers uploads only when it reads
-   "Local worker is ready." Otherwise it explains what to fix — the worker isn't running
-   (`npm run worker`), FFmpeg is missing (`brew install ffmpeg`, then
+1. **Worker status.** The app calls `/health` first and offers uploads only when the worker's
+   one provider is ready: "Local worker is ready." (mock) or "Local transcription is ready."
+   (FunASR). Otherwise it explains what to fix — the worker isn't running (`npm run worker`,
+   or `npm run worker:funasr`), FFmpeg is missing (`brew install ffmpeg`, then
    `npm run worker:doctor`), the app and worker versions don't match, the data folder isn't
-   accessible (with its path and the worker's hint), or the worker refused this page's
-   address — and re-checks every few seconds.
+   accessible (with its path and the worker's hint), the worker runs a provider this app
+   doesn't know ("Pebble's local worker configuration does not match this app."), FunASR needs
+   setup or couldn't load (with the worker's one-line hint), or the worker refused this page's
+   address — and re-checks every few seconds (every second while models are being checked).
 2. **Process audio locally.** Choose a file (M4A, MP3, WAV, FLAC, OGG/Opus, WebM or AAC, up to
    2 GB), adjust the title (prefilled from the filename), confirm _"I own this audio or am
    authorized to process it. Pebble processes it only on this computer."_, and choose **Run

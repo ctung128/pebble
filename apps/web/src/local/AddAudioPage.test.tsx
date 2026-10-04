@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { fakeWorkerClient, makeJob, renderLocal } from "../test/localFixtures.tsx";
+import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
 import { AddAudioPage, OWNERSHIP_LABEL } from "./AddAudioPage.tsx";
 import { WorkerError } from "./workerClient.ts";
 
@@ -25,9 +25,10 @@ describe("AddAudioPage", () => {
     expect(screen.getByRole("heading", { name: "Process audio locally" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        /This preview uses placeholder transcript text while Mandarin speech recognition is being connected./,
+        "This preview prepares your audio on this computer and creates placeholder transcript text for testing.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run processing preview" })).toBeInTheDocument();
     expect(screen.getByText(/stays private on this computer/)).toHaveTextContent("~/.pebble");
     expect(document.body.textContent).not.toMatch(/transcribe audio|create transcript/i);
   });
@@ -122,5 +123,70 @@ describe("AddAudioPage", () => {
       "This file is larger than the worker's upload limit.",
     );
     await waitFor(() => expect(submitButton()).toBeEnabled());
+  });
+});
+
+describe("AddAudioPage — local transcription (FunASR)", () => {
+  const funasrClient = (overrides = {}) =>
+    fakeWorkerClient({ health: async () => ({ ok: true, data: funasrHealth() }), ...overrides });
+
+  async function renderFunasr(client = funasrClient()) {
+    const view = renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
+    await screen.findByText("Local transcription is ready.");
+    return view;
+  }
+
+  it("uses transcription wording, never preview or placeholder wording", async () => {
+    await renderFunasr();
+    expect(
+      screen.getByRole("heading", { name: "Create a transcript locally" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Pebble processes your audio on this computer and creates a timestamped Mandarin transcript.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create transcript" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/placeholder|processing preview|FunASR/i);
+  });
+
+  it("still requires ownership confirmation before uploading", async () => {
+    const { client } = await renderFunasr();
+    await userEvent.upload(fileInput(), audio());
+    await userEvent.click(screen.getByRole("button", { name: "Create transcript" }));
+    expect(
+      screen.getByText("Confirm that you own this audio or are authorized to process it."),
+    ).toBeInTheDocument();
+    expect(client.upload).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(OWNERSHIP_LABEL)).toBeInTheDocument();
+  });
+
+  it("uploads once ownership is confirmed and opens the job", async () => {
+    const { client } = await renderFunasr(
+      funasrClient({
+        upload: vi.fn(async () => makeJob({ provider: { id: "funasr", kind: "asr" } })),
+      }),
+    );
+    await userEvent.upload(fileInput(), audio());
+    await userEvent.click(ownership());
+    await userEvent.click(screen.getByRole("button", { name: "Create transcript" }));
+    expect(await screen.findByText("Job page job-0123456789ab")).toBeInTheDocument();
+    expect(client.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no upload while speech models are being checked", async () => {
+    const client = fakeWorkerClient({
+      health: async () => ({
+        ok: true,
+        data: funasrHealth({ state: "checking", available: false }),
+      }),
+    });
+    renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
+    expect(await screen.findByText("Checking local speech models…")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Audio file")).not.toBeInTheDocument();
+    // The last known provider sets the wording even before the worker is ready.
+    expect(
+      screen.getByRole("heading", { name: "Create a transcript locally" }),
+    ).toBeInTheDocument();
   });
 });

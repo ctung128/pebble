@@ -54,7 +54,12 @@ def check_health(
 
 def _health(provider: TranscriptionProvider) -> dict[str, object]:
     health = provider.health()
-    return {"available": health.available, "detail": health.detail}
+    return {
+        "available": health.available,
+        "detail": health.detail,
+        "state": health.state,
+        "hint": health.hint,
+    }
 
 
 def display_path(path: Path) -> str:

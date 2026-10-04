@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import {
+  CONFIGURATION_MISMATCH,
+  FUNASR_CHECKING,
+  FUNASR_NEEDS_SETUP,
+  LOCAL_COPY,
+} from "./providerCopy.ts";
 import type { WorkerStatus } from "./workerHealth.ts";
 import styles from "./local.module.css";
 
@@ -17,13 +23,25 @@ export function WorkerStatusCard({ status, onRecheck }: WorkerStatusCardProps) {
     );
   }
 
+  if (status.kind === "provider-checking") {
+    return (
+      <section className={styles.status} data-tone="neutral" role="status" aria-live="polite">
+        <p className={styles.statusTitle}>{FUNASR_CHECKING}</p>
+        <p className={styles.statusBody}>
+          This takes a few seconds. Pebble checks again on its own.
+        </p>
+      </section>
+    );
+  }
+
   if (status.kind === "ready") {
     const { tools } = status.health;
+    const copy = LOCAL_COPY[status.mode];
     return (
       <section className={styles.status} data-tone="ok" role="status" aria-live="polite">
-        <p className={styles.statusTitle}>Local worker is ready.</p>
+        <p className={styles.statusTitle}>{copy.readyTitle}</p>
         <p className={styles.statusBody}>
-          FFmpeg {tools.ffmpeg.version} · Processing preview (placeholder transcript text) · worker{" "}
+          FFmpeg {tools.ffmpeg.version} · {copy.readyCapability} · worker{" "}
           {status.health.workerVersion}
         </p>
       </section>
@@ -42,7 +60,16 @@ export function WorkerStatusCard({ status, onRecheck }: WorkerStatusCardProps) {
   );
 }
 
-type Problem = Exclude<WorkerStatus, { kind: "checking" } | { kind: "ready" }>;
+type Problem = Exclude<
+  WorkerStatus,
+  { kind: "checking" } | { kind: "ready" } | { kind: "provider-checking" }
+>;
+
+/** Shows a worker hint, formatting its (single) `npm run …` command as code. */
+function Hint({ text }: { text: string }) {
+  const parts = text.split(/(npm run [\w:-]+(?: -- [\w-]+)?)/);
+  return <p>{parts.map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : part))}</p>;
+}
 
 const PROBLEMS: {
   [K in Problem["kind"]]: (status: Extract<Problem, { kind: K }>) => {
@@ -57,6 +84,10 @@ const PROBLEMS: {
         <p>In a terminal, from the Pebble folder, run:</p>
         <pre className={styles.command}>
           <code>npm run worker</code>
+        </pre>
+        <p>For real Mandarin transcription, start it with:</p>
+        <pre className={styles.command}>
+          <code>npm run worker:funasr</code>
         </pre>
         <p>Pebble checks again automatically every few seconds.</p>
       </>
@@ -105,15 +136,33 @@ const PROBLEMS: {
       </>
     ),
   }),
-  "provider-unavailable": ({ detail }) => ({
-    title: "Pebble's processing preview isn't available.",
+  "provider-setup": ({ hint }) => ({
+    title: FUNASR_NEEDS_SETUP,
+    body: hint ? (
+      <Hint text={hint} />
+    ) : (
+      <p>
+        Run <code>npm run worker:doctor</code> for details, then restart the worker.
+      </p>
+    ),
+  }),
+  "provider-unavailable": ({ mode, hint }) => ({
+    title: LOCAL_COPY[mode].unavailableHeading,
+    body: hint ? (
+      <Hint text={hint} />
+    ) : (
+      <p>
+        Run <code>npm run worker:doctor</code> for details, then restart the worker.
+      </p>
+    ),
+  }),
+  "provider-mismatch": () => ({
+    title: CONFIGURATION_MISMATCH,
     body: (
-      <>
-        {detail ? <p>{detail}</p> : null}
-        <p>
-          Run <code>npm run worker:doctor</code> for details, then restart the worker.
-        </p>
-      </>
+      <p>
+        Stop the worker and start it again from this Pebble folder with <code>npm run worker</code>{" "}
+        (processing preview) or <code>npm run worker:funasr</code> (local transcription).
+      </p>
     ),
   }),
   "origin-blocked": () => ({

@@ -102,6 +102,7 @@ def doctor(settings: Settings) -> int:
         rows.append(("Data directory", f"{storage.root}: {error}", False))
 
     provider = build_provider(settings, storage)
+    provider.prepare(wait=True)  # doctor waits for full model verification
     health = provider.health()
     rows.append(("Provider", f"{provider.id} — {health.detail}", health.available))
     rows.append(("Binding", f"{settings.host}:{settings.port} (loopback only)", True))

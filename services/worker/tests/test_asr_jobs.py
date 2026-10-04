@@ -151,3 +151,46 @@ def test_review_thresholds_come_from_the_environment(tmp_path):
     assert settings.review.speech_gap_ms == 3500
     with pytest.raises(ConfigError):
         Settings.from_env({"PEBBLE_DATA_DIR": str(tmp_path), "PEBBLE_REVIEW_LONG_SEGMENT_MS": "0"})
+
+
+# --- /health (schema 1.5) -----------------------------------------------------------------------
+
+
+def _provider_status(client):
+    body = client.get("/health").json()
+    assert body["schemaVersion"] == "1.5"
+    [provider] = body["providers"]
+    return body["status"], provider
+
+
+def test_health_reports_checking_then_ready_for_funasr(make_client, settings):
+    provider = funasr(settings, SentencePerChunk())
+    client = make_client(provider=provider)  # startup begins verification in the background
+    provider.prepare(wait=True)
+    status, entry = _provider_status(client)
+    assert (status, entry["id"], entry["kind"], entry["state"], entry["available"]) == (
+        "ok",
+        "funasr",
+        "asr",
+        "ready",
+        True,
+    )
+    assert "hint" not in entry
+
+
+def test_health_reports_setup_state_and_hint_for_funasr(make_client, settings):
+    client = make_client(provider=funasr(settings, SentencePerChunk(), install=False))
+    status, entry = _provider_status(client)
+    assert (status, entry["state"], entry["available"]) == ("degraded", "models_missing", False)
+    assert entry["hint"].endswith("npm run worker:models -- pull")
+
+
+def test_mock_health_reports_ready_without_a_hint(client):
+    status, entry = _provider_status(client)
+    assert (status, entry["id"], entry["state"], entry["available"]) == (
+        "ok",
+        "mock",
+        "ready",
+        True,
+    )
+    assert "hint" not in entry

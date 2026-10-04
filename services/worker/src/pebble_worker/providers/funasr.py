@@ -62,6 +62,25 @@ INSTALL_HINT = (
 )
 PULL_HINT = "Download and verify the models with: npm run worker:models -- pull"
 
+#: Plain-language remediation shown in the local app (schema 1.5 `hint`): at most one command.
+HINTS = {
+    "environment_missing": (
+        "Start the worker with npm run worker:funasr to install the speech-recognition "
+        "components it needs."
+    ),
+    "models_missing": (
+        "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull"
+    ),
+    "verification_failed": (
+        "The speech model files don't match what Pebble expects. Download them again, then "
+        "check again: npm run worker:models -- pull"
+    ),
+    "load_failed": (
+        "The speech models couldn't be loaded. Restart the worker and try again. If it keeps "
+        "happening, run npm run worker:doctor."
+    ),
+}
+
 _CJK = re.compile("[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _WORD = re.compile(r"[A-Za-z0-9]+")
 
@@ -72,8 +91,15 @@ class GenerateModel(Protocol):
 
 Loader = Callable[[Mapping[str, Path]], GenerateModel]
 ProviderState = Literal[
-    "environment_missing", "models_missing", "verification_failed", "load_failed", "ready"
+    "ready",
+    "checking",
+    "environment_missing",
+    "models_missing",
+    "verification_failed",
+    "load_failed",
 ]
+#: (relative path, size, mtime_ns) of every manifest file: verification is valid for one value.
+Signature = tuple[tuple[str, int, int], ...]
 
 
 class NormalizationError(Exception):
@@ -115,18 +141,26 @@ class FunASRProvider:
         self._loader = loader or self._load_funasr
         self._reader = reader or read_chunk
         self._runtime = runtime()
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()  # loading and transcription
+        self._check_lock = threading.Lock()  # verification bookkeeping only; never held long
+        self._check_thread: threading.Thread | None = None
         self._model: GenerateModel | None = None
-        self._verified = False
-        self._failure: tuple[ProviderState, str] | None = None
+        #: Files as they were when they last passed / failed full SHA-256 verification.
+        self._verified: Signature | None = None
+        self._failed: tuple[Signature, str] | None = None
+        self._load_failure: str | None = None
 
     # --- health -----------------------------------------------------------------------------
 
     def health(self) -> ProviderHealth:
-        """Cheap checks only (no hashing, no imports): safe to call on every /health poll."""
+        """
+        Cheap and non-blocking (file stats only; no hashing, no imports), so it is safe on every
+        /health poll. Full verification runs in the background (`prepare`); until it has passed
+        for the files as they are now, the state is `checking`.
+        """
         if self._runtime is None:
-            return ProviderHealth(
-                False, f"FunASR is not installed. {INSTALL_HINT}", "environment_missing"
+            return self._unavailable(
+                "environment_missing", f"FunASR is not installed. {INSTALL_HINT}"
             )
         missing = 0
         wrong_size = 0
@@ -139,29 +173,98 @@ class FunASRProvider:
                     wrong_size += 1
         total = sum(len(spec.files) for spec in self.models.values())
         if missing:
-            return ProviderHealth(
-                False,
-                f"Speech model files are missing ({missing} of {total}). {PULL_HINT}",
+            return self._unavailable(
                 "models_missing",
+                f"Speech model files are missing ({missing} of {total}). {PULL_HINT}",
             )
         if wrong_size:
-            return ProviderHealth(
-                False,
+            return self._unavailable(
+                "verification_failed",
                 f"{wrong_size} speech model file(s) have the wrong size. Check them with "
                 f"npm run worker:models -- verify, then {PULL_HINT[0].lower()}{PULL_HINT[1:]}",
-                "verification_failed",
             )
-        if self._failure is not None:
-            state, detail = self._failure
-            return ProviderHealth(False, detail, state)
-        if self._model is not None:
-            return ProviderHealth(True, "FunASR Paraformer is loaded (CPU).", "ready")
-        return ProviderHealth(
-            True,
-            "FunASR Paraformer is ready (CPU). Models are verified and loaded when the first "
-            "transcription starts, which takes a little longer.",
-            "ready",
-        )
+        if self._load_failure is not None:
+            return self._unavailable("load_failed", self._load_failure)
+        signature = self._signature()
+        with self._check_lock:
+            verified = signature is not None and signature == self._verified
+            failed = self._failed if self._failed and self._failed[0] == signature else None
+        if verified:
+            if self._model is not None:
+                return ProviderHealth(True, "FunASR Paraformer is loaded (CPU).", "ready")
+            return ProviderHealth(
+                True,
+                "FunASR Paraformer is ready (CPU). Models are verified; they load when the "
+                "first transcription starts, which takes a little longer.",
+                "ready",
+            )
+        if failed is not None:
+            return self._unavailable("verification_failed", failed[1])
+        self.prepare()
+        return ProviderHealth(False, "Verifying the speech model files…", "checking")
+
+    def prepare(self, *, wait: bool = False) -> None:
+        """
+        Starts full model verification (size + SHA-256, local files only; nothing is loaded or
+        downloaded) in the background unless the current files already have a result.
+        With `wait`, blocks until it has finished (doctor, and a job that needs the result).
+        """
+        if self._runtime is None:
+            return
+        with self._check_lock:
+            thread = self._check_thread
+            if thread is None or not thread.is_alive():
+                signature = self._signature()
+                known = signature is not None and (
+                    signature == self._verified or (self._failed or (None,))[0] == signature
+                )
+                if signature is None or known:
+                    thread = None
+                else:
+                    thread = threading.Thread(
+                        target=self._run_verification, name="pebble-model-check", daemon=True
+                    )
+                    self._check_thread = thread
+                    thread.start()
+        if wait and thread is not None:
+            thread.join()
+
+    def _run_verification(self) -> None:
+        before = self._signature()
+        reports = [verify_model(self.storage, spec) for spec in self.models.values()]
+        after = self._signature()
+        if before is None or before != after:
+            return  # files changed while hashing; the next health check starts again
+        missing = sum(r.status == "missing" for report in reports for r in report.files)
+        failed = sum(r.status == "fail" for report in reports for r in report.files)
+        with self._check_lock:
+            if missing or failed:
+                self._failed = (
+                    after,
+                    f"Speech model verification failed ({failed} failed, {missing} missing). "
+                    f"Run npm run worker:models -- verify for details. {PULL_HINT}",
+                )
+                log.warning("model verification failed (%d failed, %d missing)", failed, missing)
+            else:
+                self._verified = after
+                self._failed = None
+                log.info("model verification passed")
+
+    def _signature(self) -> Signature | None:
+        entries = []
+        for spec in self.models.values():
+            for file in spec.files:
+                path = file_path(self.storage, spec, file)
+                try:
+                    stat = path.lstat()
+                except OSError:
+                    return None
+                entries.append((f"{spec.model_id}/{file.path}", stat.st_size, stat.st_mtime_ns))
+        return tuple(entries)
+
+    @staticmethod
+    def _unavailable(state: ProviderState, detail: str) -> ProviderHealth:
+        return ProviderHealth(False, detail, state, HINTS[state])
 
     def provenance_details(self) -> ProvenanceDetails:
         return ProvenanceDetails(
@@ -217,46 +320,37 @@ class FunASRProvider:
                     "FunASR is not installed in the worker environment.",
                     hint=INSTALL_HINT,
                 )
-            if not self._verified:
-                self._verify_models()
+            # Reuse a verification of these exact files (same sizes and modification times);
+            # anything else is verified again before loading.
+            self.prepare(wait=True)
+            signature = self._signature()
+            with self._check_lock:
+                verified = signature is not None and signature == self._verified
+            if not verified:
+                raise PipelineError(
+                    FailureCode.PROVIDER_UNAVAILABLE,
+                    "The speech model files failed verification, so Pebble won't load them.",
+                    hint=f"Run npm run worker:models -- verify for details. {PULL_HINT}",
+                )
             paths = {role: model_dir(self.storage, spec) for role, spec in self.models.items()}
             try:
                 self._model = self._loader(paths)
             except Exception as error:
                 log.exception("FunASR failed to load the models")
-                detail = (
+                self._load_failure = (
                     f"FunASR couldn't load the speech models ({type(error).__name__}). "
                     "Check ~/.pebble/logs/worker.log, run npm run worker:models -- verify, "
                     "then restart the worker."
                 )
-                self._failure = ("load_failed", detail)
                 raise PipelineError(
                     FailureCode.PROVIDER_UNAVAILABLE,
                     "FunASR couldn't load the speech models.",
                     hint="Check ~/.pebble/logs/worker.log and run npm run worker:models -- "
                     "verify, then restart the worker and retry.",
                 ) from error
-            self._failure = None
+            self._load_failure = None
             log.info("FunASR models loaded (CPU)")
             return self._model
-
-    def _verify_models(self) -> None:
-        reports = [verify_model(self.storage, spec) for spec in self.models.values()]
-        missing = sum(r.status == "missing" for report in reports for r in report.files)
-        failed = sum(r.status == "fail" for report in reports for r in report.files)
-        if missing or failed:
-            state: ProviderState = "verification_failed" if failed else "models_missing"
-            detail = (
-                f"Speech model verification failed ({failed} failed, {missing} missing). "
-                f"Run npm run worker:models -- verify for details. {PULL_HINT}"
-            )
-            self._failure = (state, detail)
-            raise PipelineError(
-                FailureCode.PROVIDER_UNAVAILABLE,
-                "The speech model files failed verification, so Pebble won't load them.",
-                hint=f"Run npm run worker:models -- verify for details. {PULL_HINT}",
-            )
-        self._verified = True
 
     def _load_funasr(self, paths: Mapping[str, Path]) -> GenerateModel:
         # Keep any ModelScope state inside the data directory, as `models pull` does.

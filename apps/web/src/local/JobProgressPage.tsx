@@ -3,7 +3,8 @@ import { Link, useParams } from "react-router";
 import type { Job } from "@pebble/schema";
 import { StatusView } from "../components/StatusView.tsx";
 import { useEpisodeSource } from "../data/SourceContext.tsx";
-import { canRetry, isActive, sectionProgress, STAGE_STEPS, statusLabel } from "./jobCopy.ts";
+import { canRetry, isActive, sectionProgress, stageSteps, statusLabel } from "./jobCopy.ts";
+import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobPolling } from "./useJobPolling.ts";
 import { WorkerError } from "./workerClient.ts";
 import { useWorker } from "./WorkerContext.tsx";
@@ -79,12 +80,14 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
     return <StatusView kind="loading" title="Loading processing status…" />;
   }
 
+  const copy = LOCAL_COPY[modeForJob(job)];
+  const steps = stageSteps(modeForJob(job));
   const finished = job.status === "completed" && verification.kind === "verified";
   const headline =
     job.status === "completed" && verification.kind !== "verified"
       ? verification.kind === "invalid"
-        ? "Finished, but the preview transcript couldn't be read"
-        : "Checking the preview transcript…"
+        ? copy.unreadableTranscript
+        : copy.checkingTranscript
       : statusLabel(job);
 
   return (
@@ -92,7 +95,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
       <title>{`${job.episodeTitle} · Processing · Pebble`}</title>
       <BackToLibrary />
       <header className={styles.intro}>
-        <p className={styles.eyebrow}>Processing preview</p>
+        <p className={styles.eyebrow}>{copy.progressEyebrow}</p>
         <h1 className={styles.heading}>{job.episodeTitle}</h1>
       </header>
 
@@ -103,7 +106,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
         {sectionProgress(job) ? <p className={styles.jobProgress}>{sectionProgress(job)}</p> : null}
 
         <ol className={styles.stages} aria-label="Stages">
-          {STAGE_STEPS.map((step, index) => (
+          {steps.map((step, index) => (
             <li key={step.stage} data-state={stepState(job, index, finished)}>
               {step.label}
             </li>
@@ -134,7 +137,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
         <div className={styles.actions}>
           {finished ? (
             <Link to={`/episodes/${job.episodeId}`} className={styles.primaryButton}>
-              Open preview transcript
+              {copy.openAction}
             </Link>
           ) : null}
           {isActive(job) ? (
@@ -168,7 +171,9 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
 }
 
 function stepState(job: Job, index: number, finished: boolean): string {
-  const current = job.stage ? STAGE_STEPS.findIndex((s) => s.stage === job.stage) : -1;
+  const current = job.stage
+    ? stageSteps(modeForJob(job)).findIndex((s) => s.stage === job.stage)
+    : -1;
   if (finished) return "done";
   if (job.status === "queued") return "pending";
   if (index < current) return "done";

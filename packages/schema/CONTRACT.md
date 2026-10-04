@@ -6,7 +6,7 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.4`.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.5`.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -15,6 +15,10 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.5** — Worker health providers may include `state` (`ready`, `checking`,
+  `environment_missing`, `models_missing`, `verification_failed`, `load_failed`) and `hint`
+  (plain-language remediation safe to show in the app, at most one command). Readers fall back
+  to `available` when `state` is absent; `detail` stays developer diagnostics.
 - **1.4** — ASR transcripts from the local worker may carry, all optional: segment
   `chunkIndex` and `review: { flags }` (structural review flags, **not confidence**), and
   provenance `models` (`{ role, id, revision }` for every model), `runtime` (package versions
@@ -164,7 +168,8 @@ Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDI
 ## Worker health (1.2)
 
 `{ schemaVersion, workerVersion, status: "ok" | "degraded", dataDirWritable, tools: { ffmpeg,
-ffprobe: { available, version } }, providers: [{ id, kind, available, detail }] }`. Never
+ffprobe: { available, version } }, providers: [{ id, kind, available, detail, state?, hint? }] }`.
+The worker lists exactly the provider it is configured with. `state` and `hint` are 1.5. Never
 contains filesystem paths, except the optional `dataDir.path` (1.3).
 
 ## Validation in two languages

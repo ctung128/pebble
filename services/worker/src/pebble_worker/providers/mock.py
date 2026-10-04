@@ -35,6 +35,9 @@ class MockProvider:
             detail="Placeholder text for pipeline testing; not speech recognition.",
         )
 
+    def prepare(self, *, wait: bool = False) -> None:
+        return None
+
     def provenance_details(self) -> None:
         return None
 

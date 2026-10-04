@@ -55,6 +55,26 @@ export function makeHealth(overrides: Partial<WorkerHealth> = {}): WorkerHealth 
   };
 }
 
+type ProviderStatus = WorkerHealth["providers"][number];
+
+/** Health from a worker started with `npm run worker:funasr` (contract 1.5). */
+export function funasrHealth(provider: Partial<ProviderStatus> = {}): WorkerHealth {
+  const ready = (provider.state ?? "ready") === "ready";
+  return makeHealth({
+    status: ready ? "ok" : "degraded",
+    providers: [
+      {
+        id: "funasr",
+        kind: "asr",
+        available: ready,
+        detail: "Developer detail: FunASR Paraformer, model.pt, uv sync --extra funasr.",
+        state: "ready",
+        ...provider,
+      },
+    ],
+  });
+}
+
 /** A WorkerClient whose every method is a spy; healthy and empty by default. */
 export function fakeWorkerClient(overrides: Partial<WorkerClient> = {}) {
   const client = {
