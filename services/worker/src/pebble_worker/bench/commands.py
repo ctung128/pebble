@@ -197,8 +197,10 @@ def experiment(storage: Storage, args: argparse.Namespace) -> int:
                 )
             print(f"Private comparison: {display_path(compare.write(storage, result))}")
         elif args.bench_action == "pair":
-            path = paired.create(storage, args.baseline, args.run, seed=args.seed)
-            print(f"Private paired review: {display_path(path)} (key kept separately)")
+            review = paired.create(storage, args.baseline, args.run, seed=args.seed)
+            print(f"Private paired review: {display_path(review.path)} (key kept separately)")
+            affected = ", ".join(review.affected) or "none"
+            print(f"{review.items} items; decided by the earlier resolver rule: {affected}")
         else:
             counts = paired.tally(storage, args.name)
             print(json.dumps(counts, indent=2))

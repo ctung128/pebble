@@ -7,7 +7,8 @@ inner cuts, so neighbours share O ms centred on the cut. Provider times are rela
 chunk's audio start, so `audio_start + t` stays in original-audio time.
 
 The resolver keeps every candidate unless it materially overlaps (in time) an already kept
-candidate from another chunk; then the one farther from its own chunk's audio edge wins and the
+candidate from another chunk; then a candidate with content (any letter or digit) beats a
+punctuation-only one, and otherwise the one farther from its own chunk's audio edge wins. The
 other is excluded with exactly one reason. Text is never joined, edited or invented, and text
 comparisons only label diagnostics. If kept segments would still overlap, the run fails.
 """
@@ -35,7 +36,9 @@ AMBIGUOUS_EDGE_MS = 250
 REPEAT_CHARS = 6
 #: Kept candidates this close to a cut are compared for possible repeats.
 REPEAT_WINDOW_MS = 4000
-EXCLUSION_REASONS = ("duplicateRemoved", "conflictLoser")
+EXCLUSION_REASONS = ("duplicateRemoved", "conflictLoser", "punctuationOnlyLoser")
+#: 2: content beats punctuation-only (added after the first Clip B runs, which used 1).
+RESOLVER_VERSION = 2
 
 
 class OverlapUnresolved(Exception):
@@ -175,6 +178,7 @@ def resolve(
             "cut": i + 1,
             "duplicateRemoved": 0,
             "conflictLoser": 0,
+            "punctuationOnlyLoser": 0,
             "ambiguous": 0,
             "foreignOrphanKept": 0,
             "possibleRepeatAcrossCut": 0,
@@ -189,17 +193,28 @@ def resolve(
     excluded: dict[str, int] = dict.fromkeys(EXCLUSION_REASONS, 0)
     ambiguous = 0
 
-    order = sorted(candidates, key=lambda c: (-c.edge, not c.owned, c.chunk, c.start, c.end))
+    # Candidates with content come first, so a punctuation-only candidate never displaces one;
+    # within each group the farther-from-edge candidate (then the owner) wins, as before.
+    order = sorted(
+        candidates, key=lambda c: (not c.norm, -c.edge, not c.owned, c.chunk, c.start, c.end)
+    )
     for candidate in order:
         rivals = [k for k in kept if k.chunk != candidate.chunk and _material(candidate, k)]
         if not rivals:
             kept.append(candidate)
             continue
         rival = max(rivals, key=lambda k: _overlap(candidate, k))
-        reason = "duplicateRemoved" if candidate.norm == rival.norm else "conflictLoser"
+        if candidate.norm == rival.norm:
+            reason = "duplicateRemoved"
+        elif not candidate.norm:
+            reason = "punctuationOnlyLoser"
+        else:
+            reason = "conflictLoser"
         excluded[reason] += 1
         at = nearest_cut(candidate)
-        is_ambiguous = len(rivals) > 1 or abs(rival.edge - candidate.edge) < AMBIGUOUS_EDGE_MS
+        is_ambiguous = reason != "punctuationOnlyLoser" and (
+            len(rivals) > 1 or abs(rival.edge - candidate.edge) < AMBIGUOUS_EDGE_MS
+        )
         ambiguous += is_ambiguous
         if at is not None:
             row = per_cut[at]
@@ -252,6 +267,7 @@ def resolve(
         latest_end = c.end if latest_end is None else max(latest_end, c.end)
 
     diagnostics: dict[str, object] = {
+        "resolverVersion": RESOLVER_VERSION,
         "candidates": len(candidates),
         "kept": len(kept),
         "excluded": excluded,

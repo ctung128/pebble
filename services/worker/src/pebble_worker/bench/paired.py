@@ -17,7 +17,9 @@ import random
 import re
 import shlex
 import string
+from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -25,9 +27,10 @@ from typing import Any
 from ..contract import Transcript
 from ..errors import StorageAccessError
 from ..storage import PRIVATE_DIR, Storage, make_private
-from .analysis import WINDOW_HALF_MS
+from .analysis import WINDOW_HALF_MS, normalize_for_cer
 from .compare import CompareError, cuts_of, label, load, valid
-from .paths import _safe, bench_root, run_file
+from .paths import bench_root, run_file, safe_path
+from .results import RunResult
 
 CONTROLS = 5
 STABILITY_DISTANCE_MS = 10_000
@@ -49,13 +52,13 @@ _BOX = re.compile(r"\[([ xX])\] ([^\[]+?)\s*(?=\[|$)")
 
 
 def reviews_dir(storage: Storage) -> Path:
-    return _safe(storage, bench_root(storage) / "reviews")
+    return safe_path(storage, bench_root(storage) / "reviews")
 
 
 def review_path(storage: Storage, name: str) -> Path:
     if not REVIEW_NAME.match(name):
         raise StorageAccessError(f"Invalid paired review name: {name!r}")
-    return _safe(storage, reviews_dir(storage) / name)
+    return safe_path(storage, reviews_dir(storage) / name)
 
 
 def _clock(ms: int) -> str:
@@ -66,28 +69,61 @@ def _boxes(options: Sequence[str]) -> str:
     return "  ".join(f"[ ] {option}" for option in options)
 
 
+def _old_resolver(result: RunResult) -> bool:
+    """Runs resolved before the punctuation-only rule (resolver version 1)."""
+    return result.overlap is not None and int(result.overlap.get("resolverVersion", 1)) < 2
+
+
+def _punctuation_only_inside(transcript: Transcript, lo: int, hi: int) -> bool:
+    return any(
+        s.end_ms > lo and s.start_ms < hi and not normalize_for_cer(s.text)
+        for s in transcript.segments
+    )
+
+
 def _items(
     storage: Storage,
     base_text: Transcript,
     cuts: Sequence[int],
-    variant_ids: Sequence[str],
+    variants: Sequence[tuple[str, RunResult, Transcript]],
     seed: int,
 ) -> list[dict[str, Any]]:
+    """
+    Cut windows, then each variant's flagged items (folded into an item they overlap), then
+    seeded controls away from cuts. A stored conflict decided by resolver version 1 in favour of
+    a punctuation-only segment marks its item `affected`.
+    """
     items: list[dict[str, Any]] = [
-        {"why": f"cut window W{n}", "lo": c - WINDOW_HALF_MS, "hi": c + WINDOW_HALF_MS}
+        {
+            "why": f"cut window W{n}",
+            "lo": c - WINDOW_HALF_MS,
+            "hi": c + WINDOW_HALF_MS,
+            "includes": Counter(),
+            "affected": False,
+        }
         for n, c in enumerate(cuts, start=1)
     ]
     flagged = 0
-    for run_id in variant_ids:
+    for run_id, result, transcript in variants:
         path = run_file(storage, run_id, "overlap.json")
         if not path.is_file():
             continue
         for entry in json.loads(path.read_text(encoding="utf-8")).get("reviewItems", []):
-            lo, hi = int(entry["startMs"]), int(entry["endMs"])
-            if flagged >= MAX_FLAGGED_ITEMS or any(i["lo"] < hi and lo < i["hi"] for i in items):
-                continue
-            items.append({"why": str(entry["kind"]), "lo": lo, "hi": hi})
-            flagged += 1
+            lo, hi, kind = int(entry["startMs"]), int(entry["endMs"]), str(entry["kind"])
+            affected = (
+                kind == "conflict"
+                and _old_resolver(result)
+                and _punctuation_only_inside(transcript, lo, hi)
+            )
+            host = next((i for i in items if i["lo"] < hi and lo < i["hi"]), None)
+            if host is None:
+                if flagged >= MAX_FLAGGED_ITEMS:
+                    continue
+                host = {"why": kind, "lo": lo, "hi": hi, "includes": Counter(), "affected": False}
+                items.append(host)
+                flagged += 1
+            host["includes"][kind] += 1
+            host["affected"] = host["affected"] or affected
     pool = [
         s
         for s in base_text.segments
@@ -95,26 +131,47 @@ def _items(
         and all(abs((s.start_ms + s.end_ms) / 2 - c) > STABILITY_DISTANCE_MS for c in cuts)
     ]
     for s in random.Random(f"{seed}:paired-control").sample(pool, min(CONTROLS, len(pool))):
-        items.append({"why": "control", "lo": s.start_ms, "hi": s.end_ms})
+        items.append(
+            {
+                "why": "control",
+                "lo": s.start_ms,
+                "hi": s.end_ms,
+                "includes": Counter(),
+                "affected": False,
+            }
+        )
     items.sort(key=lambda i: i["lo"])
     return items
 
 
-def create(storage: Storage, baseline_id: str, variant_ids: Sequence[str], *, seed: int) -> Path:
+@dataclass(frozen=True)
+class PairedReview:
+    path: Path
+    items: int
+    affected: tuple[str, ...]  # anonymous item ids decided by the pre-fix resolver
+    pre_fix: bool
+
+
+def create(
+    storage: Storage, baseline_id: str, variant_ids: Sequence[str], *, seed: int
+) -> PairedReview:
     base, base_text = load(storage, baseline_id)
     if base_text is None or base.chunking.overlap_ms != 0 or not valid(base):
         raise CompareError("The baseline must be a completed, valid run without overlap.")
     cuts = cuts_of(base)
     runs: list[tuple[str, Transcript]] = [(label(base), base_text)]
+    variants: list[tuple[str, RunResult, Transcript]] = []
     for run_id in variant_ids:
         result, transcript = load(storage, run_id)
         if result.clip.id != base.clip.id or transcript is None or cuts_of(result) != cuts:
             raise CompareError("Variants must be completed runs of the same clip and cuts.")
         runs.append((label(result), transcript))
+        variants.append((run_id, result, transcript))
+    pre_fix = any(_old_resolver(result) for _, result, _ in variants)
     if len({name for name, _ in runs}) != len(runs):
         raise CompareError("List each variant once.")
     audio = run_file(storage, baseline_id, "normalized.wav")
-    items = _items(storage, base_text, cuts, variant_ids, seed)
+    items = _items(storage, base_text, cuts, variants, seed)
     letters = "XYZ" if len(runs) <= 3 else string.ascii_uppercase
     key: dict[str, dict[str, str]] = {}
     lines = [
@@ -125,8 +182,19 @@ def create(storage: Storage, baseline_id: str, variant_ids: Sequence[str], *, se
         "Tick exactly one box per row (`[x]`). `bench tally` counts the ticks.",
         "",
     ]
+    if pre_fix:
+        lines += [
+            "Stored outputs: these overlap runs were resolved before the punctuation-only fix",
+            "(resolver version 1) and are shown unchanged. Items marked 'decided by the",
+            "earlier rule' contain a conflict where a punctuation-only segment was kept over",
+            "one with text.",
+            "",
+        ]
+    affected: list[str] = []
     for n, item in enumerate(items, start=1):
         item_id = f"P{n:02d}"
+        if item["affected"]:
+            affected.append(item_id)
         order = list(range(len(runs)))
         random.Random(f"{seed}:{item_id}").shuffle(order)
         key[item_id] = {letters[pos]: runs[run][0] for pos, run in enumerate(order)}
@@ -136,7 +204,7 @@ def create(storage: Storage, baseline_id: str, variant_ids: Sequence[str], *, se
             f"-t {(hi - lo) / 1000:.3f} {shlex.quote(str(audio))}"
         )
         lines += [
-            f"### {item_id} · {_clock(lo)}–{_clock(hi)} · {item['why']}",
+            f"### {item_id} · {_clock(lo)}–{_clock(hi)} · {_why(item)}",
             "",
             f"- Replay: `{replay}`",
             f"- Best version: {_boxes([*letters[: len(runs)], NO_DIFFERENCE])}",
@@ -160,10 +228,20 @@ def create(storage: Storage, baseline_id: str, variant_ids: Sequence[str], *, se
         raise CompareError("A paired review with this timestamp already exists; try again.")
     path.write_text("\n".join(lines), encoding="utf-8")
     make_private(path)
-    key_path = _safe(storage, directory / f"overlap-{stamp}.key.json")
+    key_path = safe_path(storage, directory / f"overlap-{stamp}.key.json")
     key_path.write_text(json.dumps({"seed": seed, "items": key}, indent=2), encoding="utf-8")
     make_private(key_path)
-    return path
+    return PairedReview(path, len(items), tuple(affected), pre_fix)
+
+
+def _why(item: dict[str, Any]) -> str:
+    parts = [item["why"]]
+    extra = {k: n for k, n in item["includes"].items() if not (k == item["why"] and n == 1)}
+    if extra:
+        parts.append("includes " + ", ".join(f"{k} x{n}" for k, n in sorted(extra.items())))
+    if item["affected"]:
+        parts.append("decided by the earlier rule")
+    return " · ".join(parts)
 
 
 def _ticked(line: str) -> list[str]:
@@ -173,7 +251,7 @@ def _ticked(line: str) -> list[str]:
 def tally(storage: Storage, name: str) -> dict[str, Any]:
     """Counts per run (from the key) — never any text from the review file."""
     path = review_path(storage, name)
-    key_path = _safe(storage, reviews_dir(storage) / name.replace(".md", ".key.json"))
+    key_path = safe_path(storage, reviews_dir(storage) / name.replace(".md", ".key.json"))
     if not path.is_file() or not key_path.is_file():
         raise CompareError("No such paired review.")
     key: dict[str, dict[str, str]] = json.loads(key_path.read_text(encoding="utf-8"))["items"]

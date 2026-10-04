@@ -116,10 +116,12 @@ recovers speech near cuts. It exists only in `bench`; the worker's jobs never ov
   Provider times are offset by the chunk's audio start, so times stay in original-audio time.
   `--overlap-ms 0` takes exactly the existing path.
 - **Resolver** (`bench/overlap.py`). Every candidate is kept unless it materially overlaps — at
-  least 50% of the shorter one — an already kept candidate from the other chunk. Then the
-  candidate farther from its own chunk's audio edge wins (ownership breaks ties) and the other
-  is excluded as `duplicateRemoved` (same normalized text) or `conflictLoser` (different text;
-  added to the private review). Unique segments in the other chunk's span are kept and counted
+  least 50% of the shorter one — an already kept candidate from the other chunk. Then a
+  candidate with content (any letter or digit) beats a punctuation-only one
+  (`punctuationOnlyLoser`); otherwise the candidate farther from its own chunk's audio edge
+  wins (ownership breaks ties) and the other is excluded as `duplicateRemoved` (same
+  normalized text) or `conflictLoser` (different text; added to the private review). Results
+  record `resolverVersion` (2 since the content rule; the first Clip B overlap runs used 1). Unique segments in the other chunk's span are kept and counted
   as `foreignOrphanKept`. Text sharing 6+ normalized characters across a cut is only counted as
   `possibleRepeatAcrossCut`. Close calls are counted as `ambiguous`. Text is never joined,
   edited or invented; if kept segments would still overlap (beyond 100 ms), the run fails with

@@ -14,21 +14,21 @@ RUN_ID = re.compile(r"^\d{8}T\d{6}Z-[a-z0-9][a-z0-9-]{0,40}-\d{1,4}s-(warm|cold)
 
 
 def bench_root(storage: Storage) -> Path:
-    return _safe(storage, storage.root / BENCH_DIRNAME)
+    return safe_path(storage, storage.root / BENCH_DIRNAME)
 
 
 def corpus_path(storage: Storage) -> Path:
-    return _safe(storage, storage.root / BENCH_DIRNAME / "corpus.json")
+    return safe_path(storage, storage.root / BENCH_DIRNAME / "corpus.json")
 
 
 def runs_root(storage: Storage) -> Path:
-    return _safe(storage, storage.root / BENCH_DIRNAME / "runs")
+    return safe_path(storage, storage.root / BENCH_DIRNAME / "runs")
 
 
 def run_dir(storage: Storage, run_id: str) -> Path:
     if not RUN_ID.match(run_id):
         raise StorageAccessError(f"Invalid benchmark run id: {run_id!r}")
-    return _safe(storage, storage.root / BENCH_DIRNAME / "runs" / run_id)
+    return safe_path(storage, storage.root / BENCH_DIRNAME / "runs" / run_id)
 
 
 #: The only files a run directory holds (plus a temporary file while review.md is rewritten).
@@ -45,7 +45,7 @@ RUN_FILES = (
 def run_file(storage: Storage, run_id: str, name: str) -> Path:
     if name not in RUN_FILES:
         raise StorageAccessError(f"Unknown benchmark run file: {name!r}")
-    return _safe(storage, run_dir(storage, run_id) / name)
+    return safe_path(storage, run_dir(storage, run_id) / name)
 
 
 def create_run_dir(storage: Storage, run_id: str) -> Path:
@@ -60,7 +60,7 @@ def create_run_dir(storage: Storage, run_id: str) -> Path:
     return path
 
 
-def _safe(storage: Storage, path: Path) -> Path:
+def safe_path(storage: Storage, path: Path) -> Path:
     symlink = first_symlink(storage, path)
     if symlink is not None:
         raise StorageAccessError(f"Benchmark paths may not go through a symlink: {symlink}")

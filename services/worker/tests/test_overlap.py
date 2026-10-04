@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import shutil
 import subprocess
 import sys
 import wave
+from itertools import pairwise
 
 import pytest
 from test_bench import fake_provider, run_warm, tone_input
@@ -139,7 +141,7 @@ def test_zero_overlap_resolution_returns_the_input_unchanged():
     resolution = resolve(ranges, outputs, 20_000)
     assert [c.start_ms for c in resolution.chunks] == [0, 10_000]
     assert [list(c.segments) for c in resolution.chunks] == outputs
-    assert resolution.diagnostics["excluded"] == {"duplicateRemoved": 0, "conflictLoser": 0}
+    assert resolution.diagnostics["excluded"] == dict.fromkeys(overlap.EXCLUSION_REASONS, 0)
 
 
 def test_provider_times_are_offset_by_the_chunk_audio_start():
@@ -171,6 +173,48 @@ def test_conflicting_text_keeps_the_farther_candidate_unchanged_and_flags_it():
     assert [i["kind"] for i in resolution.review_items] == ["conflict"]
 
 
+# Left 9,000–10,900 (mid 9,950: 1,050 ms from its edge) against right 500–2,500 → 9,500–11,500
+# (mid 10,500: 1,500 ms from its edge): without content rules the right one wins on distance.
+NEAR_LEFT, FAR_RIGHT = (9000, 10_900), (500, 2500)
+
+
+@pytest.mark.parametrize(
+    ("left_text", "right_text", "kept", "reason"),
+    [
+        ("我们去公园。", "。", "我们去公园。", "punctuationOnlyLoser"),  # content beats distance
+        ("，。", "我们去学校。", "我们去学校。", "punctuationOnlyLoser"),  # and distance agrees
+        ("。", "？！", "？！", "duplicateRemoved"),  # noqa: RUF001 — both empty: distance decides
+        ("我们去公园。", "我们去学校。", "我们去学校。", "conflictLoser"),  # both content: distance
+        ("「 」…… ——", "好", "好", "punctuationOnlyLoser"),  # CJK punctuation and spaces only
+        ("　、；：", "Ok 2", "Ok 2", "punctuationOnlyLoser"),  # noqa: RUF001 — Latin/digits win
+    ],
+)
+def test_content_beats_punctuation_only_in_conflicts(left_text, right_text, kept, reason):
+    left, right = seg(*NEAR_LEFT, left_text), seg(*FAR_RIGHT, right_text)
+    resolution = resolve(TWO, [[left], [right]], 20_000)
+    assert texts(resolution) == [kept]
+    diagnostics = resolution.diagnostics
+    assert diagnostics["excluded"][reason] == 1 and sum(diagnostics["excluded"].values()) == 1
+    assert diagnostics["perCut"][0][reason] == 1 and diagnostics["reconciled"]
+    assert diagnostics["resolverVersion"] == overlap.RESOLVER_VERSION == 2
+    if reason == "punctuationOnlyLoser":
+        assert resolution.review_items == [] and diagnostics["ambiguous"] == 0
+
+
+def test_punctuation_rule_keeps_ordering_and_no_overlap():
+    left = [seg(6000, 8500, "前面一句。"), seg(*NEAR_LEFT, "左边的内容。")]
+    right = [seg(*FAR_RIGHT, "。"), seg(3000, 6000, "后面一句。")]
+    resolution = resolve(TWO, [left, right], 20_000)
+    absolute = sorted(
+        (c.start_ms + s.start_ms, c.start_ms + s.end_ms, s.text)
+        for c in resolution.chunks
+        for s in c.segments
+    )
+    assert [t for _, _, t in absolute] == ["前面一句。", "左边的内容。", "后面一句。"]
+    assert all(b[0] >= a[1] - overlap.OVERLAP_TOLERANCE_MS for a, b in pairwise(absolute))
+    assert resolution.diagnostics["excluded"]["punctuationOnlyLoser"] == 1
+
+
 def test_equal_edge_distance_falls_back_to_ownership():
     ranges = [ChunkRange(0, 0, 10_000, 0, 11_000), ChunkRange(1, 10_000, 20_000, 9_000, 20_000)]
     left = seg(9500, 10_000, "相同。")  # mid 9750: 1250 from its edge; owned by chunk 0
@@ -189,7 +233,7 @@ def test_unique_foreign_segments_are_kept_and_counted():
     resolution = resolve(TWO, [[seg(2000, 8000, "前面的话。")], [early]], 20_000)
     assert "补上的话。" in texts(resolution)
     assert resolution.diagnostics["foreignOrphanKept"] == 1
-    assert resolution.diagnostics["excluded"] == {"duplicateRemoved": 0, "conflictLoser": 0}
+    assert resolution.diagnostics["excluded"] == dict.fromkeys(overlap.EXCLUSION_REASONS, 0)
 
 
 def test_small_overlaps_are_kept_but_larger_unresolved_overlaps_fail_the_run():
@@ -393,26 +437,19 @@ def test_classification_follows_the_numeric_criteria(
 
 def test_paired_review_is_blinded_and_tallied_as_counts(storage, audio):
     base, one, two = run_overlaps(storage, audio, (0, 1000, 2000))
-    path = paired.create(storage, base.name, [one.name, two.name], seed=3)
+    review = paired.create(storage, base.name, [one.name, two.name], seed=3)
+    path = review.path
+    assert review.items >= 1 and not review.pre_fix and review.affected == ()
     key_path = path.with_name(path.name.replace(".md", ".key.json"))
     content = path.read_text()
     assert path.stat().st_mode & 0o777 == 0o600 and key_path.stat().st_mode & 0o777 == 0o600
     assert "overlap 1000" not in content and "overlap 2000" not in content  # blinded
     assert "#### X" in content and "-loglevel error -nostats" in content
-    again = paired._items(
-        storage,
-        compare.load(storage, base.name)[1],
-        compare.cuts_of(compare.load(storage, base.name)[0]),
-        [one.name, two.name],
-        3,
-    )
-    assert again == paired._items(
-        storage,
-        compare.load(storage, base.name)[1],
-        compare.cuts_of(compare.load(storage, base.name)[0]),
-        [one.name, two.name],
-        3,
-    )
+    variants = [(r.name, *compare.load(storage, r.name)) for r in (one, two)]
+    base_result, base_text = compare.load(storage, base.name)
+    cuts = compare.cuts_of(base_result)
+    first_items = paired._items(storage, base_text, cuts, variants, 3)
+    assert first_items == paired._items(storage, base_text, cuts, variants, 3)  # deterministic
 
     rated = content.replace("[ ] X", "[x] X", 1).replace("[ ] clean", "[x] clean", 1)
     rated = rated.replace("[ ] yes  [ ] no", "[x] yes  [x] no", 1)  # an invalid double tick
@@ -424,6 +461,27 @@ def test_paired_review_is_blinded_and_tallied_as_counts(storage, audio):
     assert sum(counts["runs"][run]["Replay range"]["clean"] for run in counts["runs"]) == 1
     assert counts["invalidRows"] == 1
     assert SENTINEL not in json.dumps(counts, ensure_ascii=False)
+
+
+def test_paired_review_marks_stored_pre_fix_decisions_anonymously(storage, audio):
+    base, wide = run_overlaps(storage, audio, (0, 2000))
+    result_path, transcript_path = wide / "result.json", wide / "transcript.json"
+    result = json.loads(result_path.read_text())
+    result["overlap"].pop("resolverVersion")  # as stored by the first Clip B runs
+    result_path.write_text(json.dumps(result))
+    transcript = json.loads(transcript_path.read_text())
+    kept = transcript["segments"][1]
+    kept["text"] = "。"  # a punctuation-only segment kept by the old rule
+    transcript_path.write_text(json.dumps(transcript, ensure_ascii=False))
+    item = {"kind": "conflict", "cut": 1, "startMs": kept["startMs"], "endMs": kept["endMs"]}
+    (wide / "overlap.json").write_text(json.dumps({"reviewItems": [item]}))
+
+    review = paired.create(storage, base.name, [wide.name], seed=3)
+    assert review.pre_fix and len(review.affected) == 1
+    assert re.fullmatch(r"P\d{2}", review.affected[0])
+    content = review.path.read_text()
+    assert "before the punctuation-only fix" in content
+    assert content.count("· decided by the earlier rule") == 1  # only the affected item
 
 
 def test_paired_review_paths_are_contained(storage, tmp_path):
