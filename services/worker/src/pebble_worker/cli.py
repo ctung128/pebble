@@ -1,4 +1,4 @@
-"""`pebble-worker serve`, `doctor`, `models list|verify|pull` and `bench run|report`."""
+"""`pebble-worker serve`, `doctor`, `models list|verify|pull` and `bench run|report|review`."""
 
 from __future__ import annotations
 

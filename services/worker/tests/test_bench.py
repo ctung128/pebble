@@ -15,7 +15,8 @@ from test_funasr_provider import RUNTIME, SPECS, install_models
 
 from pebble_worker.bench import analysis
 from pebble_worker.bench.corpus import CorpusError, find_clip, load_corpus
-from pebble_worker.bench.paths import create_run_dir, run_dir
+from pebble_worker.bench.paths import create_run_dir, run_dir, run_file
+from pebble_worker.bench.rebuild import RebuildError, rebuild_review
 from pebble_worker.bench.report import load_runs, render_markdown, summarize
 from pebble_worker.bench.results import RunResult
 from pebble_worker.bench.review import TEXT_OPTIONS, read_ratings
@@ -257,28 +258,110 @@ def test_boundary_analysis_is_timing_only():
     assert not any("text" in key.lower() or "duplicat" in key.lower() for key in rows[0])
 
 
-def test_review_selection_priorities_and_cap():
-    spans = [(i * 2000, i * 2000 + 1500, ()) for i in range(40)]
-    spans[2] = (4000, 5500, ("timestamp_alignment_anomaly",))  # not next to a cut
-    spans[5] = (10_000, 10_500, ("short_fragment",))
-    plans = [ChunkPlan(i, i * 8000, (i + 1) * 8000, "hard") for i in range(10)]
-    plans[-1] = ChunkPlan(9, 72_000, 80_000, "end")
-    picks = analysis.select_for_review(plans, _transcript(spans, 80_000), seed=7)
+A = "timestamp_alignment_anomaly"
+
+
+def _spaced(flags_by_index, n=60):
+    """n segments, 1.5 s long every 2 s, with the given flags by index."""
+    return [(i * 2000, i * 2000 + 1500, tuple(flags_by_index.get(i, ()))) for i in range(n)]
+
+
+def _select(spans, cuts=(), seed=7):
+    return analysis.select_for_review(list(cuts), _transcript(spans, 200_000), seed=seed)
+
+
+def _counts(picks):
+    return analysis.category_counts(picks)
+
+
+def test_alignment_anomaly_earns_no_review_slot():
+    every_other = {i: (A,) for i in range(0, 60, 2)}
+    picks = _select(_spaced(every_other))
+    assert picks and all(A not in p.segment.review.flags for p in picks)
+    assert {p.category for p in picks} == {"control"}
+    assert len(picks) == analysis.CATEGORY_CAP  # controls only, capped
+    assert _select(_spaced({i: (A,) for i in range(60)})) == []  # nothing else to pick
+
+
+def test_five_controls_are_reserved_and_quotas_fill_the_rest():
+    flags = {i: ("long_segment",) for i in range(10, 20)}
+    flags |= {i: ("short_fragment",) for i in range(20, 30)}
+    flags |= {i: ("speech_gap",) for i in range(30, 40)}
+    flags |= {i: (A,) for i in range(40, 50)}
+    cuts = [(2000 * i + 1750, "forced") for i in (1, 3, 5, 7, 41, 43)]  # 12 neighbours
+    picks = _select(_spaced(flags), cuts)
+    assert _counts(picks) == {
+        "cut-neighbour": 6,
+        "long-segment": 3,
+        "short-fragment": 3,
+        "speech-gap": 3,
+        "control": 5,
+    }
     assert len(picks) == analysis.REVIEW_CAP
-    reasons = [p.reasons[0] for p in picks]
-    assert reasons.count("forced-cut-adjacent") == 18  # 9 forced cuts, 2 neighbours each
-    assert "timestamp-alignment-anomaly" in reasons and "long-or-short" in reasons
-    assert "control" not in reasons  # controls come last when the cap is reached
-    assert [p.segment.start_ms for p in picks] == sorted(p.segment.start_ms for p in picks)
+    assert len({p.segment.id for p in picks}) == len(picks)  # each segment once
+    controls = [p for p in picks if p.category == "control"]
+    assert all(not p.segment.review.flags for p in controls)
 
 
-def test_review_selection_includes_five_seeded_controls():
-    spans = [(i * 2000, i * 2000 + 1500, ()) for i in range(30)]
-    plans = [ChunkPlan(0, 0, 60_000, "end")]
-    first = analysis.select_for_review(plans, _transcript(spans), seed=3)
-    again = analysis.select_for_review(plans, _transcript(spans), seed=3)
-    assert [p.reasons for p in first] == [("control",)] * 5
+def test_silence_cut_neighbours_are_used_when_there_are_no_forced_cuts():
+    picks = _select(_spaced({}), [(20_750, "silence"), (60_750, "silence")])
+    neighbours = [p for p in picks if p.category == "cut-neighbour"]
+    assert sorted(p.segment.start_ms for p in neighbours) == [20_000, 22_000, 60_000, 62_000]
+    assert all(p.reasons == ("silence-cut-neighbour",) for p in neighbours)
+
+
+def test_forced_cut_neighbours_outrank_silence_cut_neighbours():
+    forced = [(2000 * i + 1750, "forced") for i in (1, 5, 9, 13)]  # 8 neighbours
+    silence = [(2000 * i + 1750, "silence") for i in (31, 35, 39, 43)]  # 8 more
+    picks = _select(_spaced({}), forced + silence)
+    neighbours = [p for p in picks if p.category == "cut-neighbour"]
+    assert len(neighbours) == analysis.CATEGORY_CAP
+    assert all(p.reasons == ("forced-cut-neighbour",) for p in neighbours)
+
+
+def test_category_and_total_caps():
+    flags = {i: ("long_segment",) for i in range(0, 20)}
+    flags |= {i: ("short_fragment",) for i in range(20, 40)}
+    flags |= {i: ("speech_gap",) for i in range(40, 60)}
+    picks = _select(_spaced(flags), [(2000 * i + 1750, "forced") for i in range(0, 58, 6)])
+    counts = _counts(picks)
+    assert len(picks) == analysis.REVIEW_CAP and counts["control"] == 0
+    assert max(counts.values()) <= analysis.CATEGORY_CAP
+    # Unfilled control slots went round-robin: cut neighbours first, then long, short, gap.
+    assert counts == {
+        "cut-neighbour": 8,
+        "long-segment": 4,
+        "short-fragment": 4,
+        "speech-gap": 4,
+        "control": 0,
+    }
+    only_long = _select(_spaced({i: ("long_segment",) for i in range(60)}))
+    assert _counts(only_long)["long-segment"] == analysis.CATEGORY_CAP == len(only_long)
+
+
+def test_each_category_is_seeded_on_its_own():
+    flags = {i: ("long_segment",) for i in range(0, 12)}
+    first = _select(_spaced(flags, n=40), seed=3)
+    again = _select(_spaced(flags, n=40), seed=3)
     assert [p.segment.id for p in first] == [p.segment.id for p in again]
+    more = flags | {i: ("speech_gap",) for i in range(40, 46)}  # a new category's candidates
+    extended = _select(_spaced(more, n=46), seed=3)
+
+    def ids(picks, category):
+        return {p.segment.id for p in picks if p.category == category}
+
+    # A category's picks only grow or shrink along its own seeded order; never reshuffled.
+    for category in ("long-segment", "control"):
+        small, large = sorted((ids(extended, category), ids(first, category)), key=len)
+        assert small <= large and small
+    assert ids(_select(_spaced(flags, n=40), seed=4), "long-segment") != ids(first, "long-segment")
+
+
+def test_review_list_is_chronological():
+    flags = {3: ("speech_gap",), 50: ("long_segment",), 20: ("short_fragment",)}
+    picks = _select(_spaced(flags), [(30_750, "silence")])
+    starts = [p.segment.start_ms for p in picks]
+    assert starts == sorted(starts) and len(picks) > 5
 
 
 @pytest.mark.parametrize(
@@ -315,6 +398,132 @@ def test_ratings_are_read_back_as_counts_only(storage, audio):
     assert ratings["textQuality"] == {**dict.fromkeys(TEXT_OPTIONS, 0), "minor fix": 1}
     assert ratings["correctionSeconds"] == {"rated": 1, "total": 12.0}
     assert INVENTED not in json.dumps(ratings)
+
+
+# --- alignment diagnostic ----------------------------------------------------------------------
+
+
+class ExtraTimestamp(SentencePerChunk):
+    """One more character timestamp than the sentence has characters."""
+
+    def generate(self, *, input, **kwargs):
+        [item] = super().generate(input=input, **kwargs)
+        [sentence] = item["sentence_info"]
+        stamps = [[100 + 50 * i, 150 + 50 * i] for i in range(7)]  # 6 characters, 7 stamps
+        sentence["timestamp"] = stamps
+        item["timestamp"] = stamps
+        return [item]
+
+
+def test_alignment_diagnostic_is_numbers_only(storage, audio):
+    [directory], _ = run_warm(storage, audio, model=ExtraTimestamp())
+    result = json.loads((directory / "result.json").read_text())
+    alignment = result["alignment"]
+    chunks = result["chunks"]["count"]
+    assert alignment["flagged"] == alignment["sentences"] == chunks
+    assert alignment["byReason"]["count_difference"] == chunks
+    assert alignment["countDifference"]["+1"] == chunks
+    assert alignment["chunks"]["checked"] == chunks and alignment["chunks"]["consistent"] == 0
+    assert alignment["chunks"]["totals"][0] == {
+        "index": 0,
+        "textTokens": 6,
+        "timestamps": 7,
+        "consistent": False,
+    }
+    assert result["review"]["categories"]["control"] == 0  # anomalous segments aren't controls
+    assert INVENTED not in json.dumps(alignment)
+    review = (directory / "review.md").read_text()
+    assert A not in review  # the diagnostic isn't shown to reviewers
+
+
+# --- rebuilding review lists --------------------------------------------------------------------
+
+
+def _snapshot(directory):
+    return {
+        name: ((directory / name).read_bytes(), (directory / name).stat().st_mtime_ns)
+        for name in ("result.json", "transcript.json", "normalized.wav")
+    }
+
+
+def test_review_rebuild_reads_saved_files_only(storage, audio, monkeypatch):
+    [directory], _ = run_warm(storage, audio)
+    before = _snapshot(directory)
+    (directory / "review.md").write_text("old list")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("rebuilding must not transcribe or load models")
+
+    monkeypatch.setattr(FunASRProvider, "transcribe", forbidden)
+    monkeypatch.setattr(FunASRProvider, "load", forbidden)
+    counts = rebuild_review(storage, directory.name)
+    assert sum(counts.values()) >= 1
+    review = (directory / "review.md").read_text()
+    assert review.startswith("# Review") and "Selection: cut-neighbour" in review
+    assert (directory / "review.md").stat().st_mode & 0o777 == 0o600
+    assert not (directory / "review.md.tmp").exists()
+    assert _snapshot(directory) == before  # transcript, result and audio untouched
+
+
+def test_review_rebuild_cli_is_offline_and_imports_no_models(env, audio):
+    import subprocess
+    import sys
+
+    storage = Storage(env)
+    storage.ensure()
+    [directory], _ = run_warm(storage, audio)
+    code = (
+        "import sys; from pebble_worker.cli import main; from pebble_worker.bench import network;"
+        f"status = main(['bench', 'review', '--run', {directory.name!r}]);"
+        "heavy = ('funasr', 'torch', 'modelscope', 'transformers');"
+        "print('heavy', sorted(m for m in heavy if m in sys.modules), 'net', network.attempts());"
+        "sys.exit(status)"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "heavy [] net 0" in done.stdout
+    assert "nothing was transcribed" in done.stdout
+    assert INVENTED not in done.stdout and str(env) not in done.stdout
+
+
+def test_review_rebuild_keeps_a_rated_list(storage, audio):
+    [directory], _ = run_warm(storage, audio)
+    review = directory / "review.md"
+    rated = review.read_text().replace("[ ] clean", "[x] clean", 1)
+    review.write_text(rated)
+    with pytest.raises(RebuildError, match="already has ratings"):
+        rebuild_review(storage, directory.name)
+    assert review.read_text() == rated
+
+
+def test_review_rebuild_refuses_symlinks(storage, audio, tmp_path):
+    [directory], _ = run_warm(storage, audio)
+    outside = tmp_path / "outside.md"
+    outside.write_text("not Pebble's")
+    (directory / "review.md").unlink()
+    (directory / "review.md").symlink_to(outside)
+    with pytest.raises(StorageAccessError, match="symlink"):
+        rebuild_review(storage, directory.name)
+    assert outside.read_text() == "not Pebble's"
+
+    (directory / "review.md").unlink()
+    transcript = directory / "transcript.json"
+    moved = tmp_path / "transcript.json"
+    transcript.rename(moved)
+    transcript.symlink_to(moved)
+    with pytest.raises(StorageAccessError, match="symlink"):
+        rebuild_review(storage, directory.name)
+
+
+@pytest.mark.parametrize("bad", ["../escape", "20261003T000000Z-clip-a-120s-warm/../../x"])
+def test_review_rebuild_rejects_traversal(storage, bad):
+    with pytest.raises(StorageAccessError):
+        rebuild_review(storage, bad)
+
+
+def test_run_files_are_an_allowlist(storage):
+    with pytest.raises(StorageAccessError, match="Unknown"):
+        run_file(storage, "20261003T000000Z-clip-a-120s-warm", "../corpus.json")
 
 
 # --- paths --------------------------------------------------------------------------------------

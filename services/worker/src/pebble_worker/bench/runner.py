@@ -26,7 +26,7 @@ from ..pipeline.merge import ChunkResult, merge
 from ..pipeline.normalize import normalize
 from ..pipeline.probe import probe
 from ..providers.base import AudioChunk, RawSegment
-from ..providers.funasr import FunASRProvider
+from ..providers.funasr import ChunkAlignment, FunASRProvider
 from ..storage import PRIVATE_DIR, Storage, make_private
 from . import analysis, network
 from .corpus import Clip
@@ -162,6 +162,7 @@ def run_one(
     stage = "probing"
     status, failure = "completed", None
     plans, transcript = [], None
+    alignments: list[ChunkAlignment | None] = []
     started = time.perf_counter()
     try:
         mark = time.perf_counter()
@@ -182,6 +183,7 @@ def run_one(
             segments: list[RawSegment] = provider.transcribe(
                 AudioChunk(plan.index, plan.start_ms, plan.end_ms, path), lambda: False
             )
+            alignments.append(provider.last_alignment)
             results.append(ChunkResult(plan.start_ms, segments, index=plan.index))
         timings["transcriptionMs"], mark = _ms(time.perf_counter() - mark), time.perf_counter()
         stage = "merging"
@@ -248,6 +250,7 @@ def run_one(
         "segments": analysis.segment_shape(transcript) if transcript else None,
         "merge": analysis.merge_checks(transcript) if transcript else None,
         "boundaries": None,
+        "alignment": analysis.alignment_summary(alignments) if transcript else None,
         "cer": None,
         "review": None,
         "network": {"attempts": network.attempts()},
@@ -264,8 +267,12 @@ def run_one(
                 "kind": "synthetic-sanity" if bench_input.kind == "synthetic" else "reference",
                 "referenceLabel": bench_input.reference_label,
             }
-        picks = analysis.select_for_review(plans, transcript, seed=seed)
-        result["review"] = {"segments": len(picks), "seed": seed}
+        picks = analysis.select_for_review(analysis.cuts_from_plans(plans), transcript, seed=seed)
+        result["review"] = {
+            "segments": len(picks),
+            "seed": seed,
+            "categories": analysis.category_counts(picks),
+        }
         _write_private(
             directory / "transcript.json",
             json.dumps(transcript.dump(), ensure_ascii=False, indent=2),

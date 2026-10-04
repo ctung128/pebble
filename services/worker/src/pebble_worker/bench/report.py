@@ -59,6 +59,7 @@ def summarize(storage: Storage, results: Sequence[RunResult]) -> list[dict[str, 
                 "physFootprintJobPeakMB": _mb(result.memory.phys_footprint_job_peak_bytes),
                 "rssMaxMB": _mb(result.memory.rss_max_bytes),
                 "boundaries": (result.boundaries or {}).get("summary"),
+                "alignment": result.alignment,
                 "cer": result.cer.dump() if result.cer else None,
                 "networkAttempts": result.network.get("attempts"),
                 "ratings": read_ratings(review_path)

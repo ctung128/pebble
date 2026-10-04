@@ -92,6 +92,8 @@ class RunResult(_Model):
     segments: dict[str, Any] | None
     merge: dict[str, Any] | None
     boundaries: dict[str, Any] | None
+    #: The private alignment diagnostic (numbers only); absent from runs before it existed.
+    alignment: dict[str, Any] | None = None
     cer: Cer | None
     review: dict[str, Any] | None
     network: dict[str, int]

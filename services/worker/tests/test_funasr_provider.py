@@ -19,8 +19,11 @@ from pebble_worker.pipeline.merge import ChunkResult, merge
 from pebble_worker.pipeline.review import ReviewConfig, review_flags
 from pebble_worker.providers.base import AudioChunk, RawSegment
 from pebble_worker.providers.funasr import (
+    AlignmentIssue,
     FunASRProvider,
     NormalizationError,
+    alignment_issue,
+    chunk_alignment,
     describe_output,
     normalize_output,
     read_chunk,
@@ -168,6 +171,48 @@ def test_malformed_timestamp_pairs_are_flagged():
     assert not timestamps_align("两个", [[0, 100], [100]], 0, 500)
     assert not timestamps_align("两个", [[0, 100], [300, 200]], 0, 500)
     assert not timestamps_align("两个", "not a list", 0, 500)
+
+
+@pytest.mark.parametrize(
+    ("text", "stamps", "issue"),
+    [
+        ("两个字", per_char(0, 900, 4), AlignmentIssue("count_difference", 1)),
+        ("两个字", per_char(0, 900, 1), AlignmentIssue("count_difference", -2)),
+        ("两个", [[0, 100], [300, 200]], AlignmentIssue("timestamps_out_of_order")),
+        ("两个", [[300, 400], [100, 200]], AlignmentIssue("timestamps_out_of_order")),
+        ("两个", [[0, 100], [100, 600]], AlignmentIssue("timestamp_outside_segment_range")),
+        ("两个", [[0, 100], [100]], AlignmentIssue("malformed_timestamps")),
+        ("两个", "not a list", AlignmentIssue("malformed_timestamps")),
+        ("两个", [[0, 100], [100, 200]], None),
+        ("两个", None, None),
+    ],
+)
+def test_alignment_issues_carry_a_reason_and_numbers_only(text, stamps, issue):
+    assert alignment_issue(text, stamps, 0, 500) == issue
+
+
+def test_chunk_alignment_compares_totals_and_never_keeps_text():
+    result = output(
+        sentence(0, 900, "你好，", per_char(0, 900, 3)),  # one timestamp too many
+        sentence(1000, 2000, "世界。", per_char(1000, 2000, 2)),
+    )
+    result[0]["timestamp"] = per_char(0, 2000, 5)
+    alignment = chunk_alignment(result)
+    assert alignment is not None
+    assert (alignment.text_tokens, alignment.timestamps) == (4, 5)
+    assert alignment.issues == (AlignmentIssue("count_difference", 1), None)
+    assert "你" not in repr(alignment) and "世" not in repr(alignment)
+    assert chunk_alignment([{"key": "c", "text": "", "timestamp": []}]) is None
+
+
+def test_provider_keeps_the_last_chunks_alignment_without_changing_segments(storage):
+    install_models(storage)
+    provider, _ = make_provider(storage)
+    assert provider.last_alignment is None
+    segments = provider.transcribe(CHUNK, NEVER)
+    assert segments == normalize_output(NORMAL, CHUNK_MS)
+    assert provider.last_alignment is not None
+    assert provider.last_alignment.issues == (None, None)
 
 
 # --- empty output ---------------------------------------------------------------------------------

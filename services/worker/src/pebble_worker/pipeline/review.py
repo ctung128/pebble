@@ -11,7 +11,9 @@ human review and benchmarking (M1-B).
 - `speech_gap`: the gap since the previous segment's end (or since 0 ms, for the first
   segment) > `speech_gap_ms` (default 2000).
 - `timestamp_alignment_anomaly`: set by the provider when a sentence's text and its
-  per-character timestamps don't correspond (see providers/funasr.py).
+  per-character timestamps don't correspond (see providers/funasr.py). Benchmarks showed it
+  is a developer diagnostic, not a learner-review signal: it marks bookkeeping differences,
+  not audible timing problems (docs/BENCHMARKS.md). It never gets UI or review slots.
 
 A gap after the last segment is not flagged.
 """

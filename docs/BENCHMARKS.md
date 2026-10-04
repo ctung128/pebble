@@ -11,7 +11,8 @@ It does **not** pick defaults, change settings, make accuracy claims, or publish
 numbers are local measurements on one machine.
 
 > [!IMPORTANT]
-> **Status: B1 (tooling only).** No benchmark has been run on private audio yet.
+> **Status:** B1 tooling is in place and the B2 starter runs have been made on two private
+> clips. Their results stay private under `~/.pebble`; no defaults have changed.
 
 ## Privacy
 
@@ -80,6 +81,7 @@ npm run worker:bench -- run --clip clip-a --chunk 120 --dry-run   # validate onl
 npm run worker:bench -- run --clip clip-a --chunk 120 --chunk 180 --chunk 240
 npm run worker:bench -- run --clip clip-a --chunk default --mode cold
 npm run worker:bench -- report
+npm run worker:bench -- review --run <run-id>                     # rebuild review.md only
 ```
 
 - `run` benchmarks **one clip** at exactly the `--chunk` targets you list (seconds, 10–900, or
@@ -93,6 +95,10 @@ npm run worker:bench -- report
   - `--seed`: seeds the choice of review controls (default 7).
 - `report` aggregates all runs (or `--run <id>` …) into a console summary and private
   `report-<time>.{json,md}` files.
+- `review --run <id>` rebuilds a run's `review.md` from its saved `transcript.json` and cut
+  positions with the current selection rules. It never transcribes, loads models or uses the
+  network, and it leaves `transcript.json` and `result.json` unchanged. It refuses to replace
+  a list that already has ratings.
 
 For a target T, chunks are planned with min 0.8 T and max 1.6 T — the ratios of the current
 150/120/240 s default — and the default silence settings.
@@ -155,6 +161,19 @@ of it, the timing gap across it, and whether a segment crosses it. The benchmark
 text was duplicated, dropped or damaged; that takes the human review below or a reference
 transcript.
 
+### Alignment diagnostic (`alignment`)
+
+`timestamp_alignment_anomaly` is set when a sentence's text and its per-character timestamps
+don't correspond. The starter runs showed it is a **private developer diagnostic, not a
+learner-review signal**: it fires often, in clusters, shifts with chunk context, and showed no
+timing pattern a listener would notice. It gets no review slot and no UI.
+
+Each new run records, as numbers only: flagged sentences by reason (`count_difference`,
+`timestamp_outside_segment_range`, `timestamps_out_of_order`, `malformed_timestamps`), a
+signed timestamps-minus-characters histogram (≤ −3, −2, −1, +1, +2, ≥ +3), and each chunk's
+text-character total against its timestamp total. Runs made before this existed have no
+`alignment` block.
+
 ### CER (`cer`)
 
 Only when a reference exists: a character error rate over letters, digits and CJK characters
@@ -164,9 +183,21 @@ natural podcasts.
 
 ## Human review (`review.md`)
 
-Up to 20 segments per run: every segment next to a chunk cut, every flagged segment, and five
-random unflagged controls (seeded). Over 20, priority is: forced-cut neighbours, timestamp
-alignment anomalies, long/short flags, silence-cut neighbours, speech gaps, then controls.
+Up to 20 segments per run, in time order, chosen so no single signal can fill the list:
+
+| Category                                                                            | Slots             |
+| ----------------------------------------------------------------------------------- | ----------------- |
+| Random controls: no review flags, not next to a cut (seeded)                        | 5, reserved first |
+| Cut neighbours: the last segment before and first after each cut; forced cuts first | up to 6           |
+| Long segments                                                                       | up to 3           |
+| Short fragments                                                                     | up to 3           |
+| Speech gaps                                                                         | up to 3           |
+| Alignment diagnostic                                                                | 0                 |
+
+Slots a category can't fill go round-robin to cut neighbours, long segments, short fragments,
+speech gaps, then controls; no category takes more than 8. A segment appears once, under the
+first category that picks it. Each category draws from its own seed (run seed + category), so
+the lists are reproducible and one category's candidates never reshuffle another's.
 
 Each entry has a replay command (`ffplay` on the run's `normalized.wav`) and boxes to tick:
 

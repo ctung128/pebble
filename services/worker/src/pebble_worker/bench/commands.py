@@ -1,4 +1,4 @@
-"""`pebble-worker bench run|report` — argument handling and console output (numbers only)."""
+"""`pebble-worker bench run|report|review`: argument handling and console output (numbers only)."""
 
 from __future__ import annotations
 
@@ -7,12 +7,14 @@ import os
 from collections.abc import Sequence
 
 from ..config import Settings
+from ..errors import StorageAccessError
 from ..health import display_path
 from ..pipeline.probe import probe
 from ..providers.funasr import FunASRProvider
 from ..storage import Storage
 from . import network
 from .corpus import CorpusError, find_clip
+from .rebuild import RebuildError, rebuild_review
 from .report import load_runs, summarize, write_report
 from .runner import BenchInput, corpus_input, run_cold, synthetic_input, warm_session
 
@@ -46,11 +48,18 @@ def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[ty
     report = actions.add_parser("report", help="aggregate private results (numbers only)")
     report.add_argument("--run", action="append", default=[], metavar="RUN_ID")
 
+    review = actions.add_parser(
+        "review", help="rebuild a run's private review checklist (no transcription)"
+    )
+    review.add_argument("--run", action="append", required=True, metavar="RUN_ID")
+
 
 def run_command(settings: Settings, args: argparse.Namespace) -> int:
     storage = Storage(settings.data_dir)
     if args.bench_action == "report":
         return report(storage, args.run)
+    if args.bench_action == "review":
+        return rebuild(storage, args.run)
     try:
         targets = [_target(value) for value in args.chunk]
     except ValueError as error:
@@ -111,6 +120,23 @@ def report(storage: Storage, run_ids: Sequence[str]) -> int:
     path = write_report(storage, rows)
     print(f"Private report: {display_path(path)}")
     return 0
+
+
+def rebuild(storage: Storage, run_ids: Sequence[str]) -> int:
+    network.block_network()
+    status = 0
+    for run_id in run_ids:
+        try:
+            counts = rebuild_review(storage, run_id)
+        except (RebuildError, StorageAccessError) as error:
+            print(f"pebble-worker bench: {error}")
+            status = 2
+            continue
+        selection = ", ".join(f"{name} {count}" for name, count in counts.items())
+        print(f"{run_id}: {sum(counts.values())} segments ({selection})")
+    if status == 0:
+        print("Review checklists rebuilt from saved transcripts; nothing was transcribed.")
+    return status
 
 
 def _target(value: str) -> int | None:

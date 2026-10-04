@@ -149,6 +149,8 @@ class FunASRProvider:
         self._verified: Signature | None = None
         self._failed: tuple[Signature, str] | None = None
         self._load_failure: str | None = None
+        #: The last transcribed chunk's alignment diagnostic (numbers only), for `bench`.
+        self.last_alignment: ChunkAlignment | None = None
 
     # --- health -----------------------------------------------------------------------------
 
@@ -277,6 +279,7 @@ class FunASRProvider:
     # --- transcription ----------------------------------------------------------------------
 
     def transcribe(self, chunk: AudioChunk, cancel: CancelCheck) -> list[RawSegment]:
+        self.last_alignment = None
         if cancel():
             raise Cancelled()
         model = self._ensure_loaded()
@@ -298,7 +301,7 @@ class FunASRProvider:
             raise Cancelled()
         log.info("chunk %d: output %s", chunk.index, describe_output(result))
         try:
-            return normalize_output(result, chunk.duration_ms)
+            segments = normalize_output(result, chunk.duration_ms)
         except NormalizationError as error:
             log.error("chunk %d: normalization failed: %s", chunk.index, error)
             raise PipelineError(
@@ -309,6 +312,8 @@ class FunASRProvider:
                 "The details are in ~/.pebble/logs/worker.log.",
                 retryable=False,
             ) from error
+        self.last_alignment = chunk_alignment(result)
+        return segments
 
     def load(self) -> None:
         """Verifies (if needed) and loads the models now rather than on the first chunk."""
@@ -445,7 +450,7 @@ def normalize_output(result: Any, chunk_duration_ms: int) -> list[RawSegment]:
         previous = (start, end)
         flags = (
             ()
-            if timestamps_align(sentence_text, sentence.get("timestamp"), start, end)
+            if alignment_issue(sentence_text, sentence.get("timestamp"), start, end) is None
             else ("timestamp_alignment_anomaly",)
         )
         segments.append(RawSegment(start, end, sentence_text.strip(), review_flags=flags))
@@ -460,29 +465,95 @@ def _ms(value: Any, n: int, field: str) -> int:
     return round(value)
 
 
-def timestamps_align(text: str, timestamps: Any, start: int, end: int) -> bool:
+AlignmentReason = Literal[
+    "count_difference",
+    "timestamp_outside_segment_range",
+    "timestamps_out_of_order",
+    "malformed_timestamps",
+]
+
+
+@dataclass(frozen=True)
+class AlignmentIssue:
+    """Why a sentence's text and its character timestamps don't correspond. Numbers only."""
+
+    reason: AlignmentReason
+    #: Timestamps minus text tokens (signed); set only for `count_difference`.
+    count_difference: int | None = None
+
+
+def text_tokens(text: str) -> int:
+    """Each CJK character and each Latin letter/digit run; punctuation and spaces don't count."""
+    return len(_CJK.findall(text)) + len(_WORD.findall(text))
+
+
+def alignment_issue(text: str, timestamps: Any, start: int, end: int) -> AlignmentIssue | None:
     """
-    True when there is nothing to contradict the sentence: no per-character timestamps, or one
-    valid `[start, end]` pair, inside the sentence, per token (each CJK character and each run
-    of Latin letters/digits). Punctuation and spaces have no timestamp.
+    None when there is nothing to contradict the sentence: no per-character timestamps, or one
+    valid `[start, end]` pair per token, in order, inside the sentence. Otherwise the first
+    reason found: malformed pairs, a count difference, pairs out of order, or a pair outside
+    the sentence's range.
     """
     if timestamps is None:
-        return True
-    if not isinstance(timestamps, list):
-        return False
-    tokens = len(_CJK.findall(text)) + len(_WORD.findall(text))
-    if len(timestamps) != tokens:
-        return False
+        return None
+    if not isinstance(timestamps, list) or not all(
+        isinstance(pair, list | tuple)
+        and len(pair) == 2
+        and all(isinstance(v, int | float) and not isinstance(v, bool) for v in pair)
+        for pair in timestamps
+    ):
+        return AlignmentIssue("malformed_timestamps")
+    difference = len(timestamps) - text_tokens(text)
+    if difference:
+        return AlignmentIssue("count_difference", difference)
+    previous_start = -math.inf
     for pair in timestamps:
-        if not (
-            isinstance(pair, list | tuple)
-            and len(pair) == 2
-            and all(isinstance(v, int | float) and not isinstance(v, bool) for v in pair)
-        ):
-            return False
-        if not start <= pair[0] <= pair[1] <= end:
-            return False
-    return True
+        if pair[0] > pair[1] or pair[0] < previous_start:
+            return AlignmentIssue("timestamps_out_of_order")
+        previous_start = pair[0]
+    if any(not start <= pair[0] <= pair[1] <= end for pair in timestamps):
+        return AlignmentIssue("timestamp_outside_segment_range")
+    return None
+
+
+def timestamps_align(text: str, timestamps: Any, start: int, end: int) -> bool:
+    return alignment_issue(text, timestamps, start, end) is None
+
+
+@dataclass(frozen=True)
+class ChunkAlignment:
+    """
+    Private benchmark diagnostic for one chunk (numbers only, never text): the chunk's text
+    tokens against its character timestamps, and each sentence's alignment issue, if any.
+    It never changes segments; the transcript only carries the existing review flag.
+    """
+
+    text_tokens: int
+    timestamps: int | None
+    issues: tuple[AlignmentIssue | None, ...]
+
+
+def chunk_alignment(result: Any) -> ChunkAlignment | None:
+    """For output that `normalize_output` accepted. None when there was no speech."""
+    item = result[0] if isinstance(result, list) and result else None
+    sentences = item.get("sentence_info") if isinstance(item, dict) else None
+    if not isinstance(sentences, list) or not sentences:
+        return None
+    text = item.get("text")  # type: ignore[union-attr]
+    timestamps = item.get("timestamp")  # type: ignore[union-attr]
+    return ChunkAlignment(
+        text_tokens=text_tokens(text) if isinstance(text, str) else 0,
+        timestamps=len(timestamps) if isinstance(timestamps, list) else None,
+        issues=tuple(
+            alignment_issue(
+                s["text"],
+                s.get("timestamp"),
+                _ms(s.get("start"), n, "start"),
+                _ms(s.get("end"), n, "end"),
+            )
+            for n, s in enumerate(sentences, start=1)
+        ),
+    )
 
 
 # --- privacy-safe diagnostics ---------------------------------------------------------------

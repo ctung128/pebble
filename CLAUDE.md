@@ -19,9 +19,11 @@ AnkiConnect's). Read `docs/LOCAL_MODE.md` and `docs/MODELS.md` before changing t
 Dependency setup is approved: the worker's optional `funasr` extra (`funasr==1.4.16`, `modelscope==1.40.1`,
 `torch==2.11.0` + `torchaudio==2.11.0` as a matched pair) plus the resolver constraint
 `transformers>=4.32.0,<5` (never a direct dependency; don't block or patch it — FunASR imports
-it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-B is approved for **B1 only**
-(private benchmark tooling, `pebble-worker bench`, docs/BENCHMARKS.md): don't run benchmarks on
-private clips (B2), create a corpus from the user's files, or change defaults without approval.
+it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-B: B1 tooling is committed and the
+B2 starter runs on the user's two private clips are done (results only under `~/.pebble`). The
+`timestamp_alignment_anomaly` flag is a private developer/benchmark diagnostic, not a learner
+signal: it earns no review slot and gets no UI. Don't start new benchmark runs, change the
+150 s chunk default or other defaults, or build a corpus from the user's files without approval.
 Broader M1-C (web/UI) needs a separately approved plan. Commits need the user's explicit
 "commit" after a shown status/diff/privacy scan. Never put recognized transcript
 text, private audio or private clip paths in the repository, tests, docs or commits.

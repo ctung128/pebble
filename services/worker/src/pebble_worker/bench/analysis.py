@@ -8,20 +8,28 @@ from __future__ import annotations
 import random
 import statistics
 import unicodedata
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import TYPE_CHECKING, Literal
 
 from ..contract import Segment, Transcript
 from ..pipeline.chunk import ChunkPlan
 from ..pipeline.review import REVIEW_FLAGS
 
+if TYPE_CHECKING:
+    from ..providers.funasr import ChunkAlignment
+
 #: A segment that starts or ends this close to a chunk cut is "near" it.
 NEAR_CUT_MS = 300
 #: The review list per run is capped at this many segments.
 REVIEW_CAP = 20
-#: Randomly chosen unflagged segments (away from cuts) for comparison.
+#: Randomly chosen unflagged segments (away from cuts) for comparison, reserved first.
 CONTROLS = 5
+#: Slots per category before redistribution, and the most any one category may take.
+QUOTAS = {"cut-neighbour": 6, "long-segment": 3, "short-fragment": 3, "speech-gap": 3}
+CATEGORY_CAP = 8
 DURATION_BUCKETS = (
     ("<0.8s", 0, 800),
     ("0.8-2s", 800, 2000),
@@ -164,58 +172,162 @@ def character_error_rate(hypothesis: str, reference: str) -> float | None:
     return round(previous[-1] / len(ref), 4)
 
 
+# --- alignment diagnostic -----------------------------------------------------------------------
+
+ALIGNMENT_REASONS = (
+    "count_difference",
+    "timestamp_outside_segment_range",
+    "timestamps_out_of_order",
+    "malformed_timestamps",
+)
+COUNT_DIFFERENCE_BUCKETS = ("<=-3", "-2", "-1", "+1", "+2", ">=+3")
+
+
+def _difference_bucket(value: int) -> str:
+    if value <= -3:
+        return "<=-3"
+    if value >= 3:
+        return ">=+3"
+    return f"{value:+d}"
+
+
+def alignment_summary(chunks: Sequence[ChunkAlignment | None]) -> dict[str, object]:
+    """
+    The private `timestamp_alignment_anomaly` diagnostic, as numbers: sentences by reason, the
+    signed timestamps-minus-tokens histogram, and each chunk's text/timestamp totals.
+    """
+    issues = [issue for chunk in chunks if chunk for issue in chunk.issues]
+    flagged = [issue for issue in issues if issue is not None]
+    differences = Counter(
+        _difference_bucket(issue.count_difference)
+        for issue in flagged
+        if issue.count_difference is not None
+    )
+    rows = [
+        {
+            "index": index,
+            "textTokens": chunk.text_tokens,
+            "timestamps": chunk.timestamps,
+            "consistent": chunk.timestamps == chunk.text_tokens,
+        }
+        for index, chunk in enumerate(chunks)
+        if chunk is not None
+    ]
+    return {
+        "sentences": len(issues),
+        "flagged": len(flagged),
+        "byReason": {r: sum(i.reason == r for i in flagged) for r in ALIGNMENT_REASONS},
+        "countDifference": {bucket: differences[bucket] for bucket in COUNT_DIFFERENCE_BUCKETS},
+        "chunks": {
+            "checked": len(rows),
+            "consistent": sum(bool(r["consistent"]) for r in rows),
+            "totals": rows,
+        },
+    }
+
+
 # --- review selection ---------------------------------------------------------------------------
 
-REASON_ORDER = (
-    "forced-cut-adjacent",
-    "timestamp-alignment-anomaly",
-    "long-or-short",
-    "silence-cut-adjacent",
-    "speech-gap",
-    "control",
-)
+CutKind = Literal["forced", "silence"]
+#: Redistribution order for slots a category can't fill.
+CATEGORIES = ("cut-neighbour", "long-segment", "short-fragment", "speech-gap", "control")
+
+
+def cuts_from_plans(plans: Sequence[ChunkPlan]) -> list[tuple[int, CutKind]]:
+    return [(p.end_ms, "forced" if p.cut == "hard" else "silence") for p in plans if p.cut != "end"]
 
 
 @dataclass(frozen=True)
 class ReviewPick:
     segment: Segment
+    category: str
     reasons: tuple[str, ...]
 
 
 def select_for_review(
-    plans: Sequence[ChunkPlan], transcript: Transcript, *, seed: int
+    cuts: Sequence[tuple[int, CutKind]], transcript: Transcript, *, seed: int
 ) -> list[ReviewPick]:
     """
-    Every segment next to a chunk cut, every flagged segment, and up to five random unflagged
-    controls — capped at REVIEW_CAP, keeping the highest-priority reasons (REASON_ORDER).
+    Up to REVIEW_CAP segments with reserved comparison coverage, in chronological order:
+
+    1. CONTROLS random segments with no review flags and not next to a cut, reserved first;
+    2. QUOTAS per category: cut neighbours (the last segment before and first after each cut;
+       forced cuts outrank silence cuts), long segments, short fragments, speech gaps;
+    3. unfilled slots go round-robin through CATEGORIES, at most CATEGORY_CAP per category.
+
+    `timestamp_alignment_anomaly` is a private diagnostic and earns no slot. Each segment
+    appears once, under the first category that picks it. Each category's order comes from
+    its own seed (run seed + category), so one category's candidates don't reshuffle another.
     """
     segments = transcript.segments
-    reasons: dict[str, set[str]] = {s.id: set() for s in segments}
-    for plan in plans:
-        if plan.cut == "end":
-            continue
-        kind = "forced-cut-adjacent" if plan.cut == "hard" else "silence-cut-adjacent"
-        before = [s for s in segments if s.start_ms < plan.end_ms]
-        after = [s for s in segments if s.start_ms >= plan.end_ms]
-        for neighbour in (before[-1] if before else None, after[0] if after else None):
-            if neighbour is not None:
-                reasons[neighbour.id].add(kind)
-    for segment in segments:
-        flags = set(segment.review.flags) if segment.review else set()
-        if "timestamp_alignment_anomaly" in flags:
-            reasons[segment.id].add("timestamp-alignment-anomaly")
-        if flags & {"long_segment", "short_fragment"}:
-            reasons[segment.id].add("long-or-short")
-        if "speech_gap" in flags:
-            reasons[segment.id].add("speech-gap")
-    unremarkable = [s for s in segments if not reasons[s.id]]
-    for segment in random.Random(seed).sample(unremarkable, min(CONTROLS, len(unremarkable))):
-        reasons[segment.id].add("control")
+    by_id = {s.id: s for s in segments}
+    flags = {s.id: set(s.review.flags) if s.review else set() for s in segments}
+    neighbours: dict[CutKind, set[str]] = {"forced": set(), "silence": set()}
+    for cut_ms, kind in cuts:
+        before = [s for s in segments if s.start_ms < cut_ms]
+        after = [s for s in segments if s.start_ms >= cut_ms]
+        for segment in (before[-1] if before else None, after[0] if after else None):
+            if segment is not None:
+                neighbours[kind].add(segment.id)
+    neighbours["silence"] -= neighbours["forced"]
+    adjacent = neighbours["forced"] | neighbours["silence"]
 
-    def priority(segment: Segment) -> tuple[int, int]:
-        best = min(REASON_ORDER.index(r) for r in reasons[segment.id])
-        return (best, segment.start_ms)
+    def ordered(name: str, ids: set[str]) -> list[str]:
+        candidates = sorted(ids, key=lambda i: by_id[i].start_ms)
+        random.Random(f"{seed}:{name}").shuffle(candidates)
+        return candidates
 
-    picked = sorted((s for s in segments if reasons[s.id]), key=priority)[:REVIEW_CAP]
-    picked.sort(key=lambda s: s.start_ms)
-    return [ReviewPick(s, tuple(r for r in REASON_ORDER if r in reasons[s.id])) for s in picked]
+    def flagged(flag: str) -> set[str]:
+        return {i for i, f in flags.items() if flag in f}
+
+    queues = {
+        "cut-neighbour": ordered("forced-cut-neighbour", neighbours["forced"])
+        + ordered("silence-cut-neighbour", neighbours["silence"]),
+        "long-segment": ordered("long-segment", flagged("long_segment")),
+        "short-fragment": ordered("short-fragment", flagged("short_fragment")),
+        "speech-gap": ordered("speech-gap", flagged("speech_gap")),
+        "control": ordered("control", {i for i in by_id if not flags[i] and i not in adjacent}),
+    }
+    picked: dict[str, str] = {}
+    counts: Counter[str] = Counter()
+
+    def take(category: str, limit: int) -> None:
+        queue = queues[category]
+        while queue and counts[category] < limit and len(picked) < REVIEW_CAP:
+            candidate = queue.pop(0)
+            if candidate not in picked:
+                picked[candidate] = category
+                counts[category] += 1
+
+    take("control", CONTROLS)
+    for category, quota in QUOTAS.items():
+        take(category, quota)
+    while len(picked) < REVIEW_CAP:
+        before = len(picked)
+        for category in CATEGORIES:
+            take(category, min(CATEGORY_CAP, counts[category] + 1))
+        if len(picked) == before:
+            break
+
+    def reasons(segment_id: str) -> tuple[str, ...]:
+        found = []
+        if segment_id in neighbours["forced"]:
+            found.append("forced-cut-neighbour")
+        if segment_id in neighbours["silence"]:
+            found.append("silence-cut-neighbour")
+        for flag, name in (
+            ("long_segment", "long-segment"),
+            ("short_fragment", "short-fragment"),
+            ("speech_gap", "speech-gap"),
+        ):
+            if flag in flags[segment_id]:
+                found.append(name)
+        return tuple(found) or ("control",)
+
+    chosen = sorted(picked, key=lambda i: by_id[i].start_ms)
+    return [ReviewPick(by_id[i], picked[i], reasons(i)) for i in chosen]
+
+
+def category_counts(picks: Sequence[ReviewPick]) -> dict[str, int]:
+    counts = Counter(p.category for p in picks)
+    return {category: counts[category] for category in CATEGORIES}

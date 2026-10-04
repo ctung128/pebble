@@ -12,7 +12,10 @@ import shlex
 from collections.abc import Sequence
 from pathlib import Path
 
-from .analysis import ReviewPick
+from .analysis import ReviewPick, category_counts
+
+#: A private diagnostic, not a review signal (docs/BENCHMARKS.md); not shown to reviewers.
+HIDDEN_FLAGS = ("timestamp_alignment_anomaly",)
 
 REPLAY_OPTIONS = ("clean", "clipped start", "clipped end", "extra speech")
 TEXT_OPTIONS = ("fine", "minor fix", "major fix", "missing speech")
@@ -42,13 +45,16 @@ def write_review(
         "For each line, replay it, then tick one box per row (`[x]`). Correction time is how",
         "long fixing the text would take, roughly, in seconds. `bench report` counts the ticks.",
         "",
+        "Selection: "
+        + ", ".join(f"{name} {count}" for name, count in category_counts(picks).items()),
+        "",
     ]
     for n, pick in enumerate(picks, start=1):
         segment = pick.segment
         start, end = segment.start_ms, segment.end_ms
-        flags = (
-            ", ".join(segment.review.flags) if segment.review and segment.review.flags else "none"
-        )
+        own = segment.review.flags if segment.review else []
+        shown = [flag for flag in own if flag not in HIDDEN_FLAGS]
+        flags = ", ".join(shown) or "none"
         replay = (
             f"ffplay -nodisp -autoexit -ss {start / 1000:.3f} -t {(end - start) / 1000:.3f} "
             f"{shlex.quote(str(audio))}"

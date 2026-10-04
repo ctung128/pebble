@@ -31,6 +31,16 @@ def run_dir(storage: Storage, run_id: str) -> Path:
     return _safe(storage, storage.root / BENCH_DIRNAME / "runs" / run_id)
 
 
+#: The only files a run directory holds (plus a temporary file while review.md is rewritten).
+RUN_FILES = ("result.json", "transcript.json", "review.md", "normalized.wav", "review.md.tmp")
+
+
+def run_file(storage: Storage, run_id: str, name: str) -> Path:
+    if name not in RUN_FILES:
+        raise StorageAccessError(f"Unknown benchmark run file: {name!r}")
+    return _safe(storage, run_dir(storage, run_id) / name)
+
+
 def create_run_dir(storage: Storage, run_id: str) -> Path:
     """Creates a new, private run directory; refuses to reuse an existing one."""
     storage.ensure()
