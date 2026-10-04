@@ -33,11 +33,20 @@ const UPLOAD_ERRORS: Record<string, string> = {
     "The worker didn't accept this page. Open local mode at http://localhost:5175.",
 };
 
+export const TITLE_HELP =
+  "This title appears in saved learning items and Anki exports. Rename it if the file name is sensitive.";
+
 export function AddAudioPage() {
   const { client, status, mode, recheck } = useWorker();
   const copy = LOCAL_COPY[mode ?? "mock"];
   const navigate = useNavigate();
-  const ids = { file: useId(), title: useId(), owner: useId(), errors: useId() };
+  const ids = {
+    file: useId(),
+    title: useId(),
+    titleHelp: useId(),
+    owner: useId(),
+    errors: useId(),
+  };
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -124,7 +133,7 @@ export function AddAudioPage() {
 
           <div className={styles.field}>
             <label htmlFor={ids.title} className={styles.label}>
-              Title
+              Episode title
             </label>
             <input
               id={ids.title}
@@ -134,11 +143,15 @@ export function AddAudioPage() {
               maxLength={MAX_TITLE_LENGTH + 20}
               disabled={busy}
               aria-invalid={showErrors && problems.title ? true : undefined}
+              aria-describedby={ids.titleHelp}
               onChange={(event) => {
                 setTitle(event.target.value);
                 setTitleEdited(true);
               }}
             />
+            <p id={ids.titleHelp} className={styles.help}>
+              {TITLE_HELP}
+            </p>
             {showErrors && problems.title ? (
               <p className={styles.fieldError}>{problems.title}</p>
             ) : null}

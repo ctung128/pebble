@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
-import { AddAudioPage, OWNERSHIP_LABEL } from "./AddAudioPage.tsx";
+import { AddAudioPage, OWNERSHIP_LABEL, TITLE_HELP } from "./AddAudioPage.tsx";
 import { WorkerError } from "./workerClient.ts";
 
 const audio = (name = "morning_walk.m4a", size = 3) =>
@@ -15,7 +15,7 @@ async function renderReady(client = fakeWorkerClient()) {
 }
 
 const fileInput = () => screen.getByLabelText("Audio file");
-const titleInput = () => screen.getByLabelText("Title");
+const titleInput = () => screen.getByLabelText("Episode title");
 const ownership = () => screen.getByLabelText(OWNERSHIP_LABEL);
 const submitButton = () => screen.getByRole("button", { name: "Run processing preview" });
 
@@ -51,10 +51,27 @@ describe("AddAudioPage", () => {
     await renderReady();
     await userEvent.upload(fileInput(), audio("morning_walk.m4a"));
     expect(titleInput()).toHaveValue("morning walk");
+    expect(titleInput()).toBeEnabled();
+    expect(titleInput()).toHaveAccessibleDescription(TITLE_HELP);
+    expect(screen.getByText(TITLE_HELP)).toBeInTheDocument();
+    expect(TITLE_HELP).toBe(
+      "This title appears in saved learning items and Anki exports. Rename it if the file name is sensitive.",
+    );
     await userEvent.clear(titleInput());
     await userEvent.type(titleInput(), "My title");
     await userEvent.upload(fileInput(), audio("other.mp3"));
     expect(titleInput()).toHaveValue("My title");
+  });
+
+  it("uploads the title as edited, not the file name", async () => {
+    const client = fakeWorkerClient();
+    await renderReady(client);
+    await userEvent.upload(fileInput(), audio("invented_private_interview.m4a"));
+    await userEvent.clear(titleInput());
+    await userEvent.type(titleInput(), "Practice clip");
+    await userEvent.click(ownership());
+    await userEvent.click(submitButton());
+    expect(client.upload).toHaveBeenCalledWith(expect.objectContaining({ title: "Practice clip" }));
   });
 
   it("requires ownership confirmation", async () => {

@@ -89,6 +89,12 @@ Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which comm
 
 ## Using local mode in the browser
 
+**File names stay private.** The reader and library show your **Episode title** and "Local
+audio", never the audio's file name. The title starts as the file name and is editable before
+processing; it is what saved learning items and Anki exports carry, so rename it if the file
+name is sensitive. The worker keeps the original file name only in its private database and
+never returns it from the API or writes it to its log.
+
 Local mode is a separate build of the web app; the public demo never contains it. In two
 terminals, from the repository root:
 

@@ -473,6 +473,26 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
     expect(screen.queryByText(/prepared sample content/)).not.toBeInTheDocument();
   });
 
+  it("shows the learner's title and 'Local audio', never the file name", async () => {
+    const source = fakeSource({
+      getTranscript: async () => asrTranscript,
+      getEpisode: async (id) => ({
+        ...testEpisode,
+        id,
+        title: "Practice clip",
+        description: "Local audio",
+        demo: undefined,
+        audioProvenance: { kind: "user-provided", publishable: false, notes: "Yours." },
+        audioUrl: "http://127.0.0.1:8790/episodes/x/audio",
+      }),
+    });
+    renderPage({ source });
+    await playButtons();
+    expect(screen.getByRole("heading", { level: 1, name: "Practice clip" })).toBeInTheDocument();
+    expect(screen.getByText("Local audio", { selector: "p" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/invented_private_interview|\.m4a/);
+  });
+
   it("has no English controls and never requests a translation", async () => {
     const { provider, translate } = fakeTranslationProvider();
     renderPage({ source: asrSource(), translation: provider });

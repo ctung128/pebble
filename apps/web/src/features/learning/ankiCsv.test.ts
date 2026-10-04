@@ -220,3 +220,29 @@ describe("source-deleted items", () => {
     expect(row).not.toMatch(/\/|\.m4a|\.wav|~/);
   });
 });
+
+describe("titles", () => {
+  // The learner renamed the upload; the original file name was "invented_private_interview.m4a".
+  const renamed = { ...testEpisode, title: "Practice clip", description: "Local audio" };
+  const saved = (sourceDeletedAt?: string) => ({
+    ...buildLearningItem({
+      episode: renamed,
+      transcript: testTranscript,
+      segment: testTranscript.segments[0]!,
+      correction: null,
+      pinyin: null,
+      translation: null,
+      id: "item-1",
+      now: new Date("2026-10-03T10:00:00Z"),
+    }),
+    ...(sourceDeletedAt ? { sourceDeletedAt } : {}),
+  });
+
+  it("carry the edited title into items and the CSV, before and after source deletion", () => {
+    expect(saved().episodeTitle).toBe("Practice clip");
+    const csv = toAnkiCsv([saved(), { ...saved("2026-10-04T12:00:00.000Z"), id: "item-2" }]);
+    expect(csv).toContain("Practice clip · 0:00");
+    expect(csv).toContain("Practice clip · 0:00 · source deleted");
+    expect(csv).not.toMatch(/invented_private_interview|\.m4a|Local audio/);
+  });
+});

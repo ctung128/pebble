@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from conftest import DEMO_AUDIO, upload, wait_for_job
 
 from pebble_worker.contract import parse_job, parse_manifest, parse_transcript, parse_worker_health
@@ -165,6 +167,44 @@ def test_delete_removes_every_trace_of_one_episode_and_nothing_else(make_client,
             assert count.fetchone()[0] == 0, table
         assert db.execute("SELECT COUNT(*) FROM transcripts").fetchone()[0] == 1
     assert client.get(f"/episodes/{kept['episodeId']}/transcript").status_code == 200
+
+
+INVENTED_FILENAME = "invented-private-interview-0412"  # never a real file name
+
+
+def test_the_original_file_name_is_never_served_or_logged(make_client, settings, audio, tmp_path):
+    import shutil
+
+    renamed = tmp_path / f"{INVENTED_FILENAME}{audio['short'].suffix}"
+    shutil.copy(audio["short"], renamed)
+    client = make_client()
+    created = upload(client, renamed, title="My renamed episode")
+    assert created["status"] == 201
+    job = wait_for_job(client, created["body"]["job"]["id"])
+    episode_id = job["episodeId"]
+
+    episode = client.get(f"/episodes/{episode_id}").json()
+    assert episode["title"] == "My renamed episode"
+    assert episode["description"] == "Local audio"
+    responses = [
+        client.get("/episodes").text,
+        client.get(f"/episodes/{episode_id}").text,
+        client.get(f"/episodes/{episode_id}/transcript").text,
+        client.get("/jobs").text,
+        client.get(f"/jobs/{job['id']}").text,
+        client.get("/health").text,
+        json.dumps(created["body"]),
+    ]
+    for body in responses:
+        assert INVENTED_FILENAME not in body
+    for log in (settings.data_dir / "logs").glob("*.log"):
+        assert INVENTED_FILENAME not in log.read_text()
+    # Kept privately for internal bookkeeping only.
+    import sqlite3
+
+    with sqlite3.connect(settings.data_dir / "pebble.db") as db:
+        stored = db.execute("SELECT original_filename FROM episodes").fetchone()[0]
+    assert stored.startswith(INVENTED_FILENAME)
 
 
 def test_demo_fixture_end_to_end_with_default_chunking(make_client, settings):

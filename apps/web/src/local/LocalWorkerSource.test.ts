@@ -9,7 +9,7 @@ const ID = "ep-0123456789ab";
 const episode = {
   id: ID,
   title: "Morning walk",
-  description: "Local audio · walk.m4a",
+  description: "Local audio",
   language: "zh-CN",
   durationMs: 9000,
   audio: { src: `episodes/${ID}/audio`, mimeType: "audio/mp4" },

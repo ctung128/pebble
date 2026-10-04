@@ -164,7 +164,9 @@ def create_app(
             {
                 "id": row["id"],
                 "title": row["title"],
-                "description": f"Local audio · {row['original_filename']}",
+                # Never the original file name: it can be sensitive. The learner's own title is
+                # the only name shown (and the one saved items and exports carry).
+                "description": "Local audio",
                 "language": row["language"],
                 "durationMs": row["duration_ms"],
                 "audio": {"src": f"episodes/{row['id']}/audio", "mimeType": row["mime_type"]},

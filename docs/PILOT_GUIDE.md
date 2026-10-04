@@ -55,6 +55,9 @@ another one).
 
 1. **Create a transcript locally**, choose your audio file, confirm you may use it, and start.
    A few minutes of audio takes about a minute.
+   The **Episode title** starts as the file name. It appears in your saved learning items
+   and Anki exports, so rename it first if the file name is private. Once the audio is
+   processed, Pebble shows only this title, never the file name.
 2. **Open the transcript.** Click a line (or its play button) to hear it again.
 3. Turn on **pinyin** to see pronunciation.
 4. **Edit** any line that looks wrong; **Revert** undoes your edit.

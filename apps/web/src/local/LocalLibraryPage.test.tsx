@@ -150,6 +150,15 @@ describe("LocalLibraryPage", () => {
     expect(await store.listCorrections()).toHaveLength(1);
   });
 
+  it("lists local audio by the learner's title only", async () => {
+    const renamed = makeJob({ ...completed, episodeTitle: "Practice clip" });
+    renderLocal(<LocalLibraryPage />, {
+      client: fakeWorkerClient({ listJobs: vi.fn(async () => [renamed]) }),
+    });
+    expect(await screen.findByText("Practice clip")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/invented_private_interview|\.m4a/);
+  });
+
   it("never offers deletion for ids that aren't local episodes", async () => {
     const odd = makeJob({ ...completed, episodeId: "demo-001" });
     renderLocal(<LocalLibraryPage />, {
