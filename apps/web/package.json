@@ -15,6 +15,7 @@
     "build:local": "VITE_PEBBLE_MODE=local vite build --outDir dist-local"
   },
   "dependencies": {
+    "@fontsource-variable/work-sans": "5.3.0",
     "@pebble/schema": "0.1.0",
     "pinyin-pro": "3.29.4",
     "react": "19.3.0",

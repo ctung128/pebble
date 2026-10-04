@@ -1,0 +1,18 @@
+/*
+ * Pebble fonts. Self-hosted or system-installed only: the app makes no font requests to third
+ * parties (no Google Fonts at runtime).
+ *
+ * - Work Sans (body and UI): from @fontsource-variable/work-sans, imported in main.tsx.
+ * - Huiwen Mincho (汇文明朝体, display: titles and the wordmark). One weight (400); never bold
+ *   it. Used only when it's installed on this computer: local() matches its full and
+ *   PostScript names ("Huiwen-mincho", "汇文明朝体"). Otherwise --font-display falls back to
+ *   Songti SC / Noto Serif SC / serif. A bundled subset (a url() source after the local()
+ *   ones) is added only once its redistribution licence is confirmed and committed with it.
+ */
+@font-face {
+  font-family: "Huiwen Mincho";
+  src: local("Huiwen-mincho"), local("汇文明朝体");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

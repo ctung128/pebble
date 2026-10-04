@@ -9,7 +9,10 @@ import { openLearningStore } from "./features/learning/openLearningStore.ts";
 import { DemoTranslationProvider } from "./features/translation/DemoTranslationProvider.ts";
 import { TranslationProviderContext } from "./features/translation/TranslationContext.tsx";
 import { SessionCachedTranslationProvider } from "./features/translation/TranslationProvider.ts";
+// Work Sans (SIL OFL 1.1), self-hosted from the package: no runtime font requests.
+import "@fontsource-variable/work-sans";
 import "./styles/tokens.css";
+import "./styles/fonts.css";
 import "./styles/global.css";
 
 const root = document.getElementById("root");

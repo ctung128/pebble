@@ -10,21 +10,48 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: var(--text-base);
+  font-size: var(--size-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Page and episode titles use the display face, which has one weight: never bold it. */
+h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+/* Focus is always visible for keyboard users and never removed. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 button,
 select,
-input {
+input,
+textarea {
   font: inherit;
+}
+
+/* Reduced motion: no animation or smooth scrolling anywhere, whatever a module sets. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows High Contrast and other forced-colour modes: keep focus visible in system colours. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
 }

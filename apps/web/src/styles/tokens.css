@@ -1,66 +1,221 @@
+/*
+ * Pebble design tokens v2.1 (direction D: white reading page, juniper accent, lichen selection).
+ * Generated from the Pebble design system's tokens.json (committed alongside as
+ * docs/design/tokens.json). Change the design system first, then regenerate; don't tune here.
+ *
+ * Tiers: primitives (raw palette, never used by components) -> semantic (what components use)
+ * -> sizes. Type is in rem so the browser's font-size setting scales text.
+ */
 :root {
   color-scheme: light dark;
 
-  --bg: #f6f4ef;
-  --surface: #fffdf8;
-  --surface-2: #efebe2;
-  --text: #24221e;
-  --text-muted: #67625a;
-  --text-faint: #8f8a80;
-  --border: #e4dfd4;
-  --border-strong: #d2ccbf;
-  --accent: #4f6f52;
-  --accent-strong: #405c43;
-  --accent-soft: #e4ece0;
-  --accent-contrast: #ffffff;
-  --warn-bg: #f7eedb;
-  --warn-text: #66490f;
-  --danger: #a23f2e;
+  /* --- Primitive colors --- */
+  --white: #ffffff;
+  --rice-50: #f7f6f1;
+  --rice-100: #efede6;
+  --stone-200: #e4e2da;
+  --stone-300: #d9d6cc;
+  --stone-400: #86837a;
+  --stone-500: #6d6b62;
+  --stone-600: #58574f;
+  --sumi-900: #1f1e1a;
+  --lichen-100: #eceee3;
+  --lichen-200: #dfe3cf;
+  --juniper-400: #78825f;
+  --juniper-600: #4a5a3a;
+  --juniper-700: #3d4b30;
+  --rust-50: #f4e5e1;
+  --rust-200: #e4c8c1;
+  --rust-700: #8a3b2e;
+  --rust-800: #73302a;
+  --honey-50: #fcf2dc;
+  --honey-200: #f0d9a6;
+  --honey-700: #8a5a0a;
 
-  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-zh: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", var(--font-ui);
+  /* --- Semantic colors (light) --- */
+  --bg-page: var(--white);
+  --bg-subtle: var(--rice-50);
+  --bg-muted: var(--rice-100);
+  --bg-hover: var(--stone-200);
+  --bg-selected: var(--lichen-100);
+  --bg-active: var(--lichen-200);
+  --bg-inset: var(--white);
+  --text-primary: var(--sumi-900);
+  --text-secondary: var(--stone-600);
+  --text-tertiary: var(--stone-500);
+  --text-accent: var(--juniper-600);
+  --text-on-accent: var(--white);
+  --accent: var(--juniper-600);
+  --accent-hover: var(--juniper-700);
+  --accent-pending: var(--juniper-400);
+  --border-subtle: var(--stone-200);
+  --border-default: var(--stone-300);
+  --border-selected: var(--juniper-600);
+  --border-control: var(--stone-400);
+  --focus-ring: var(--juniper-600);
+  --error: var(--rust-700);
+  --error-hover: var(--rust-800);
+  --error-bg: var(--rust-50);
+  --error-border: var(--rust-200);
+  --warning: var(--honey-700);
+  --warning-bg: var(--honey-50);
+  --warning-border: var(--honey-200);
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.75rem;
-  --text-zh: 1.3rem;
+  /* --- Brand imagery only (never UI fills) --- */
+  --img-xuan: #e6dcc4;
+  --img-sumi: #1f1d1a;
+  --img-water: #d5dbd3;
+  --img-moss: #4f6b34;
+  --img-leaf: #3f6f3a;
+  --img-hair: #f4f2ec;
+  --img-slate: #2e3a40;
+  --seal: #a3352b;
 
+  /* --- Type families (font files: fonts.css) --- */
+  --font-display: "Huiwen Mincho", "Songti SC", "Noto Serif SC", serif;
+  --font-ui: "Work Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-zh:
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+    sans-serif;
+
+  /* --- Type sizes (rem) --- */
+  --size-display-lg: 2.625rem;
+  --size-display-md: 1.875rem;
+  --size-display-sm: 1.375rem;
+  --size-body: 1rem;
+  --size-body-sm: 0.875rem;
+  --size-caption: 0.8125rem;
+  --size-label: 0.75rem;
+  --size-overline: 0.75rem;
+  --size-speaker: 0.75rem;
+  --size-transcript-zh: 1.375rem;
+  --size-pinyin: 0.875rem;
+  --size-vertical-title: 2.625rem;
+  --size-vertical-body: 1.0625rem;
+  --size-work-label: 0.8125rem;
+  --size-ruby: 0.625rem;
+
+  /* --- Spacing (px). v1 --space-5 was 24px and --space-6 was 40px: see the alias note. --- */
+  --space-half: 2px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 40px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
 
-  --radius-s: 6px;
-  --radius-m: 10px;
-  --radius-l: 16px;
+  /* --- Radius and shapes --- */
+  --radius-xs: 2px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
+  --shape-pebble: 48% 52% 46% 54% / 56% 52% 48% 44%;
+  --shape-pebble-small: 52% 48% 44% 56% / 60% 58% 42% 40%;
 
-  --content-width: 760px;
-  --player-height: 80px;
-  --shadow-bar: 0 -8px 24px rgb(0 0 0 / 0.05);
+  /* --- Border widths, states, sizes --- */
+  --border-width-hairline: 1px;
+  --border-width-selected: 1.5px;
+  --focus-width: 2px;
+  --opacity-disabled: 0.4;
+  --sidebar-width: 248px;
+  --content-width: 740px;
+  --player-height: 100px;
+  --control-md: 40px;
+  --control-lg: 46px;
+  --line-action: 36px;
+  --transport: 44px;
+  --play-width: 66px;
+
+  /* --- Rings and the one shadow, built from semantic colors so they follow the theme --- */
+  --ring-selected: inset 0 0 0 var(--border-width-selected) var(--border-selected);
+  --ring-error: inset 0 0 0 var(--border-width-selected) var(--error);
+  --ring-thumb: 0 0 0 3px var(--bg-page);
+  --edge-keycap: inset 0 -1px 0 var(--border-default);
+  --shadow-popover: 0 0 0 1px var(--border-subtle), 0 8px 24px rgb(31 30 26 / 0.08);
+
+  /* --- Motion --- */
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --easing-standard: ease;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}
+
+/*
+ * INTERIM DARK THEME. The v2 design system has no dark palette yet. These are the app's
+ * existing v1 dark values, mapped onto the v2 semantic names, so dark mode keeps working
+ * (project rule) until a v2 dark theme is designed and replaces this block.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161513;
-    --surface: #1e1d1a;
-    --surface-2: #2a2824;
-    --text: #ece8df;
-    --text-muted: #aca698;
-    --text-faint: #807b70;
-    --border: #2f2c27;
-    --border-strong: #423e37;
+    --bg-page: #161513;
+    --bg-subtle: #1e1d1a;
+    --bg-muted: #2a2824;
+    --bg-hover: #2f2c27;
+    --bg-selected: #263127;
+    --bg-active: #263127;
+    --bg-inset: #1e1d1a;
+    --text-primary: #ece8df;
+    --text-secondary: #aca698;
+    --text-tertiary: #aca698;
+    --text-accent: #9cc29f;
+    --text-on-accent: #14201a;
     --accent: #9cc29f;
-    --accent-strong: #b3d4b5;
-    --accent-soft: #263127;
-    --accent-contrast: #14201a;
-    --warn-bg: #3a301c;
-    --warn-text: #ecd39a;
-    --danger: #f0907e;
-    --shadow-bar: 0 -8px 24px rgb(0 0 0 / 0.4);
+    --accent-hover: #b3d4b5;
+    --accent-pending: #6d8a70;
+    --border-subtle: #2f2c27;
+    --border-default: #423e37;
+    --border-control: #807b70;
+    --border-selected: #9cc29f;
+    --focus-ring: #9cc29f;
+    --error: #f0907e;
+    --error-hover: #f4a797;
+    --error-bg: #3a201b;
+    --error-border: #5c3128;
+    --warning: #ecd39a;
+    --warning-bg: #3a301c;
+    --warning-border: #5a4a2a;
   }
+}
+
+/*
+ * TEMPORARY v1 -> v2 aliases so the existing CSS Modules keep working. Migrate modules to the
+ * semantic names, then delete this block. --space-5 / --space-6 are NOT aliased (v2 reuses the
+ * names): in the same change, replace v1 var(--space-5) (24px) with var(--space-6) and v1
+ * var(--space-6) (40px) with var(--space-10).
+ */
+:root {
+  --bg: var(--bg-page);
+  --surface: var(--bg-subtle);
+  --surface-2: var(--bg-muted);
+  --text: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --text-faint: var(--text-tertiary);
+  --border: var(--border-subtle);
+  --border-strong: var(--border-control);
+  --accent-strong: var(--accent-hover);
+  --accent-soft: var(--bg-active);
+  --accent-contrast: var(--text-on-accent);
+  --warn-bg: var(--warning-bg);
+  --warn-text: var(--warning);
+  --danger: var(--error);
+  --radius-s: var(--radius-md);
+  --radius-m: var(--radius-lg);
+  --radius-l: var(--radius-xl);
+  --shadow-bar: none;
+  --text-xs: var(--size-label);
+  --text-sm: var(--size-body-sm);
+  --text-base: var(--size-body);
+  --text-lg: 1.125rem;
+  --text-xl: var(--size-display-lg);
+  --text-zh: var(--size-transcript-zh);
 }
