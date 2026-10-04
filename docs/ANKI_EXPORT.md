@@ -22,8 +22,8 @@ Anki's import header lines (supported by Anki 2.1.55 and newer):
 | 2   | Pinyin      | Generated pinyin for the saved text. Filled in automatically on export if it wasn't generated before saving; empty only if pinyin couldn't be generated                             |
 | 3   | Translation | English. Filled in automatically on export when a translation is available; empty for edited lines (prepared translations match only the original text) or if it couldn't be loaded |
 | 4   | Note        | Your note; may span several lines                                                                                                                                                   |
-| 5   | Source      | `Episode title · m:ss`                                                                                                                                                              |
-| 6   | Tags        | `pebble pebble::<episode-id>`, plus `pebble::edited` for corrected lines                                                                                                            |
+| 5   | Source      | `Episode title · m:ss`, plus ` · source deleted` if the audio was deleted from Pebble                                                                                               |
+| 6   | Tags        | `pebble pebble::<episode-id>`, plus `pebble::edited` for corrected lines and `pebble::source-deleted` when the audio was deleted                                                    |
 
 - English and pinyin are added automatically: on export, Pebble fills in whichever is missing
   (only then; nothing is fetched in the background) and keeps the results on the learning

@@ -1,9 +1,9 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, testEpisode, testTranscript } from "../../test/fixtures.tsx";
 import { buildLearningItem } from "./buildLearningItem.ts";
-import { LearningItemsPage } from "./LearningItemsPage.tsx";
+import { LearningItemsPage, SOURCE_DELETED_HELP, STORAGE_NOTE } from "./LearningItemsPage.tsx";
 import { MemoryLearningStore } from "./MemoryLearningStore.ts";
 
 async function storeWithItem() {
@@ -22,6 +22,45 @@ async function storeWithItem() {
 }
 
 describe("LearningItemsPage", () => {
+  it("says where items are stored and how to keep a copy", async () => {
+    renderWithProviders(<LearningItemsPage />);
+    expect(await screen.findByText(STORAGE_NOTE)).toBeInTheDocument();
+  });
+
+  it("names the reset control for what it removes in local mode", async () => {
+    vi.stubGlobal("__PEBBLE_LOCAL__", true);
+    try {
+      renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
+      expect(
+        await screen.findByRole("button", { name: "Remove all edits and learning items" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/demo data/i)).not.toBeInTheDocument();
+    } finally {
+      vi.stubGlobal("__PEBBLE_LOCAL__", false);
+    }
+  });
+
+  it("marks items whose source was deleted, without a link back", async () => {
+    const store = new MemoryLearningStore();
+    const [stored] = await (await storeWithItem()).listItems();
+    await store.putItem({
+      ...stored!,
+      note: "kept note",
+      sourceDeletedAt: "2026-10-04T12:00:00.000Z",
+    });
+    renderWithProviders(<LearningItemsPage />, { store });
+    expect(await screen.findByText("第二句。")).toBeInTheDocument();
+    expect(screen.getByText("dì èr jù。")).toBeInTheDocument();
+    expect(screen.getByText("The second sentence.")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("kept note")).toBeInTheDocument();
+    expect(screen.getByText("Source deleted")).toBeInTheDocument();
+    expect(screen.getByText(SOURCE_DELETED_HELP)).toBeInTheDocument();
+    expect(screen.getByText(/Test episode · 0:03/)).toBeInTheDocument();
+    expect(screen.queryByText(/· source deleted/)).not.toBeInTheDocument(); // the badge says it
+    expect(screen.queryByRole("link", { name: /Test episode/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export CSV for Anki" })).toBeEnabled();
+  });
+
   it("shows an empty state and disables export", async () => {
     renderWithProviders(<LearningItemsPage />);
     expect(await screen.findByText("No learning items yet")).toBeInTheDocument();

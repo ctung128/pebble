@@ -210,3 +210,13 @@ describe("mock content", () => {
     expect(csv).toContain("第一句。");
   });
 });
+
+describe("source-deleted items", () => {
+  it("stay exportable and say so in Source and Tags, without any path", () => {
+    const csv = toAnkiCsv([item({ sourceDeletedAt: "2026-10-04T12:00:00.000Z" })]);
+    const row = csv.trim().split("\n").at(-1)!;
+    expect(row).toContain("Test episode · 0:00 · source deleted");
+    expect(row).toContain("pebble::source-deleted");
+    expect(row).not.toMatch(/\/|\.m4a|\.wav|~/);
+  });
+});

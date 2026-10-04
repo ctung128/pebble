@@ -7,12 +7,13 @@ import { canRetry, isActive, sectionProgress, statusLabel } from "./jobCopy.ts";
 import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobList } from "./useJobList.ts";
 import { LOCAL_EPISODE_ID, WorkerError } from "./workerClient.ts";
+import { useLearning } from "../features/learning/LearningContext.tsx";
 import { useWorker } from "./WorkerContext.tsx";
 import { WorkerStatusCard } from "./WorkerStatusCard.tsx";
 import styles from "./local.module.css";
 
 export const DELETE_PROMPT =
-  "Permanently delete this local audio, its processed sections, preview transcript and job record from this computer? This can't be undone.";
+  "Delete this audio from Pebble? This removes the audio, its transcript, your edits to it and its processing files from this computer. Learning items you saved from it stay in Learning items, marked “Source deleted.” This can't be undone.";
 
 export function LocalLibraryPage() {
   const { client, status, recheck } = useWorker();
@@ -68,6 +69,7 @@ export function LocalLibraryPage() {
 
 function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
   const { client } = useWorker();
+  const { markSourceDeleted } = useLearning();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -134,7 +136,13 @@ function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
             prompt={DELETE_PROMPT}
             confirmLabel="Delete"
             aria-label={`Delete ${job.episodeTitle}`}
-            onConfirm={() => void act(() => client.deleteEpisode(job.episodeId))}
+            onConfirm={() =>
+              void act(async () => {
+                // Browser data changes only after the worker has deleted the episode.
+                await client.deleteEpisode(job.episodeId);
+                markSourceDeleted(job.episodeId);
+              })
+            }
           >
             Delete
           </ConfirmButton>

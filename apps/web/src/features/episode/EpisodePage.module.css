@@ -78,6 +78,19 @@
   margin: 0;
 }
 
+.sourceNoteDetails {
+  font-size: var(--text-xs);
+}
+
+.sourceNoteDetails summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.sourceNoteDetails p {
+  margin-top: var(--space-1);
+}
+
 .sourceNoteHeading {
   margin: 0;
   font-size: var(--text-sm);

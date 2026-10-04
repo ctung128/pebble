@@ -132,6 +132,41 @@ def test_delete_removes_audio_records_and_refuses_active_jobs(make_client, setti
     assert client.get("/episodes").json()["episodes"] == []
 
 
+def test_delete_removes_every_trace_of_one_episode_and_nothing_else(make_client, settings, audio):
+    import sqlite3
+
+    client = make_client()
+    gone = upload(client, audio["short"])["body"]["job"]
+    kept = upload(client, audio["short"])["body"]["job"]
+    for job in (gone, kept):
+        wait_for_job(client, job["id"])
+    root = settings.data_dir
+    outside = root.parent / "outside-marker"
+    outside.write_text("untouched")
+    before = {p for p in root.rglob("*")}
+
+    assert client.delete(f"/episodes/{gone['episodeId']}").status_code == 204
+
+    removed = before - {p for p in root.rglob("*")}
+    assert removed, "the episode's files were removed"
+    assert all(gone["episodeId"] in p.relative_to(root).parts for p in removed)  # only its files
+    assert not (root / "episodes" / gone["episodeId"]).exists()
+    assert (root / "episodes" / kept["episodeId"]).is_dir()
+    assert outside.read_text() == "untouched"
+
+    with sqlite3.connect(root / "pebble.db") as db:
+        for table, column, value in (
+            ("episodes", "id", gone["episodeId"]),
+            ("jobs", "id", gone["id"]),
+            ("chunks", "job_id", gone["id"]),
+            ("transcripts", "episode_id", gone["episodeId"]),
+        ):
+            count = db.execute(f"SELECT COUNT(*) FROM {table} WHERE {column} = ?", (value,))
+            assert count.fetchone()[0] == 0, table
+        assert db.execute("SELECT COUNT(*) FROM transcripts").fetchone()[0] == 1
+    assert client.get(f"/episodes/{kept['episodeId']}/transcript").status_code == 200
+
+
 def test_demo_fixture_end_to_end_with_default_chunking(make_client, settings):
     from dataclasses import replace
 

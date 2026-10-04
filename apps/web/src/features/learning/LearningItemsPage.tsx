@@ -9,6 +9,11 @@ import { useLearning } from "./LearningContext.tsx";
 import { ResetDemoData } from "./ResetDemoData.tsx";
 import styles from "./LearningItemsPage.module.css";
 
+export const SOURCE_DELETED_HELP =
+  "This item is saved in your browser, but its original audio and transcript were removed from Pebble.";
+export const STORAGE_NOTE =
+  "Learning items are saved in this browser on this computer. Clearing this browser's site data removes them, so export to Anki to keep a copy.";
+
 export function LearningItemsPage() {
   const { items, persistence } = useLearning();
 
@@ -21,6 +26,7 @@ export function LearningItemsPage() {
           <p className={styles.lede}>
             Lines you saved while listening. Export them to Anki as CSV.
           </p>
+          <p className={styles.storageNote}>{STORAGE_NOTE}</p>
         </div>
       </header>
 
@@ -75,11 +81,20 @@ function ItemCard({ item }: { item: LearningItem }) {
         </p>
       ) : null}
 
-      <p className={styles.source}>
-        <Link to={`/episodes/${item.episodeId}?segment=${encodeURIComponent(item.segmentId)}`}>
-          {itemSource(item)}
-        </Link>
-      </p>
+      {item.sourceDeletedAt ? (
+        <div className={styles.sourceDeleted}>
+          <p className={styles.source}>
+            <span className={styles.sourceDeletedBadge}>Source deleted</span> {itemSource(item)}
+          </p>
+          <p className={styles.sourceDeletedHelp}>{SOURCE_DELETED_HELP}</p>
+        </div>
+      ) : (
+        <p className={styles.source}>
+          <Link to={`/episodes/${item.episodeId}?segment=${encodeURIComponent(item.segmentId)}`}>
+            {itemSource(item)}
+          </Link>
+        </p>
+      )}
 
       <form
         className={styles.noteForm}

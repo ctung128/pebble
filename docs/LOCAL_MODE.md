@@ -23,6 +23,8 @@ from URLs or apps, and it does not work around any platform's content protection
 
 ## Quick start (pilot testers)
 
+Testers: start with the plain-language [pilot guide](PILOT_GUIDE.md).
+
 From the Pebble folder, four commands. Each explains what it will do; nothing is installed or
 downloaded without asking first.
 

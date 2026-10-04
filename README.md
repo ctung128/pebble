@@ -86,6 +86,8 @@ npm run pebble:stop     # or Ctrl+C where pebble:start runs
 npm run test:worker && npm run test:scripts
 ```
 
+Pilot testers: see [docs/PILOT_GUIDE.md](docs/PILOT_GUIDE.md).
+
 Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765.
 
 ## Repository layout

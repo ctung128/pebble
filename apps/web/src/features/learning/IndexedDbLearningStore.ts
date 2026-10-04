@@ -91,6 +91,18 @@ export class IndexedDbLearningStore implements LearningStore {
     return this.write(CORRECTIONS, (store) => store.delete([episodeId, segmentId]));
   }
 
+  deleteCorrectionsForEpisode(episodeId: string) {
+    // One transaction: read the [episodeId, segmentId] keys, delete that episode's.
+    return this.write(CORRECTIONS, (store) => {
+      const keys = store.getAllKeys();
+      keys.onsuccess = () => {
+        for (const key of keys.result) {
+          if (Array.isArray(key) && key[0] === episodeId) store.delete(key);
+        }
+      };
+    });
+  }
+
   async listItems(): Promise<LearningItem[]> {
     const rows = await settle(this.db.transaction(ITEMS).objectStore(ITEMS).getAll());
     return validRows(rows, parseLearningItem, "learning item");

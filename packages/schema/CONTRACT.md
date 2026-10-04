@@ -19,7 +19,8 @@ worker. Both are tested against `examples/`.
   nonce for one run of a worker started by `npm run pebble:start`. It exists so
   `npm run pebble:stop` only ever signals the worker that run started; it is not a secret or a
   credential, carries no user data, and appears only in the local `/health` response (the
-  public demo never contacts a worker).
+  public demo never contacts a worker). Learning items may include `sourceDeletedAt`: the item's
+  local episode (audio and transcript) was deleted; the item itself is kept.
 - **1.5** — Worker health providers may include `state` (`ready`, `checking`,
   `environment_missing`, `models_missing`, `verification_failed`, `load_failed`) and `hint`
   (plain-language remediation safe to show in the app, at most one command). Readers fall back
@@ -148,6 +149,7 @@ change transcript `confidence` (which stays `null`). Apps keep its origin as
 | `translation`                   | English if resolved (when saving, or later on export), else `null`         |
 | `note`                          | learner note or `null`                                                     |
 | `savedAt`, `updatedAt`          | ISO 8601                                                                   |
+| `sourceDeletedAt`               | optional (1.6): ISO 8601, when the item's local episode was deleted        |
 | `provenance`                    | `{ transcriptKind, transcriptProvider, corrected, audioKind }`             |
 
 `originalText` must be set exactly when `provenance.corrected` is true.

@@ -34,4 +34,4 @@ export function canRequestTranslation(kind: TranscriptProvenance["kind"]): boole
 
 export const ASR_NOTICE_HEADING = "Local transcript";
 export const ASR_NOTICE =
-  "Transcribed on this computer with FunASR Paraformer. Generated transcripts can mishear names, accents, or fast conversation—replay or edit any line that looks wrong.";
+  "Pebble creates a machine transcript on your computer. It can mishear or miss parts of fast or conversational speech. Replay the audio and edit any line that looks wrong.";

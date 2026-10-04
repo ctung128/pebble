@@ -4,7 +4,10 @@ let loading: Promise<PinyinConverter> | null = null;
 
 /** Tone-marked pinyin with punctuation attached to the preceding syllable. */
 export function formatPinyin(raw: string): string {
-  return raw.replace(/\s+([，。？！、；：,.!?;:])/g, "$1").trim();
+  return raw
+    .replace(/\s+([，。？！、；：,.!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -17,7 +20,8 @@ export function loadPinyin(): Promise<PinyinConverter> {
     .then(
       ({ pinyin }) =>
         (text: string) =>
-          formatPinyin(pinyin(text)),
+          // Latin words and numbers stay whole ("iPhone 15", not "i P h o n e 1 5").
+          formatPinyin(pinyin(text, { nonZh: "consecutive" })),
     )
     .catch((error: unknown) => {
       loading = null; // allow a retry

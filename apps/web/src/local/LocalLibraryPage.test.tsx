@@ -2,8 +2,48 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
+import { CURRENT_SCHEMA_VERSION, type Correction, type LearningItem } from "@pebble/schema";
+import { MemoryLearningStore } from "../features/learning/MemoryLearningStore.ts";
 import { WorkerError } from "./workerClient.ts";
 import { DELETE_PROMPT, LocalLibraryPage } from "./LocalLibraryPage.tsx";
+
+/** Invented text only. */
+function savedItem(id: string, episodeId: string): LearningItem {
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    id,
+    kind: "segment",
+    episodeId,
+    episodeTitle: "Finished walk",
+    segmentId: "seg-0001",
+    startMs: 1000,
+    endMs: 2500,
+    text: "今天天气很好。",
+    originalText: null,
+    pinyin: "jīntiān tiānqì hěn hǎo.",
+    translation: null,
+    note: "my note",
+    savedAt: "2026-10-04T10:00:00.000Z",
+    updatedAt: "2026-10-04T10:00:00.000Z",
+    provenance: {
+      transcriptKind: "asr",
+      transcriptProvider: "funasr",
+      corrected: false,
+      audioKind: "user-provided",
+    },
+  };
+}
+
+function correction(episodeId: string, segmentId: string): Correction {
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    episodeId,
+    segmentId,
+    originalText: "原来的句子。",
+    correctedText: "改过的句子。",
+    updatedAt: "2026-10-04T10:00:00.000Z",
+  };
+}
 
 const completed = makeJob({
   id: "job-aaaaaaaaaaaa",
@@ -45,18 +85,69 @@ describe("LocalLibraryPage", () => {
     expect(within(active!).queryByRole("button", { name: /Delete/ })).not.toBeInTheDocument();
   });
 
-  it("deletes only after a confirmation that explains what is removed", async () => {
+  it("deletes only after a confirmation that explains what is removed and what stays", async () => {
     const listJobs = vi.fn().mockResolvedValueOnce([completed]).mockResolvedValue([]);
     const client = fakeWorkerClient({ listJobs });
     renderLocal(<LocalLibraryPage />, { client });
     await userEvent.click(await screen.findByRole("button", { name: "Delete Finished walk" }));
     expect(screen.getByText(DELETE_PROMPT)).toBeInTheDocument();
-    expect(DELETE_PROMPT).toMatch(/local audio.*sections.*preview transcript.*job record/);
+    expect(DELETE_PROMPT).toMatch(/removes the audio, its transcript, your edits to it/);
+    expect(DELETE_PROMPT).toMatch(/Learning items you saved from it stay.*Source deleted/);
     expect(client.deleteEpisode).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(client.deleteEpisode).toHaveBeenCalledWith("ep-aaaaaaaaaaaa");
     expect(await screen.findByText("No local audio yet")).toBeInTheDocument();
+  });
+
+  it("after a delete, keeps learning items as source-deleted and removes only that episode's edits", async () => {
+    const store = new MemoryLearningStore();
+    const mine = savedItem("item-mine", "ep-aaaaaaaaaaaa");
+    const other = savedItem("item-other", "ep-bbbbbbbbbbbb");
+    await store.putItem(mine);
+    await store.putItem(other);
+    await store.putCorrection(correction("ep-aaaaaaaaaaaa", "seg-0001"));
+    await store.putCorrection(correction("ep-aaaaaaaaaaaa", "seg-0002"));
+    await store.putCorrection(correction("ep-bbbbbbbbbbbb", "seg-0001"));
+    const listJobs = vi.fn().mockResolvedValueOnce([completed]).mockResolvedValue([]);
+    renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient({ listJobs }), store });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Finished walk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await screen.findByText("No local audio yet");
+
+    await waitFor(async () => {
+      const items = await store.listItems();
+      expect(items.find((i) => i.id === "item-mine")?.sourceDeletedAt).toBeTruthy();
+    });
+    const items = await store.listItems();
+    expect(items).toHaveLength(2); // nothing deleted
+    const kept = items.find((i) => i.id === "item-mine")!;
+    expect({ ...kept, sourceDeletedAt: undefined, updatedAt: mine.updatedAt }).toEqual({
+      ...mine,
+      sourceDeletedAt: undefined,
+    });
+    expect(items.find((i) => i.id === "item-other")).toEqual(other);
+    const left = await store.listCorrections();
+    expect(left.map((c) => `${c.episodeId}/${c.segmentId}`)).toEqual(["ep-bbbbbbbbbbbb/seg-0001"]);
+  });
+
+  it("changes no browser data when the worker refuses the delete", async () => {
+    const store = new MemoryLearningStore();
+    await store.putItem(savedItem("item-mine", "ep-aaaaaaaaaaaa"));
+    await store.putCorrection(correction("ep-aaaaaaaaaaaa", "seg-0001"));
+    const client = fakeWorkerClient({
+      listJobs: vi.fn(async () => [completed]),
+      deleteEpisode: vi.fn(async () => {
+        throw new WorkerError("JOB_ACTIVE", "This episode is still processing.");
+      }),
+    });
+    renderLocal(<LocalLibraryPage />, { client, store });
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Finished walk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This episode is still processing.");
+    expect((await store.listItems())[0]?.sourceDeletedAt).toBeUndefined();
+    expect(await store.listCorrections()).toHaveLength(1);
   });
 
   it("never offers deletion for ids that aren't local episodes", async () => {

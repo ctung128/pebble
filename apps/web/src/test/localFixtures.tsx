@@ -103,6 +103,7 @@ function EpisodeRouteProbe() {
 
 interface LocalRenderOptions {
   client?: WorkerClient;
+  store?: MemoryLearningStore;
   source?: EpisodeSource;
   path?: string;
   route?: string;
@@ -111,7 +112,7 @@ interface LocalRenderOptions {
 /** Renders a local-mode page inside the worker, source, translation and learning providers. */
 export function renderLocal(ui: ReactNode, options: LocalRenderOptions = {}) {
   const client = options.client ?? fakeWorkerClient();
-  const store = new MemoryLearningStore();
+  const store = options.store ?? new MemoryLearningStore();
   const translation = new SessionCachedTranslationProvider(fakeTranslationProvider().provider);
   const result = render(
     <WorkerProvider client={client}>

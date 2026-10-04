@@ -6,7 +6,6 @@
   border-top: 1px solid var(--border);
 }
 
-.explain,
 .status {
   margin: 0;
   font-size: var(--text-sm);

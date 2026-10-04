@@ -18,6 +18,12 @@ export class MemoryLearningStore implements LearningStore {
     this.corrections.delete(correctionKey(episodeId, segmentId));
   }
 
+  async deleteCorrectionsForEpisode(episodeId: string) {
+    for (const [key, correction] of this.corrections) {
+      if (correction.episodeId === episodeId) this.corrections.delete(key);
+    }
+  }
+
   async listItems() {
     return [...this.items.values()];
   }

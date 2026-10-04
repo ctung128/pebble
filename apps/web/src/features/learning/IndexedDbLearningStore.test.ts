@@ -46,6 +46,23 @@ describe("IndexedDbLearningStore", () => {
     expect(await store.listCorrections()).toEqual([]);
   });
 
+  it("deletes every correction of one episode and nothing else", async () => {
+    const store = await IndexedDbLearningStore.open(new IDBFactory(), "range");
+    const of = (episodeId: string, segmentId: string) => ({ ...correction, episodeId, segmentId });
+    for (const c of [
+      of("ep-aaaaaaaaaaaa", "seg-1"),
+      of("ep-aaaaaaaaaaaa", "seg-2"),
+      of("ep-aaaaaaaaaaab", "seg-1"),
+      of("test-001", "seg-1"),
+    ]) {
+      await store.putCorrection(c);
+    }
+    await store.deleteCorrectionsForEpisode("ep-aaaaaaaaaaaa");
+    const left = (await store.listCorrections()).map((c) => `${c.episodeId}/${c.segmentId}`);
+    expect(left.sort()).toEqual(["ep-aaaaaaaaaaab/seg-1", "test-001/seg-1"]);
+    store.close();
+  });
+
   it("deletes items and clears everything", async () => {
     const store = await IndexedDbLearningStore.open(new IDBFactory());
     await store.putItem(item);

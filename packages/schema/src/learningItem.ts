@@ -34,6 +34,11 @@ export const LearningItemSchema = z
     note: z.string().nullable(),
     savedAt: IsoDateTimeSchema,
     updatedAt: IsoDateTimeSchema,
+    /**
+     * Set when the item's local episode was deleted from Pebble (1.6). The item stays; its
+     * audio and transcript are gone, so it can't be replayed or opened.
+     */
+    sourceDeletedAt: IsoDateTimeSchema.optional(),
     provenance: z.object({
       transcriptKind: TranscriptProvenanceSchema.shape.kind,
       transcriptProvider: z.string().min(1),

@@ -132,3 +132,30 @@
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
+
+.storageNote {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.sourceDeleted .source {
+  color: var(--text-muted);
+}
+
+.sourceDeletedBadge {
+  display: inline-block;
+  margin-right: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.sourceDeletedHelp {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

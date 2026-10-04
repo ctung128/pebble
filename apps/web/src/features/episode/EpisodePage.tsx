@@ -349,6 +349,10 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             {ASR_NOTICE_HEADING}
           </h2>
           <p>{ASR_NOTICE}</p>
+          <details className={styles.sourceNoteDetails}>
+            <summary>Transcript details</summary>
+            <p>{transcript.provenance.notes ?? `Created by ${transcript.provenance.provider}`}</p>
+          </details>
         </aside>
       ) : null}
 

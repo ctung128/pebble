@@ -8,6 +8,8 @@ export interface LearningStore {
   listCorrections(): Promise<Correction[]>;
   putCorrection(correction: Correction): Promise<void>;
   deleteCorrection(episodeId: string, segmentId: string): Promise<void>;
+  /** Removes every correction for one episode (used when its source is deleted). */
+  deleteCorrectionsForEpisode(episodeId: string): Promise<void>;
   listItems(): Promise<LearningItem[]>;
   putItem(item: LearningItem): Promise<void>;
   deleteItem(id: string): Promise<void>;

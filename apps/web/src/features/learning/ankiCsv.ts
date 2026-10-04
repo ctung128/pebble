@@ -29,13 +29,21 @@ export function csvField(value: string): string {
   return quote ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
+/** Where the line came from: episode title and time. */
 export function itemSource(item: LearningItem): string {
   return `${item.episodeTitle} · ${formatTime(item.startMs)}`;
+}
+
+/** The CSV's Source field, which also says when the source was deleted from Pebble. */
+export function exportSource(item: LearningItem): string {
+  const source = itemSource(item);
+  return item.sourceDeletedAt ? `${source} · source deleted` : source;
 }
 
 export function itemTags(item: LearningItem): string {
   const tags = ["pebble", `pebble::${item.episodeId}`];
   if (item.provenance.corrected) tags.push("pebble::edited");
+  if (item.sourceDeletedAt) tags.push("pebble::source-deleted");
   return tags.join(" ");
 }
 
@@ -55,7 +63,7 @@ export function toAnkiCsv(items: readonly LearningItem[]): string {
         item.pinyin ?? "",
         item.translation ?? "",
         item.note ?? "",
-        itemSource(item),
+        exportSource(item),
         itemTags(item),
       ]
         .map(csvField)

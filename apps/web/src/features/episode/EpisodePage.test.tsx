@@ -462,8 +462,12 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
     const notice = screen.getByRole("complementary", { name: "Local transcript" });
     expect(within(notice).getByRole("heading", { name: "Local transcript" })).toBeInTheDocument();
     expect(notice).toHaveTextContent(
-      "Transcribed on this computer with FunASR Paraformer. Generated transcripts can mishear names, accents, or fast conversation—replay or edit any line that looks wrong.",
+      "Pebble creates a machine transcript on your computer. It can mishear or miss parts of fast or conversational speech. Replay the audio and edit any line that looks wrong.",
     );
+    // The model is secondary: inside a collapsed "Transcript details", not the notice text.
+    const details = within(notice).getByText("Transcript details").closest("details")!;
+    expect(details).not.toHaveAttribute("open");
+    expect(details).toHaveTextContent("Transcribed on this computer with FunASR Paraformer");
     expect(notice).not.toHaveTextContent(/iic\/|\.pebble|\.m4a|\.wav/);
     expect(screen.queryByRole("note", { name: "Preview transcript" })).not.toBeInTheDocument();
     expect(screen.queryByText(/prepared sample content/)).not.toBeInTheDocument();

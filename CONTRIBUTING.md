@@ -42,3 +42,20 @@
 
 3. **Tests use invented or synthetic content only**: made-up sentences, generated tones, or
    speech synthesized on the fly. Never a real recording or its transcript.
+
+## Before each pilot release
+
+Pilots use [docs/PILOT_GUIDE.md](docs/PILOT_GUIDE.md) and
+[docs/PILOT_FEEDBACK.md](docs/PILOT_FEEDBACK.md). Facilitator notes (consent, session script,
+participant codes, observations) are kept privately, never in this repository.
+
+1. Every check above passes, including `npm run test:scripts`, and the commit is pushed.
+2. `npm run pebble:doctor -- --verify` reports everything ready on the release machine.
+3. The privacy grep above finds nothing unexpected in the release's commits, and the demo
+   build check reports no local-mode code.
+4. **Clean-account dry run.** On a fresh macOS user account, follow the tester guide exactly,
+   answering **yes** to each setup step (app packages, speech environment, model download).
+   Make one transcript from synthetic or self-recorded speech, replay, edit, save, export,
+   delete, and stop. Note anything the guide didn't make obvious and fix the guide first.
+5. Check that the guide's commands and messages still match what the commands print.
+6. Record which commit each pilot used (in the private facilitator notes).

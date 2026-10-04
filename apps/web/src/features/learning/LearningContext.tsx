@@ -34,6 +34,11 @@ interface LearningContextValue {
   saveItem: (item: LearningItem) => void;
   removeItem: (id: string) => void;
   updateNote: (id: string, note: string) => void;
+  /**
+   * After a local episode is deleted: removes its corrections and marks its saved learning
+   * items "source deleted". The items themselves are kept.
+   */
+  markSourceDeleted: (episodeId: string) => void;
   resetAll: () => void;
 }
 
@@ -188,6 +193,34 @@ export function LearningProvider({
     [items, saveItem],
   );
 
+  const markSourceDeleted = useCallback(
+    (episodeId: string) => {
+      setCorrections((current) => {
+        const next = new Map(current);
+        for (const [key, correction] of current) {
+          if (correction.episodeId === episodeId) next.delete(key);
+        }
+        return next;
+      });
+      persist((store) => store.deleteCorrectionsForEpisode(episodeId));
+
+      const now = new Date().toISOString();
+      const marked = [...items.values()]
+        .filter((item) => item.episodeId === episodeId && !item.sourceDeletedAt)
+        .map((item): LearningItem => ({ ...item, sourceDeletedAt: now, updatedAt: now }));
+      if (marked.length === 0) return;
+      setItems((current) => {
+        const next = new Map(current);
+        for (const item of marked) next.set(item.id, item);
+        return next;
+      });
+      persist(async (store) => {
+        for (const item of marked) await store.putItem(item);
+      });
+    },
+    [items, persist],
+  );
+
   const resetAll = useCallback(() => {
     setCorrections(new Map());
     setItems(new Map());
@@ -206,6 +239,7 @@ export function LearningProvider({
       saveItem,
       removeItem,
       updateNote,
+      markSourceDeleted,
       resetAll,
     }),
     [
@@ -219,6 +253,7 @@ export function LearningProvider({
       saveItem,
       removeItem,
       updateNote,
+      markSourceDeleted,
       resetAll,
     ],
   );
