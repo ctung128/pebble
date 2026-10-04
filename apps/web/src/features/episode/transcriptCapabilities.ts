@@ -14,16 +14,18 @@ export interface TranscriptCapabilities {
   learning: boolean;
   /** "available": shown and usable; "locked": shown but disabled; "hidden": not shown at all. */
   translation: "available" | "locked" | "hidden";
+  /** "Copy Chinese": a local clipboard action, independent of translation. */
+  copy: boolean;
 }
 
 export function transcriptCapabilities(kind: TranscriptProvenance["kind"]): TranscriptCapabilities {
   switch (kind) {
     case "fixture":
-      return { learning: true, translation: "available" };
+      return { learning: true, translation: "available", copy: true };
     case "asr":
-      return { learning: true, translation: "hidden" };
+      return { learning: true, translation: "hidden", copy: true };
     case "mock":
-      return { learning: false, translation: "locked" };
+      return { learning: false, translation: "locked", copy: false }; // placeholder text
   }
 }
 

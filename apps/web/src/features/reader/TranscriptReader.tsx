@@ -19,6 +19,8 @@ interface TranscriptReaderProps {
   lockedDescriptionId?: string | undefined;
   /** False removes the English action entirely (no translation exists for this transcript). */
   showTranslation?: boolean;
+  /** Shows the "Copy Chinese" action (a local clipboard copy of the displayed line). */
+  showCopy?: boolean;
   ref?: Ref<HTMLOListElement>;
 }
 
@@ -35,6 +37,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   reviewDescriptionId,
   lockedDescriptionId,
   showTranslation = true,
+  showCopy = false,
   ref,
 }: TranscriptReaderProps) {
   if (segments.length === 0) {
@@ -60,6 +63,7 @@ export const TranscriptReader = memo(function TranscriptReader({
               reviewDescriptionId={reviewDescriptionId}
               lockedDescriptionId={lockedDescriptionId}
               showTranslation={showTranslation}
+              showCopy={showCopy}
             />
           </li>
         );

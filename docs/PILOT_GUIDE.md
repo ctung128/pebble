@@ -60,6 +60,8 @@ another one).
    processed, Pebble shows only this title, never the file name.
 2. **Open the transcript.** Click a line (or its play button) to hear it again.
 3. Turn on **pinyin** to see pronunciation.
+   **Copy Chinese** (the copy icon on a line) copies that line's Chinese text, including your
+   edits, so you can paste it into a dictionary or translator yourself.
 4. **Edit** any line that looks wrong; **Revert** undoes your edit.
 5. **Save** lines you want to study. They appear in **Learning items**, where you can add a
    note and **Export CSV for Anki**.

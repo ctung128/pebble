@@ -11,6 +11,7 @@ import {
 } from "../../test/fixtures.tsx";
 import { buildLearningItem } from "../learning/buildLearningItem.ts";
 import { MemoryLearningStore } from "../learning/MemoryLearningStore.ts";
+import { COPY_LABEL } from "../reader/copyText.ts";
 import { EpisodePage } from "./EpisodePage.tsx";
 
 type RenderOptions = Parameters<typeof renderWithProviders>[1];
@@ -539,5 +540,73 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
     expect(
       screen.queryByText(/long_segment|long segment|May need review/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("EpisodePage — Copy Chinese", () => {
+  let writeText: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText, readText: vi.fn() },
+    });
+  });
+
+  const copyIn = async (n: number) =>
+    (await lineActions(n)).getByRole("button", { name: COPY_LABEL });
+
+  it("copies the demo's displayed line, then the corrected text after an edit", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    renderPage({ translation: provider });
+    await userEvent.click(await copyIn(1));
+    expect(writeText).toHaveBeenLastCalledWith("第二句。");
+
+    await userEvent.click((await lineActions(1)).getByRole("button", { name: "Edit" }));
+    const input = screen.getByRole("textbox", { name: "Edit this line" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "第二句话。");
+    await userEvent.click(screen.getByRole("button", { name: "Save edit" }));
+    await userEvent.click(await copyIn(1));
+    expect(writeText).toHaveBeenLastCalledWith("第二句话。");
+    expect(translate).not.toHaveBeenCalled(); // copying never asks for a translation
+  });
+
+  it("works for real (ASR) transcripts, where English is hidden", async () => {
+    const asrSource = fakeSource({
+      getTranscript: async () => ({
+        ...testTranscript,
+        provenance: { ...testTranscript.provenance, kind: "asr" as const, provider: "funasr" },
+      }),
+    });
+    const { provider, translate } = fakeTranslationProvider();
+    renderPage({ source: asrSource, translation: provider });
+    expect((await lineActions(0)).queryByRole("button", { name: "English" })).toBeNull();
+    await userEvent.click(await copyIn(0));
+    expect(writeText).toHaveBeenCalledWith("第一句。");
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it("isn't offered for mock (placeholder) transcripts", async () => {
+    const mockSource = fakeSource({
+      getTranscript: async () => ({
+        ...testTranscript,
+        provenance: { ...testTranscript.provenance, kind: "mock" as const, provider: "mock" },
+      }),
+    });
+    renderPage({ source: mockSource });
+    await playButtons();
+    expect(screen.queryByRole("button", { name: COPY_LABEL })).not.toBeInTheDocument();
+  });
+
+  it("stores nothing: learner data and localStorage are unchanged", async () => {
+    const store = new MemoryLearningStore();
+    renderPage({ store });
+    const before = JSON.stringify([await store.listItems(), await store.listCorrections()]);
+    const keys = Object.keys(localStorage).sort().join();
+    await userEvent.click(await copyIn(2));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify([await store.listItems(), await store.listCorrections()])).toBe(before);
+    expect(Object.keys(localStorage).sort().join()).toBe(keys);
   });
 });

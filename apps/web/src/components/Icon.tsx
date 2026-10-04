@@ -10,6 +10,8 @@ const PATHS = {
   bookmarkFilled: "M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1Z",
   edit: "m14.06 6.19 3.75 3.75L8.75 19H5v-3.75l9.06-9.06Zm1.41-1.41 1.83-1.83a1 1 0 0 1 1.41 0l2.34 2.34a1 1 0 0 1 0 1.41l-1.83 1.83-3.75-3.75Z",
   download: "M11 4h2v8.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V4ZM5 18h14v2H5z",
+  copy: "M10 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-2v-2h1V5h-8v1H9V4a1 1 0 0 1 1-1ZM5 8h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm1 2v9h7v-9H6Z",
+  check: "M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

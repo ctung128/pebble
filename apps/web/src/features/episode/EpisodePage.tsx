@@ -432,6 +432,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           reviewDescriptionId={REVIEW_HELP_ID}
           lockedDescriptionId={learningLocked ? LOCKED_HELP_ID : undefined}
           showTranslation={!translationHidden}
+          showCopy={capabilities.copy}
         />
         <p className={styles.keys} aria-label="Keyboard shortcuts">
           <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay · <kbd>←</kbd>

@@ -3,6 +3,7 @@ import type { Segment } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import { CorrectionEditor } from "../corrections/CorrectionEditor.tsx";
+import { COPY_FAILED, COPY_HELP, COPY_LABEL, useCopyText } from "./copyText.ts";
 import type { LineActions, LineView } from "./lineView.ts";
 import styles from "./TranscriptReader.module.css";
 
@@ -16,6 +17,7 @@ interface SegmentRowProps {
   reviewDescriptionId: string;
   lockedDescriptionId?: string | undefined;
   showTranslation?: boolean;
+  showCopy?: boolean;
 }
 
 export const SegmentRow = memo(function SegmentRow({
@@ -28,6 +30,7 @@ export const SegmentRow = memo(function SegmentRow({
   reviewDescriptionId,
   lockedDescriptionId,
   showTranslation = true,
+  showCopy = false,
 }: SegmentRowProps) {
   // Locked actions stay focusable and visible (discoverable) but do nothing.
   const locked = lockedDescriptionId !== undefined;
@@ -37,13 +40,18 @@ export const SegmentRow = memo(function SegmentRow({
   const time = formatTime(segment.startMs);
   const translationId = `translation-${segment.id}`;
   const translationOpen = showTranslation && (view.translation?.open ?? false);
+  // Copy state is per row and short-lived; it never leaves this component.
+  const copy = useCopyText();
+  const copyFailed = showCopy && copy.status === "failed";
+  const copyButton = useRef<HTMLButtonElement>(null);
   // "Expanded" lines keep their actions visible; a review flag alone doesn't expand a line.
   const expanded =
     view.correction !== null ||
     view.pinyin.visible ||
     translationOpen ||
     view.editing ||
-    view.confirmingUnsave;
+    view.confirmingUnsave ||
+    copyFailed;
   const hasDetails = expanded || view.needsReview;
 
   // Return focus to the Edit button when the editor closes.
@@ -106,6 +114,18 @@ export const SegmentRow = memo(function SegmentRow({
             <span className={styles.visuallyHidden}>English</span>
           </button>
         ) : null}
+        {showCopy ? (
+          <button
+            ref={copyButton}
+            type="button"
+            className={styles.action}
+            aria-label={COPY_LABEL}
+            title={copy.status === "copied" ? "Copied" : COPY_HELP}
+            onClick={() => copy.copy(view.text)}
+          >
+            <Icon name={copy.status === "copied" ? "check" : "copy"} size={18} />
+          </button>
+        ) : null}
         <button
           type="button"
           className={styles.action}
@@ -129,6 +149,11 @@ export const SegmentRow = memo(function SegmentRow({
           <Icon name="edit" size={18} />
           <span className={styles.visuallyHidden}>Edit</span>
         </button>
+        {showCopy ? (
+          <span className={styles.visuallyHidden} role="status">
+            {copy.status === "copied" ? "Copied" : ""}
+          </span>
+        ) : null}
       </div>
 
       {hasDetails ? (
@@ -206,6 +231,17 @@ export const SegmentRow = memo(function SegmentRow({
             />
           ) : null}
 
+          {copyFailed ? (
+            <CopyFallback
+              text={view.text}
+              language={language}
+              onClose={() => {
+                copy.dismiss();
+                copyButton.current?.focus();
+              }}
+            />
+          ) : null}
+
           {view.confirmingUnsave ? (
             <p className={styles.confirm} role="group" aria-label="Confirm removal">
               Remove this learning item and its note?{" "}
@@ -227,3 +263,42 @@ export const SegmentRow = memo(function SegmentRow({
     </div>
   );
 });
+
+/** Shown when the clipboard refuses: the line, selected, ready for ⌘C / Ctrl+C. */
+function CopyFallback({
+  text,
+  language,
+  onClose,
+}: {
+  text: string;
+  language: string;
+  onClose: () => void;
+}) {
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    field.current?.focus();
+    field.current?.select();
+  }, []);
+  return (
+    <div className={styles.copyFallback}>
+      <p aria-live="polite">{COPY_FAILED}</p>
+      <div className={styles.copyFallbackRow}>
+        <input
+          ref={field}
+          className={styles.copyField}
+          readOnly
+          value={text}
+          lang={language}
+          aria-label="Chinese text for this line"
+          onFocus={(event) => event.currentTarget.select()}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onClose();
+          }}
+        />
+        <button type="button" className={styles.link} onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
