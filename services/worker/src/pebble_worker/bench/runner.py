@@ -28,7 +28,7 @@ from ..pipeline.probe import probe
 from ..providers.base import AudioChunk, RawSegment
 from ..providers.funasr import ChunkAlignment, FunASRProvider
 from ..storage import PRIVATE_DIR, Storage, make_private
-from . import analysis, network
+from . import analysis, network, overlap
 from .corpus import Clip
 from .memory import MemorySampler
 from .results import RESULT_SCHEMA_VERSION, RunResult
@@ -144,6 +144,7 @@ def run_one(
     provider: FunASRProvider,
     setup: Setup,
     seed: int,
+    overlap_ms: int = 0,
     now: datetime | None = None,
 ) -> Path:
     from .paths import create_run_dir
@@ -151,6 +152,8 @@ def run_one(
     now = now or datetime.now(UTC)
     chunking = chunking_for(target_seconds, settings)
     run_id = f"{now:%Y%m%dT%H%M%SZ}-{bench_input.clip_id}-{round(chunking.target_seconds)}s-{mode}"
+    if overlap_ms:
+        run_id += f"-o{overlap_ms}"
     directory = create_run_dir(storage, run_id)
     work = directory / "work"
     work.mkdir(mode=PRIVATE_DIR)
@@ -163,6 +166,8 @@ def run_one(
     status, failure = "completed", None
     plans, transcript = [], None
     alignments: list[ChunkAlignment | None] = []
+    resolution: overlap.Resolution | None = None
+    overlap_diagnostics: dict[str, object] | None = None
     started = time.perf_counter()
     try:
         mark = time.perf_counter()
@@ -175,18 +180,30 @@ def run_one(
         silences = detect_silences(normalized, duration_ms, chunking, ffmpeg=settings.ffmpeg_path)
         plans = plan_chunks(duration_ms, silences, chunking)
         (work / "chunks").mkdir(mode=PRIVATE_DIR)
-        paths = write_chunks(normalized, plans, work / "chunks")
+        if overlap_ms:
+            ranges = overlap.chunk_ranges(plans, duration_ms, overlap_ms)
+            paths = overlap.write_context_chunks(normalized, ranges, work / "chunks")
+            spans = [(r.index, r.audio_start, r.audio_end) for r in ranges]
+        else:
+            paths = write_chunks(normalized, plans, work / "chunks")
+            spans = [(p.index, p.start_ms, p.end_ms) for p in plans]
         timings["chunkingMs"], mark = _ms(time.perf_counter() - mark), time.perf_counter()
         stage = "transcribing"
         results: list[ChunkResult] = []
-        for plan, path in zip(plans, paths, strict=True):
+        for (index, start_ms, end_ms), path in zip(spans, paths, strict=True):
             segments: list[RawSegment] = provider.transcribe(
-                AudioChunk(plan.index, plan.start_ms, plan.end_ms, path), lambda: False
+                AudioChunk(index, start_ms, end_ms, path), lambda: False
             )
             alignments.append(provider.last_alignment)
-            results.append(ChunkResult(plan.start_ms, segments, index=plan.index))
+            results.append(ChunkResult(start_ms, segments, index=index))
         timings["transcriptionMs"], mark = _ms(time.perf_counter() - mark), time.perf_counter()
         stage = "merging"
+        if overlap_ms:
+            stage = "resolving"
+            resolution = overlap.resolve(ranges, [r.segments for r in results], duration_ms)
+            overlap_diagnostics = resolution.diagnostics
+            results = resolution.chunks
+            stage = "merging"
         transcript = merge(
             episode_id="ep-000000000000",
             duration_ms=duration_ms,
@@ -200,6 +217,9 @@ def run_one(
             status = "no-speech"
     except PipelineError as error:
         status, failure = "failed", {"stage": stage, "code": error.code.value}
+    except overlap.OverlapUnresolved as error:
+        status, failure = "failed", {"stage": stage, "code": "OVERLAP_UNRESOLVED"}
+        overlap_diagnostics = error.diagnostics
     finally:
         total_ms = _ms(time.perf_counter() - started)
         memory = sampler.stop()
@@ -227,6 +247,7 @@ def run_one(
             "silenceMinSeconds": chunking.silence_min_seconds,
             "silenceNoiseDb": chunking.silence_noise_db,
             "isWorkerDefault": target_seconds is None,
+            "overlapMs": overlap_ms,
         },
         "provider": _provider_info(provider),
         "setup": {
@@ -251,6 +272,8 @@ def run_one(
         "merge": analysis.merge_checks(transcript) if transcript else None,
         "boundaries": None,
         "alignment": analysis.alignment_summary(alignments) if transcript else None,
+        "overlap": overlap_diagnostics,
+        "cutWindows": None,
         "cer": None,
         "review": None,
         "network": {"attempts": network.attempts()},
@@ -258,6 +281,12 @@ def run_one(
     if transcript is not None:
         rows = analysis.boundary_analysis(plans, transcript)
         result["boundaries"] = {"summary": analysis.boundary_summary(rows), "cuts": rows}
+        result["cutWindows"] = analysis.cut_windows(analysis.cuts_from_plans(plans), transcript)
+        if resolution is not None:
+            _write_private(
+                directory / "overlap.json",
+                json.dumps({"reviewItems": resolution.review_items}, indent=2),
+            )
         if bench_input.reference_text is not None:
             value = analysis.character_error_rate(
                 "".join(s.text for s in transcript.segments), bench_input.reference_text
@@ -363,9 +392,14 @@ def warm_session(
     provider: FunASRProvider,
     import_runtime: Callable[[], object] = real_import,
     seed: int,
+    overlaps: Sequence[int] = (0,),
 ) -> list[Path]:
-    """Sets up once (reported as a shared warm-session setup), then runs each target."""
+    """
+    Sets up once (reported as a shared warm-session setup), then makes one run per listed
+    target, or per listed overlap when several overlaps are given for a single target.
+    """
     setup = measure_setup(provider, import_runtime=import_runtime, scope="shared-warm-session")
+    plan = [(t, o) for t in targets for o in overlaps]
     return [
         run_one(
             storage,
@@ -376,6 +410,7 @@ def warm_session(
             provider=provider,
             setup=setup,
             seed=seed,
+            overlap_ms=overlap_ms,
         )
-        for target in targets
+        for target, overlap_ms in plan
     ]

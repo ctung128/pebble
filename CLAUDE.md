@@ -22,7 +22,9 @@ Dependency setup is approved: the worker's optional `funasr` extra (`funasr==1.4
 it during package initialization). Use `UV_CACHE_DIR=~/.pebble/uv-cache`. M1-B: B1 tooling is committed and the
 B2 starter runs on the user's two private clips are done (results only under `~/.pebble`). The
 `timestamp_alignment_anomaly` flag is a private developer/benchmark diagnostic, not a learner
-signal: it earns no review slot and gets no UI. Don't start new benchmark runs, change the
+signal: it earns no review slot and gets no UI. M1-B2 adds a **benchmark-only** chunk-overlap
+experiment (`bench run --overlap-ms`, `compare`, `pair`, `tally`); the worker's jobs never
+overlap. Don't start new benchmark runs, change the
 150 s chunk default or other defaults, or build a corpus from the user's files without approval.
 Broader M1-C (web/UI) needs a separately approved plan. Commits need the user's explicit
 "commit" after a shown status/diff/privacy scan. Never put recognized transcript

@@ -10,7 +10,7 @@ from ..models.verify import first_symlink
 from ..storage import PRIVATE_DIR, Storage, make_private
 
 BENCH_DIRNAME = "benchmarks"
-RUN_ID = re.compile(r"^\d{8}T\d{6}Z-[a-z0-9][a-z0-9-]{0,40}-\d{1,4}s-(warm|cold)$")
+RUN_ID = re.compile(r"^\d{8}T\d{6}Z-[a-z0-9][a-z0-9-]{0,40}-\d{1,4}s-(warm|cold)(-o\d{1,4})?$")
 
 
 def bench_root(storage: Storage) -> Path:
@@ -32,7 +32,14 @@ def run_dir(storage: Storage, run_id: str) -> Path:
 
 
 #: The only files a run directory holds (plus a temporary file while review.md is rewritten).
-RUN_FILES = ("result.json", "transcript.json", "review.md", "normalized.wav", "review.md.tmp")
+RUN_FILES = (
+    "result.json",
+    "transcript.json",
+    "review.md",
+    "normalized.wav",
+    "overlap.json",
+    "review.md.tmp",
+)
 
 
 def run_file(storage: Storage, run_id: str, name: str) -> Path:

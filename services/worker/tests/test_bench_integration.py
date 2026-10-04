@@ -107,3 +107,52 @@ def test_bench_runs_warm_and_cold_on_synthetic_speech(temp_data_dir):
     assert {r.setup.scope for r in warm_results} == {"shared-warm-session"}
     [md] = list((temp_data_dir / "benchmarks" / "reports").glob("report-*.md"))
     assert not CJK.search(md.read_text())
+
+
+def test_overlap_variants_on_synthetic_speech(temp_data_dir):
+    run = _cli(
+        temp_data_dir,
+        "run",
+        "--synthetic",
+        "--chunk",
+        "10",
+        "--overlap-ms",
+        "0",
+        "--overlap-ms",
+        "1000",
+        "--overlap-ms",
+        "2000",
+    )
+    assert run.returncode == 0, run.stderr[-2000:]
+    assert not CJK.search(run.stdout)
+    runs = sorted((temp_data_dir / "benchmarks" / "runs").iterdir())
+    results = {
+        r.chunking.overlap_ms: (r, d)
+        for d in runs
+        for r in [RunResult.model_validate(json.loads((d / "result.json").read_text()))]
+    }
+    assert sorted(results) == [0, 1000, 2000]
+    base, base_dir = results[0]
+    assert base.status == "completed" and base.overlap is None
+    completed = [base_dir]
+    for overlap_ms in (1000, 2000):
+        result, directory = results[overlap_ms]
+        assert result.network == {"attempts": 0}
+        assert result.overlap is not None and result.overlap["reconciled"]
+        if result.status == "completed":
+            completed.append(directory)
+            assert result.merge["maxOverlapMs"] <= 100
+        else:  # the conservative policy may fail a run rather than trim; that is recorded
+            assert result.failure.code == "OVERLAP_UNRESOLVED"
+        assert not CJK.search((directory / "result.json").read_text())
+    if len(completed) > 1:
+        names = [d.name for d in completed]
+        compared = _cli(
+            temp_data_dir,
+            "compare",
+            "--baseline",
+            names[0],
+            *[arg for name in names[1:] for arg in ("--run", name)],
+        )
+        assert compared.returncode == 0, compared.stdout + compared.stderr[-2000:]
+        assert not CJK.search(compared.stdout)

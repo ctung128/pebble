@@ -36,6 +36,8 @@ class Chunking(_Model):
     silence_min_seconds: float
     silence_noise_db: float
     is_worker_default: bool
+    #: Benchmark-only shared overlap at each cut (M1-B2); 0 is the worker's behaviour.
+    overlap_ms: int = 0
 
 
 class SetupTiming(_Model):
@@ -94,6 +96,10 @@ class RunResult(_Model):
     boundaries: dict[str, Any] | None
     #: The private alignment diagnostic (numbers only); absent from runs before it existed.
     alignment: dict[str, Any] | None = None
+    #: Overlap resolution diagnostics (numbers only); None without overlap.
+    overlap: dict[str, Any] | None = None
+    #: Structure in the ±4 s window around each cut (numbers only).
+    cut_windows: list[dict[str, Any]] | None = None
     cer: Cer | None
     review: dict[str, Any] | None
     network: dict[str, int]

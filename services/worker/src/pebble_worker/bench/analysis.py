@@ -150,6 +150,60 @@ def boundary_summary(rows: Sequence[dict[str, object]]) -> dict[str, object]:
     return {"forced": of("forced"), "silence": of("silence")}
 
 
+# --- cut windows ------------------------------------------------------------------------------
+
+#: Cut-window half width: a window is this far either side of a cut.
+WINDOW_HALF_MS = 4000
+
+
+def window_metrics(transcript: Transcript, lo: int, hi: int) -> dict[str, object]:
+    """
+    Structure inside `[lo, hi)`, from timing and text *lengths* only. Characters of segments
+    partly inside the window are prorated by time, so character counts are approximate.
+    """
+    inside = [s for s in transcript.segments if s.end_ms > lo and s.start_ms < hi]
+    prorated = 0.0
+    fully = 0
+    boundaries = 0
+    covered, gaps, cursor = 0, [], lo
+    for s in sorted(inside, key=lambda s: (s.start_ms, s.end_ms)):
+        count = len(normalize_for_cer(s.text))
+        prorated += count * (min(s.end_ms, hi) - max(s.start_ms, lo)) / (s.end_ms - s.start_ms)
+        if s.start_ms >= lo and s.end_ms <= hi:
+            fully += count
+        boundaries += (lo <= s.start_ms <= hi) + (lo <= s.end_ms <= hi)
+        start, end = max(s.start_ms, lo), min(s.end_ms, hi)
+        if start > cursor:
+            gaps.append((cursor, start))
+        covered += max(0, end - max(start, cursor))
+        cursor = max(cursor, end)
+    if cursor < hi:
+        gaps.append((cursor, hi))
+    centre = (lo + hi) // 2
+    return {
+        "segments": len(inside),
+        "boundaries": boundaries,
+        "charsProrated": round(prorated, 1),
+        "charsFullyInside": fully,
+        "coverageMs": covered,
+        "largestGapMs": max((b - a for a, b in gaps), default=0),
+        "gapAtCentreMs": next((b - a for a, b in gaps if a <= centre <= b), 0),
+    }
+
+
+def cut_windows(
+    cuts: Sequence[tuple[int, CutKind]], transcript: Transcript
+) -> list[dict[str, object]]:
+    return [
+        {
+            "window": f"W{n}",
+            "kind": kind,
+            **window_metrics(transcript, cut - WINDOW_HALF_MS, cut + WINDOW_HALF_MS),
+        }
+        for n, (cut, kind) in enumerate(cuts, start=1)
+    ]
+
+
 # --- character error rate -----------------------------------------------------------------------
 
 

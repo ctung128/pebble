@@ -84,6 +84,9 @@ npm run worker:bench -- report
 npm run worker:bench -- review --run <run-id>                     # rebuild review.md only
 ```
 
+Overlap experiment commands (`--overlap-ms`, `compare`, `pair`, `tally`) are described in
+[Overlap experiment](#overlap-experiment-m1-b2-benchmark-only).
+
 - `run` benchmarks **one clip** at exactly the `--chunk` targets you list (seconds, 10–900, or
   `default` for the worker's current setting). There is no implicit matrix.
   - `--mode warm` (default): one process verifies and loads the models once — reported as a
@@ -102,6 +105,56 @@ npm run worker:bench -- review --run <run-id>                     # rebuild revi
 
 For a target T, chunks are planned with min 0.8 T and max 1.6 T — the ratios of the current
 150/120/240 s default — and the default silence settings.
+
+## Overlap experiment (M1-B2, benchmark-only)
+
+Tests whether giving FunASR a little duplicated audio either side of each silence-based cut
+recovers speech near cuts. It exists only in `bench`; the worker's jobs never overlap.
+
+- **Model.** Cuts and chunk ownership are unchanged. With `--overlap-ms O`, each chunk's audio
+  extends O/2 past each of its inner cuts (1,000 ms = 500 ms each side), clamped to the file.
+  Provider times are offset by the chunk's audio start, so times stay in original-audio time.
+  `--overlap-ms 0` takes exactly the existing path.
+- **Resolver** (`bench/overlap.py`). Every candidate is kept unless it materially overlaps — at
+  least 50% of the shorter one — an already kept candidate from the other chunk. Then the
+  candidate farther from its own chunk's audio edge wins (ownership breaks ties) and the other
+  is excluded as `duplicateRemoved` (same normalized text) or `conflictLoser` (different text;
+  added to the private review). Unique segments in the other chunk's span are kept and counted
+  as `foreignOrphanKept`. Text sharing 6+ normalized characters across a cut is only counted as
+  `possibleRepeatAcrossCut`. Close calls are counted as `ambiguous`. Text is never joined,
+  edited or invented; if kept segments would still overlap (beyond 100 ms), the run fails with
+  `OVERLAP_UNRESOLVED` rather than trimming. Every exclusion has exactly one reason.
+- **Runs.** One warm session, one run per listed overlap, a single chunk target:
+
+  ```bash
+  npm run worker:bench -- run --clip clip-b --chunk default \
+    --overlap-ms 0 --overlap-ms 1000 --overlap-ms 2000
+  npm run worker:bench -- compare --baseline <run-id> --run <run-id> --run <run-id> \
+    --reference <other-target run-id> …
+  npm run worker:bench -- pair --baseline <run-id> --run <run-id> --run <run-id>
+  npm run worker:bench -- tally overlap-<time>.md
+  ```
+
+- **Compare** reads saved results only and reports, per ±4 s cut window, approximate characters
+  for each variant against the baseline and against reference runs with no cut there; plus
+  stability away from cuts (segments more than 10 s from a cut with the same normalized-text
+  fingerprint and start/end within ±150 ms). Its numeric verdict:
+  - _promising_: the variant has more characters in a majority of comparable windows, at least
+    20% more in total, and valid timing (_strong pending human review_ when it also closes at
+    least half the gap to the no-cut references);
+  - _neutral/inconclusive_: mixed results or fewer than two windows;
+  - _reject_: timing validation fails; _reject-candidate_: more than 10% fewer characters,
+    pending human review.
+
+  _Strong_ also needs fewer missing-speech ratings and no confirmed duplicate speech in the
+  paired review; stability below 95% is reported alongside the verdict.
+
+- **Paired review** (`bench pair`). A private file under `~/.pebble/benchmarks/reviews` with
+  every cut window, each variant's conflict/ambiguous/repeat items (up to 10) and five controls
+  away from cuts. The versions appear as X/Y/Z in a seeded random order per item; the key is a
+  separate private file. Each row takes exactly one tick: replay range, text quality, missing
+  speech, duplicate speech, effort (none / under 15 s / 15–60 s / over 60 s or gave up), and a
+  best version per item. `bench tally` reveals the key only in its counts.
 
 ## Starter protocol (B2, 7–9 runs)
 
