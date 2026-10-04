@@ -55,29 +55,23 @@ MODELS: Mapping[Literal["asr", "vad", "punctuation"], ModelSpec] = {
     "punctuation": CT_PUNC_ZH,
 }
 
-INSTALL_HINT = (
-    "Install it in the worker environment: cd services/worker && "
-    "UV_CACHE_DIR=~/.pebble/uv-cache uv sync --extra funasr, then restart the worker "
-    "(npm run worker:funasr)."
-)
-PULL_HINT = "Download and verify the models with: npm run worker:models -- pull"
+INSTALL_HINT = "Set it up with: npm run pebble:setup, then start Pebble again."
+PULL_HINT = "Download and verify the models with: npm run pebble:setup"
 
 #: Plain-language remediation shown in the local app (schema 1.5 `hint`): at most one command.
 HINTS = {
     "environment_missing": (
-        "Start the worker with npm run worker:funasr to install the speech-recognition "
-        "components it needs."
+        "Pebble's speech-recognition components aren't set up yet. Set them up with: "
+        "npm run pebble:setup"
     ),
-    "models_missing": (
-        "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull"
-    ),
+    "models_missing": "Download the speech models (about 1.3 GB) with: npm run pebble:setup",
     "verification_failed": (
-        "The speech model files don't match what Pebble expects. Download them again, then "
-        "check again: npm run worker:models -- pull"
+        "The speech model files don't match what Pebble expects. Download them again with: "
+        "npm run pebble:setup"
     ),
     "load_failed": (
-        "The speech models couldn't be loaded. Restart the worker and try again. If it keeps "
-        "happening, run npm run worker:doctor."
+        "The speech models couldn't be loaded. Stop Pebble and start it again. If it keeps "
+        "happening, check the setup with: npm run pebble:doctor -- --verify"
     ),
 }
 
@@ -339,7 +333,7 @@ class FunASRProvider:
                 raise PipelineError(
                     FailureCode.PROVIDER_UNAVAILABLE,
                     "The speech model files failed verification, so Pebble won't load them.",
-                    hint=f"Run npm run worker:models -- verify for details. {PULL_HINT}",
+                    hint=PULL_HINT,
                 )
             paths = {role: model_dir(self.storage, spec) for role, spec in self.models.items()}
             try:

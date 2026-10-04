@@ -357,16 +357,16 @@ def test_health_reports_a_missing_environment(storage):
     provider, _ = make_provider(storage, runtime=None)
     health = provider.health()
     assert (health.available, health.state) == (False, "environment_missing")
-    assert "uv sync --extra funasr" in health.detail
-    assert health.hint is not None and "npm run worker:funasr" in health.hint
+    assert "npm run pebble:setup" in health.detail
+    assert health.hint is not None and "npm run pebble:setup" in health.hint
 
 
 def test_health_reports_missing_models(storage):
     provider, _ = make_provider(storage)
     health = provider.health()
     assert (health.available, health.state) == (False, "models_missing")
-    assert "6 of 6" in health.detail and "models -- pull" in health.detail
-    assert health.hint is not None and health.hint.endswith("npm run worker:models -- pull")
+    assert "6 of 6" in health.detail and "pebble:setup" in health.detail
+    assert health.hint is not None and health.hint.endswith("npm run pebble:setup")
 
 
 def test_health_reports_wrong_sizes_without_hashing(storage):
@@ -429,7 +429,7 @@ def test_hash_mismatch_is_reported_by_background_verification(storage):
     provider.prepare(wait=True)
     health = provider.health()
     assert (health.available, health.state) == (False, "verification_failed")
-    assert health.hint is not None and "npm run worker:models -- pull" in health.hint
+    assert health.hint is not None and "npm run pebble:setup" in health.hint
     assert loads == []
 
 
@@ -508,7 +508,7 @@ def test_missing_environment_fails_the_job_without_fallback(storage):
     with pytest.raises(PipelineError) as raised:
         provider.transcribe(CHUNK, NEVER)
     assert raised.value.code == FailureCode.PROVIDER_UNAVAILABLE
-    assert "uv sync --extra funasr" in (raised.value.hint or "")
+    assert "npm run pebble:setup" in (raised.value.hint or "")
     assert loads == []
 
 

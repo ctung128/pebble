@@ -48,14 +48,14 @@ describe("WorkerStatusCard", () => {
         status={{
           kind: "provider-setup",
           mode: "funasr",
-          hint: "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull",
+          hint: "Download the speech models (about 1.3 GB) with: npm run pebble:setup",
         }}
         onRecheck={vi.fn()}
       />,
     );
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Pebble's local transcription needs setup.");
-    expect(screen.getByText("npm run worker:models -- pull").tagName).toBe("CODE");
+    expect(screen.getByText("npm run pebble:setup").tagName).toBe("CODE");
     expect(alert).not.toHaveTextContent(/doctor|FunASR|uv sync/);
   });
 
@@ -77,15 +77,15 @@ describe("WorkerStatusCard", () => {
     render(<WorkerStatusCard status={{ kind: "provider-mismatch" }} onRecheck={vi.fn()} />);
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Pebble's local worker configuration does not match this app.");
-    expect(alert).toHaveTextContent("npm run worker:funasr");
+    expect(alert).toHaveTextContent("npm run pebble:start");
   });
 
   it("gives the exact command when the worker isn't running", async () => {
     const onRecheck = vi.fn();
     render(<WorkerStatusCard status={{ kind: "not-running" }} onRecheck={onRecheck} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Pebble's local worker is not running.");
-    expect(screen.getByText("npm run worker")).toBeInTheDocument();
-    expect(screen.getByText("npm run worker:funasr")).toBeInTheDocument();
+    expect(screen.getByText("npm run pebble:start")).toBeInTheDocument();
+    expect(screen.getByText("npm run pebble:setup")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Check again" }));
     expect(onRecheck).toHaveBeenCalled();
   });
@@ -98,7 +98,7 @@ describe("WorkerStatusCard", () => {
       />,
     );
     expect(screen.getByText("Audio processing needs FFmpeg.")).toBeInTheDocument();
-    expect(screen.getByText(/npm run worker:doctor/)).toBeInTheDocument();
+    expect(screen.getByText(/npm run pebble:doctor/)).toBeInTheDocument();
   });
 
   it("explains a version mismatch with a next step", () => {

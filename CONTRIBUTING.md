@@ -6,7 +6,7 @@
 
    ```bash
    npm run typecheck && npm run lint && npm run format:check && npm test && npm run build
-   npm run test:worker
+   npm run test:worker && npm run test:scripts
    ```
 
    With FunASR installed and models pulled, also run the real-model test (network blocked,

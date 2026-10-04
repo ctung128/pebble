@@ -235,14 +235,14 @@ after the last segment is not flagged.
 plain-language `hint` with at most one command (schema 1.5). The local app shows the hint; the
 developer-oriented `detail` stays in the payload and `npm run worker:doctor`.
 
-| `state`               | When                                                                                                          | App shows                                               | Hint (command)                  |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------- |
-| `checking`            | after startup (or after model files change) while every file's size and SHA-256 is verified in the background | "Checking local speech models…", re-checks every second | —                               |
-| `ready`               | verification passed for the files as they are now                                                             | "Local transcription is ready."                         | —                               |
-| `environment_missing` | the `funasr` extra isn't installed                                                                            | "Pebble's local transcription needs setup."             | `npm run worker:funasr`         |
-| `models_missing`      | a manifest file is missing                                                                                    | "Pebble's local transcription needs setup."             | `npm run worker:models -- pull` |
-| `verification_failed` | a file has the wrong size, or its hash failed                                                                 | "Pebble's local transcription needs setup."             | `npm run worker:models -- pull` |
-| `load_failed`         | FunASR couldn't load verified models on a job (retried on the next job)                                       | "Pebble's local transcription isn't available."         | `npm run worker:doctor`         |
+| `state`               | When                                                                                                          | App shows                                               | Hint (command)                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------- |
+| `checking`            | after startup (or after model files change) while every file's size and SHA-256 is verified in the background | "Checking local speech models…", re-checks every second | —                                   |
+| `ready`               | verification passed for the files as they are now                                                             | "Local transcription is ready."                         | —                                   |
+| `environment_missing` | the `funasr` extra isn't installed                                                                            | "Pebble's local transcription needs setup."             | `npm run pebble:setup`              |
+| `models_missing`      | a manifest file is missing                                                                                    | "Pebble's local transcription needs setup."             | `npm run pebble:setup`              |
+| `verification_failed` | a file has the wrong size, or its hash failed                                                                 | "Pebble's local transcription needs setup."             | `npm run pebble:setup`              |
+| `load_failed`         | FunASR couldn't load verified models on a job (retried on the next job)                                       | "Pebble's local transcription isn't available."         | `npm run pebble:doctor -- --verify` |
 
 Verification never blocks the worker: it binds and answers `/health` immediately, hashes in a
 background thread, and never loads models or touches the network. A passing result is cached

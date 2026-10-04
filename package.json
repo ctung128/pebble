@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",
+    "test:scripts": "node --test \"scripts/pebble/*.test.mjs\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "fixtures:build": "node scripts/build-demo-fixture.mjs",
@@ -25,7 +26,11 @@
     "worker:bench": "UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker --extra funasr pebble-worker bench",
     "worker:models": "UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" uv run --project services/worker pebble-worker models",
     "test:worker": "cd services/worker && export UV_CACHE_DIR=\"$HOME/.pebble/uv-cache\" && uv run pytest && uv run ruff check . && uv run ruff format --check .",
-    "dev:local": "npm run dev:local -w @pebble/web --"
+    "dev:local": "npm run dev:local -w @pebble/web --",
+    "pebble:doctor": "node scripts/pebble/cli.mjs doctor",
+    "pebble:setup": "node scripts/pebble/cli.mjs setup",
+    "pebble:start": "node scripts/pebble/cli.mjs start",
+    "pebble:stop": "node scripts/pebble/cli.mjs stop"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

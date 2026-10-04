@@ -6,7 +6,7 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.5`.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.6`.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -15,6 +15,11 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.6** — Worker health may include `instanceId` (32 lowercase hex characters): a random
+  nonce for one run of a worker started by `npm run pebble:start`. It exists so
+  `npm run pebble:stop` only ever signals the worker that run started; it is not a secret or a
+  credential, carries no user data, and appears only in the local `/health` response (the
+  public demo never contacts a worker).
 - **1.5** — Worker health providers may include `state` (`ready`, `checking`,
   `environment_missing`, `models_missing`, `verification_failed`, `load_failed`) and `hint`
   (plain-language remediation safe to show in the app, at most one command). Readers fall back
@@ -169,8 +174,9 @@ Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDI
 
 `{ schemaVersion, workerVersion, status: "ok" | "degraded", dataDirWritable, tools: { ffmpeg,
 ffprobe: { available, version } }, providers: [{ id, kind, available, detail, state?, hint? }] }`.
-The worker lists exactly the provider it is configured with. `state` and `hint` are 1.5. Never
-contains filesystem paths, except the optional `dataDir.path` (1.3).
+The worker lists exactly the provider it is configured with. `state` and `hint` are 1.5;
+`instanceId?` is 1.6 (present only when started by `pebble:start`). Never contains filesystem
+paths, except the optional `dataDir.path` (1.3).
 
 ## Validation in two languages
 

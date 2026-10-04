@@ -158,7 +158,7 @@ def test_review_thresholds_come_from_the_environment(tmp_path):
 
 def _provider_status(client):
     body = client.get("/health").json()
-    assert body["schemaVersion"] == "1.5"
+    assert body["schemaVersion"] == "1.6"
     [provider] = body["providers"]
     return body["status"], provider
 
@@ -182,7 +182,7 @@ def test_health_reports_setup_state_and_hint_for_funasr(make_client, settings):
     client = make_client(provider=funasr(settings, SentencePerChunk(), install=False))
     status, entry = _provider_status(client)
     assert (status, entry["state"], entry["available"]) == ("degraded", "models_missing", False)
-    assert entry["hint"].endswith("npm run worker:models -- pull")
+    assert entry["hint"].endswith("npm run pebble:setup")
 
 
 def test_mock_health_reports_ready_without_a_hint(client):

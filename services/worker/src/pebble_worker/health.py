@@ -48,6 +48,7 @@ def check_health(
                 "ffprobe": {"available": ffprobe is not None, "version": ffprobe},
             },
             "providers": provider_status,
+            **({"instanceId": settings.instance_id} if settings.instance_id else {}),
         }
     )
 

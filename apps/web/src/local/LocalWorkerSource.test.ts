@@ -79,7 +79,7 @@ describe("LocalWorkerSource", () => {
     const down = new LocalWorkerSource(BASE, () => Promise.reject(new TypeError("fetch failed")));
     const error = await errorFrom(down.listEpisodes());
     expect(error.code).toBe("NETWORK");
-    expect(error.message).toContain("npm run worker");
+    expect(error.message).toContain("npm run pebble:start");
 
     const { source: s } = source({
       [`episodes/${ID}`]: () => json({ error: { code: "EPISODE_NOT_READY" } }, 409),

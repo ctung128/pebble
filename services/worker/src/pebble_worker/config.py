@@ -22,6 +22,8 @@ ALLOWED_HOST_NAMES: tuple[str, ...] = ("127.0.0.1", "localhost")
 #: Transcription providers. There is no automatic fallback from one to another.
 PROVIDERS: tuple[str, ...] = ("mock", "funasr")
 _LOCAL_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1):\d{1,5}$")
+#: Set by `npm run pebble:start` so `pebble:stop` can recognise the worker it started.
+INSTANCE_ID = re.compile(r"^[0-9a-f]{32}$")
 
 
 @dataclass(frozen=True)
@@ -57,8 +59,12 @@ class Settings:
     mock_delay_ms: int = 300
     #: 1-based chunk number at which the mock provider fails (for testing failures).
     mock_fail_at_chunk: int | None = None
+    #: Local run nonce from `pebble:start` (PEBBLE_INSTANCE_ID), reported only by /health.
+    instance_id: str | None = None
 
     def __post_init__(self) -> None:
+        if self.instance_id is not None and not INSTANCE_ID.match(self.instance_id):
+            raise ConfigError("PEBBLE_INSTANCE_ID must be 32 lowercase hexadecimal characters.")
         if self.host != LOOPBACK_HOST:
             raise ConfigError(
                 f"Refusing to bind to {self.host!r}. The Pebble worker only listens on "
@@ -122,6 +128,7 @@ class Settings:
             "ffprobe_path": env.get("PEBBLE_FFPROBE") or "ffprobe",
             "mock_delay_ms": int(num("PEBBLE_MOCK_DELAY_MS", 300)),
             "mock_fail_at_chunk": int(fail_at) if fail_at else None,
+            "instance_id": env.get("PEBBLE_INSTANCE_ID") or None,
         }
         values.update(overrides)
         return cls(**values)  # type: ignore[arg-type]

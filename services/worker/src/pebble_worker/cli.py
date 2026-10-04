@@ -1,16 +1,17 @@
-"""`pebble-worker serve`, `doctor`, `models list|verify|pull` and `bench run|report|review`."""
+"""`pebble-worker serve`, `doctor`, `check`, `models list|verify|pull` and `bench …`."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import platform
-import socket
 import sys
 from collections.abc import Sequence
 
 from . import __version__
+from .checks import port_state
 from .config import Settings
 from .db import MIGRATIONS, Database
 from .errors import ConfigError
@@ -26,6 +27,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     serve.add_argument("--host", help="must be 127.0.0.1 (anything else is refused)")
     serve.add_argument("--port", type=int)
     commands.add_parser("doctor", help="check FFmpeg, the data directory and providers")
+    check = commands.add_parser(
+        "check", help="read-only setup check for npm run pebble:doctor (changes nothing)"
+    )
+    check.add_argument("--json", action="store_true", help="machine-readable output")
+    check.add_argument("--verify", action="store_true", help="also hash every model file")
     models = commands.add_parser("models", help="list, verify or download the pinned models")
     models.add_argument("action", choices=("list", "verify", "pull"))
     from .bench.commands import add_parser as add_bench_parser
@@ -45,6 +51,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     os.umask(0o077)  # everything the worker creates is private to this user
+    if args.command == "check":
+        return check_command(settings, as_json=args.json, verify=args.verify)
     if args.command == "doctor":
         return doctor(settings)
     if args.command == "models":
@@ -61,10 +69,20 @@ def run_server(settings: Settings) -> int:
 
     from .api import create_app
 
-    if not _port_available(settings.host, settings.port):
+    state = port_state(settings.host, settings.port)
+    if state == "pebble":
+        print(
+            f"pebble-worker: a Pebble worker is already running on {settings.host}:"
+            f"{settings.port}. Use it, or stop it first (npm run pebble:stop, or Ctrl+C in its "
+            "terminal).",
+            file=sys.stderr,
+        )
+        return 2
+    if state == "other":
         print(
             f"pebble-worker: port {settings.port} on {settings.host} is already in use by "
-            "another program. Stop it, or choose another port with PEBBLE_PORT.",
+            "another program. Pebble won't touch it; choose another port with PEBBLE_PORT "
+            "(for example PEBBLE_PORT=8791).",
             file=sys.stderr,
         )
         return 2
@@ -138,13 +156,32 @@ def models_command(settings: Settings, action: str) -> int:
     return commands.run(Storage(settings.data_dir), action)
 
 
-def _port_available(host: str, port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        try:
-            probe.bind((host, port))
-        except OSError:
-            return False
-    return True
+def check_command(settings: Settings, *, as_json: bool, verify: bool) -> int:
+    from .checks import run_checks
+
+    result = run_checks(settings, verify=verify)
+    if as_json:
+        print(json.dumps(result))
+        return 0
+    models = result["models"]
+    rows = [
+        ("Python", result["python"]["version"], result["python"]["ok"]),
+        ("ffmpeg", result["ffmpeg"]["version"] or "not found", result["ffmpeg"]["ok"]),
+        ("ffprobe", result["ffprobe"]["version"] or "not found", result["ffprobe"]["ok"]),
+        (
+            "Speech packages",
+            "installed" if result["environment"]["ok"] else "not installed",
+            result["environment"]["ok"],
+        ),
+        (
+            "Speech models",
+            f"{models['state']} ({models['present']}/{models['files']} files)",
+            models["state"] in ("present", "verified"),
+        ),
+    ]
+    for label, detail, ok in rows:
+        print(f"  {'ok ' if ok else 'FAIL'}  {label:<16} {detail}")
+    return 0
 
 
 def _configure_logging(storage: Storage) -> None:

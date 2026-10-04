@@ -21,6 +21,41 @@ over `127.0.0.1` only. Nothing is uploaded to the internet.
 Pebble starts at a local audio file you choose. It does not fetch, download or scrape audio
 from URLs or apps, and it does not work around any platform's content protections.
 
+## Quick start (pilot testers)
+
+From the Pebble folder, four commands. Each explains what it will do; nothing is installed or
+downloaded without asking first.
+
+```bash
+npm run pebble:doctor            # read-only check: what's ready and the one next step for each problem
+npm run pebble:setup             # guided: asks before installing app packages, the speech
+                                 # environment, and before the one-time ~1.3 GB model download
+npm run pebble:start             # starts Pebble; then open http://localhost:5175
+npm run pebble:stop              # stops a Pebble started with pebble:start (or press Ctrl+C there)
+npm run pebble:doctor -- --verify   # also checks every speech model file (takes a few seconds)
+```
+
+- **Setup never installs Node.js, uv or FFmpeg.** It prints the command for you to run yourself.
+  The speech environment goes in `services/worker/.venv`; downloads are kept under `~/.pebble`
+  (including Python 3.12, only if uv can't find one — setup says so before it happens). If you
+  decline a step, setup stops and tells you whether anything was changed.
+- **`pebble:start`** prints "Pebble is starting: open http://localhost:5175" as soon as the
+  worker answers; the app then shows "Checking local speech models…" until they're ready. It
+  runs in the foreground: Ctrl+C stops Pebble. Its technical log is
+  `~/.pebble/logs/pebble-start.log`.
+- **Ports.** The worker uses 127.0.0.1:8790 and the app 5175. If Pebble is already running,
+  start says so instead of starting a second copy. If another program uses 8790, Pebble never
+  touches it; start on another port with `PEBBLE_PORT=8791 npm run pebble:start` (the app is
+  pointed at that port automatically).
+- **Stopping.** `pebble:stop` only stops the worker that `pebble:start` launched: the worker's
+  `/health` must report the same random `instanceId` that start recorded in
+  `~/.pebble/run/pebble.json` (plus the same PID, port and version). It asks politely and never
+  force-kills; anything it can't identify is left alone with an explanation.
+- If the worker stops while a transcript is being made, that job shows as failed with a
+  **Retry** option when Pebble starts again.
+
+The developer commands below still work as before.
+
 ## Requirements
 
 - macOS or Linux, Python 3.12+, [uv](https://docs.astral.sh/uv/), and FFmpeg (`ffmpeg` and
@@ -48,7 +83,7 @@ for Pebble are cached inside Pebble's data directory; set it yourself when you r
 directly, for example `UV_CACHE_DIR=~/.pebble/uv-cache uv sync --extra funasr` in
 `services/worker`.
 
-Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765. If the port is busy, the worker says so and exits; choose another with `PEBBLE_PORT`.
+Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765. Before starting, the worker checks the port: it counts as free only if nothing accepts a connection on it and it can be bound the way the server binds it, so connections left over from a previous run don't block a restart. If a Pebble worker is already there, it says so; if another program is, it says so and exits — choose another port with `PEBBLE_PORT`.
 
 ## Using local mode in the browser
 

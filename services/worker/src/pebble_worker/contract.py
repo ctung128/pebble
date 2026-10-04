@@ -26,7 +26,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.5"
+CURRENT_SCHEMA_VERSION = "1.6"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -310,7 +310,7 @@ class DataDir(Model):
 
 
 class WorkerHealth(Model):
-    _omit_when_none = frozenset({"data_dir"})
+    _omit_when_none = frozenset({"data_dir", "instance_id"})
     schema_version: SchemaVersion
     worker_version: NonEmptyStr
     status: Literal["ok", "degraded"]
@@ -318,6 +318,8 @@ class WorkerHealth(Model):
     data_dir: DataDir | None = None
     tools: Tools
     providers: list[ProviderStatus]
+    #: 1.6: the run nonce of a worker started by `npm run pebble:start` (local lifecycle only).
+    instance_id: Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")] | None = None
 
 
 # --- Cross-field rules (same paths and messages as the Zod refinements) --------------------

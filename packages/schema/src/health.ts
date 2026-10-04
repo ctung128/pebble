@@ -45,6 +45,11 @@ export const WorkerHealthSchema = z.object({
       hint: z.string().min(1).optional(),
     }),
   ),
+  /** Run nonce of a worker started by `npm run pebble:start` (1.6); local lifecycle only. */
+  instanceId: z
+    .string()
+    .regex(/^[0-9a-f]{32}$/)
+    .optional(),
 });
 
 export type WorkerHealth = z.infer<typeof WorkerHealthSchema>;

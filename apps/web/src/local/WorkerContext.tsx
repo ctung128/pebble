@@ -11,7 +11,7 @@ import type { WorkerClient } from "./workerClient.ts";
 import type { LocalMode } from "./providerCopy.ts";
 import { checkWorker, statusMode, type WorkerStatus } from "./workerHealth.ts";
 
-/** How often to re-check while the worker isn't ready (e.g. waiting for `npm run worker`). */
+/** How often to re-check while the worker isn't ready (e.g. waiting for `npm run pebble:start`). */
 export const HEALTH_RETRY_MS = 5000;
 /** Faster re-checks while the worker is verifying its speech models (a few seconds). */
 export const CHECKING_RETRY_MS = 1000;

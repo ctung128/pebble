@@ -192,7 +192,7 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
         data: funasrHealth({
           state: "models_missing",
           available: false,
-          hint: "Download the speech models (about 1.3 GB), then check again: npm run worker:models -- pull",
+          hint: "Download the speech models (about 1.3 GB) with: npm run pebble:setup",
         }),
       }),
       listJobs,

@@ -24,7 +24,10 @@ B2 starter runs on the user's two private clips are done (results only under `~/
 `timestamp_alignment_anomaly` flag is a private developer/benchmark diagnostic, not a learner
 signal: it earns no review slot and gets no UI. M1-B2 adds a **benchmark-only** chunk-overlap
 experiment (`bench run --overlap-ms`, `compare`, `pair`, `tally`); the worker's jobs never
-overlap. Don't start new benchmark runs, change the
+overlap. ASR research is paused; the current work is private-pilot readiness. Slice 1 (tester
+commands `npm run pebble:doctor|setup|start|stop`, safe port/lifecycle, health `instanceId` in
+contract 1.6) is the approved scope; Slice 2 (library, delete, reader QA, guides) needs its own
+approval. Don't start new benchmark runs, change the
 150 s chunk default or other defaults, or build a corpus from the user's files without approval.
 Broader M1-C (web/UI) needs a separately approved plan. Commits need the user's explicit
 "commit" after a shown status/diff/privacy scan. Never put recognized transcript
@@ -85,6 +88,6 @@ and model weights in Git, the public demo, or any deployment artifact.
 
 ## Verify before reporting
 
-`npm run typecheck && npm run lint && npm test && npm run build && npm run test:worker`
+`npm run typecheck && npm run lint && npm test && npm run build && npm run test:worker && npm run test:scripts`
 
 Before any commit, run the privacy check in `CONTRIBUTING.md` and stage files explicitly.

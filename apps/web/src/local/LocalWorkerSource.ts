@@ -68,7 +68,7 @@ export class LocalWorkerSource implements EpisodeSource {
     } catch (cause) {
       throw new SourceError(
         "NETWORK",
-        "Pebble's local worker is not running. Start it with npm run worker.",
+        "Pebble's local worker is not running. Start it with npm run pebble:start.",
         { cause },
       );
     }

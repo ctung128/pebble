@@ -34,7 +34,7 @@ describe("HttpWorkerClient (fetch)", () => {
     });
     const error = await errorFrom(client.listJobs());
     expect(error.code).toBe("UNREACHABLE");
-    expect(error.hint).toBe("Start it with npm run worker.");
+    expect(error.hint).toBe("Start it with npm run pebble:start.");
   });
 
   it("surfaces the worker's error envelope", async () => {

@@ -57,7 +57,7 @@ export function makeHealth(overrides: Partial<WorkerHealth> = {}): WorkerHealth 
 
 type ProviderStatus = WorkerHealth["providers"][number];
 
-/** Health from a worker started with `npm run worker:funasr` (contract 1.5). */
+/** Health from a FunASR worker (`npm run pebble:start`; contract 1.5). */
 export function funasrHealth(provider: Partial<ProviderStatus> = {}): WorkerHealth {
   const ready = (provider.state ?? "ready") === "ready";
   return makeHealth({

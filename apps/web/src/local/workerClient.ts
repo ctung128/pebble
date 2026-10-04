@@ -175,7 +175,7 @@ function validJob(payload: unknown): Job {
 
 function unreachable(cause?: unknown) {
   return new WorkerError("UNREACHABLE", "Pebble's local worker is not running.", {
-    hint: "Start it with npm run worker.",
+    hint: "Start it with npm run pebble:start.",
     cause,
   });
 }

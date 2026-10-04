@@ -24,7 +24,7 @@ type UploadState =
 
 const UPLOAD_ERRORS: Record<string, string> = {
   UNREACHABLE:
-    "Pebble's local worker stopped responding. Start it with npm run worker, then try again.",
+    "Pebble's local worker stopped responding. Start it with npm run pebble:start, then try again.",
   FILE_TOO_LARGE: "This file is larger than the worker's upload limit.",
   UNSUPPORTED_MEDIA: "The worker doesn't accept this file type.",
   EMPTY_FILE: "This file is empty.",

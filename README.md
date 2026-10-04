@@ -79,10 +79,11 @@ labelled, with learning tools disabled. Real Mandarin speech recognition arrives
 [docs/LOCAL_MODE.md](docs/LOCAL_MODE.md):
 
 ```bash
-npm run worker:doctor   # requires uv and FFmpeg
-npm run worker          # terminal 1: http://127.0.0.1:8790
-npm run dev:local       # terminal 2: http://localhost:5175
-npm run test:worker
+npm run pebble:doctor   # read-only check (needs Node 22+, uv and FFmpeg)
+npm run pebble:setup    # guided; asks before installing or downloading anything
+npm run pebble:start    # worker + local app: open http://localhost:5175
+npm run pebble:stop     # or Ctrl+C where pebble:start runs
+npm run test:worker && npm run test:scripts
 ```
 
 Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which commonly uses port 8765.

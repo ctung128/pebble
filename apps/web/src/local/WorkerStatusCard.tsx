@@ -83,13 +83,12 @@ const PROBLEMS: {
       <>
         <p>In a terminal, from the Pebble folder, run:</p>
         <pre className={styles.command}>
-          <code>npm run worker</code>
+          <code>npm run pebble:start</code>
         </pre>
-        <p>For real Mandarin transcription, start it with:</p>
-        <pre className={styles.command}>
-          <code>npm run worker:funasr</code>
-        </pre>
-        <p>Pebble checks again automatically every few seconds.</p>
+        <p>
+          If it says Pebble isn't set up yet, run <code>npm run pebble:setup</code> first. Pebble
+          checks again automatically every few seconds.
+        </p>
       </>
     ),
   }),
@@ -101,9 +100,11 @@ const PROBLEMS: {
           The worker can't find {missing.join(" and ")}. Install FFmpeg, then confirm the setup:
         </p>
         <pre className={styles.command}>
-          <code>{"brew install ffmpeg\nnpm run worker:doctor"}</code>
+          <code>{"brew install ffmpeg\nnpm run pebble:doctor"}</code>
         </pre>
-        <p>Restart the worker after the doctor reports all checks passed.</p>
+        <p>
+          Then stop Pebble and start it again with <code>npm run pebble:start</code>.
+        </p>
       </>
     ),
   }),
@@ -113,9 +114,8 @@ const PROBLEMS: {
       <>
         <p>{detail}</p>
         <p>
-          Stop the worker, then start it again from this same Pebble folder with{" "}
-          <code>npm run worker</code> and reload this page. If you updated Pebble, run{" "}
-          <code>npm install</code> first.
+          Stop Pebble with <code>npm run pebble:stop</code>, start it again from this same Pebble
+          folder with <code>npm run pebble:start</code>, and reload this page.
         </p>
       </>
     ),
@@ -142,7 +142,7 @@ const PROBLEMS: {
       <Hint text={hint} />
     ) : (
       <p>
-        Run <code>npm run worker:doctor</code> for details, then restart the worker.
+        Run <code>npm run pebble:doctor</code> for details, then start Pebble again.
       </p>
     ),
   }),
@@ -152,7 +152,7 @@ const PROBLEMS: {
       <Hint text={hint} />
     ) : (
       <p>
-        Run <code>npm run worker:doctor</code> for details, then restart the worker.
+        Run <code>npm run pebble:doctor</code> for details, then start Pebble again.
       </p>
     ),
   }),
@@ -160,8 +160,8 @@ const PROBLEMS: {
     title: CONFIGURATION_MISMATCH,
     body: (
       <p>
-        Stop the worker and start it again from this Pebble folder with <code>npm run worker</code>{" "}
-        (processing preview) or <code>npm run worker:funasr</code> (local transcription).
+        Stop the worker and start Pebble again from this Pebble folder with{" "}
+        <code>npm run pebble:start</code>.
       </p>
     ),
   }),
@@ -170,7 +170,7 @@ const PROBLEMS: {
     body: (
       <p>
         Open Pebble's local mode at <code>http://localhost:5175</code> (
-        <code>npm run dev:local</code>), or add this page's address to{" "}
+        <code>npm run pebble:start</code>), or add this page's address to{" "}
         <code>PEBBLE_ALLOWED_ORIGINS</code> and restart the worker.
       </p>
     ),
