@@ -7,18 +7,11 @@ import { PageHeader } from "../../components/PageHeader.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
 import { useAsync } from "../../lib/useAsync.ts";
-import { CopyFallback } from "../reader/CopyFallback.tsx";
-import { COPY_HELP, COPY_LABEL, useCopyText } from "../reader/copyText.ts";
 import { itemSource } from "./ankiCsv.ts";
 import { AnkiExportPanel } from "./AnkiExportPanel.tsx";
 import { useLearning } from "./LearningContext.tsx";
 import { ResetDemoData } from "./ResetDemoData.tsx";
 import styles from "./LearningItemsPage.module.css";
-
-export const SOURCE_DELETED_HELP =
-  "This item is saved in your browser, but its original audio and transcript were removed from Pebble.";
-export const STORAGE_NOTE =
-  "Learning items are saved in this browser on this computer. Clearing this browser's site data removes them, so export to Anki to keep a copy.";
 
 interface EpisodeGroup {
   episodeId: string;
@@ -53,14 +46,10 @@ export function LearningItemsPage() {
     <div className={styles.page}>
       <title>Learning items · Pebble</title>
       <PageHeader
-        index="02 — Learning items"
         title="Learning items"
         vertical="学习条目"
         meta={persistence.mode === "loading" ? null : plural(items.length, "item")}
-      >
-        <p className={styles.lede}>Lines you saved while listening. Export them to Anki as CSV.</p>
-        <p className={styles.storageNote}>{STORAGE_NOTE}</p>
-      </PageHeader>
+      />
 
       <div className={styles.columns}>
         <div className={styles.main}>
@@ -134,7 +123,6 @@ function ItemCard({ item }: { item: LearningItem }) {
   const [note, setNote] = useState(item.note ?? "");
   const [savedNote, setSavedNote] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
-  const copy = useCopyText();
   const dirty = note !== (item.note ?? "");
   const lineHref = `/episodes/${item.episodeId}?segment=${encodeURIComponent(item.segmentId)}`;
 
@@ -151,15 +139,6 @@ function ItemCard({ item }: { item: LearningItem }) {
         <button
           type="button"
           className={styles.tool}
-          aria-label={COPY_LABEL}
-          title={copy.status === "copied" ? "Copied" : COPY_HELP}
-          onClick={() => copy.copy(item.text)}
-        >
-          <Icon name={copy.status === "copied" ? "check" : "copy"} size={18} />
-        </button>
-        <button
-          type="button"
-          className={styles.tool}
           aria-label="Edit note"
           title="Edit note"
           aria-expanded={editingNote}
@@ -168,9 +147,6 @@ function ItemCard({ item }: { item: LearningItem }) {
         >
           <Icon name="edit" size={18} />
         </button>
-        <span className={styles.visuallyHidden} role="status">
-          {copy.status === "copied" ? "Copied" : ""}
-        </span>
       </div>
 
       <div className={styles.body}>
@@ -188,10 +164,6 @@ function ItemCard({ item }: { item: LearningItem }) {
           </p>
         ) : null}
       </div>
-
-      {copy.status === "failed" ? (
-        <CopyFallback text={item.text} language="zh-CN" onClose={copy.dismiss} />
-      ) : null}
 
       {editingNote ? (
         <form
@@ -238,7 +210,6 @@ function ItemCard({ item }: { item: LearningItem }) {
           <>
             <span className={styles.tag}>Source deleted</span>
             <span className={styles.source}>{itemSource(item)}</span>
-            <p className={styles.sourceDeletedHelp}>{SOURCE_DELETED_HELP}</p>
           </>
         ) : (
           <Link to={lineHref} className={styles.sourceLink}>

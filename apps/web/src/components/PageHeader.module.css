@@ -36,6 +36,7 @@
   top: 0;
   right: 0;
   writing-mode: vertical-rl;
+  white-space: nowrap; /* one column, however short the header */
   font-family: var(--font-display);
   font-size: var(--vertical-size);
   letter-spacing: 0.6em;

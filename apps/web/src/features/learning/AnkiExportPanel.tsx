@@ -26,6 +26,9 @@ type ExportState =
     }
   | { kind: "failed" };
 
+/** The one place the page says where learning items live (they stay in this browser). */
+export const KEEP_A_COPY = "Export a copy if you want to keep your cards outside this browser.";
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** Export button plus the Anki setup guidance a learner needs to see their translations. */
@@ -106,14 +109,9 @@ export function AnkiExportPanel({ items }: { items: readonly LearningItem[] }) {
         ) : null}
       </div>
 
-      <p className={styles.instruction}>
-        In Anki, import this file using a note type with fields for Chinese, Pinyin, Translation,
-        Note, and Source. Map Pebble’s Translation column to the Translation field, then ensure{" "}
-        <code>{"{{Translation}}"}</code> appears in the card’s Back Template.
-      </p>
-
       <details className={styles.help}>
         <summary>How to import into Anki</summary>
+        <p className={styles.aside}>{KEEP_A_COPY}</p>
         <h3>One-time setup</h3>
         <ol>
           <li>

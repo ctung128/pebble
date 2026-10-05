@@ -4,18 +4,6 @@
   container-type: inline-size;
 }
 
-.lede {
-  margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
-}
-
-.storageNote {
-  margin: 0;
-  max-width: 60ch;
-  font-size: var(--size-body-sm);
-  color: var(--text-secondary);
-}
-
 /*
  * The list beside a 280px column for Anki (and reset), when the content column has room for
  * both; one column otherwise, with Anki after the list.
@@ -43,6 +31,7 @@
 .side {
   display: grid;
   gap: var(--space-6);
+  min-width: 0; /* the Anki help's code block scrolls instead of widening the column */
 }
 
 /* --- Episode groups --- */
@@ -314,17 +303,4 @@
 .original span[lang] {
   font-family: var(--font-zh);
   color: var(--text-primary);
-}
-
-.sourceDeletedHelp {
-  flex-basis: 100%;
-}
-
-.visuallyHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }

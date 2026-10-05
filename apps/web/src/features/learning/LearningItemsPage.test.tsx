@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CURRENT_SCHEMA_VERSION } from "@pebble/schema";
 import { renderWithProviders, testEpisode, testTranscript } from "../../test/fixtures.tsx";
 import { buildLearningItem } from "./buildLearningItem.ts";
-import { LearningItemsPage, SOURCE_DELETED_HELP, STORAGE_NOTE } from "./LearningItemsPage.tsx";
+import { LearningItemsPage } from "./LearningItemsPage.tsx";
 import { MemoryLearningStore } from "./MemoryLearningStore.ts";
 
 async function storeWithItem() {
@@ -23,9 +23,14 @@ async function storeWithItem() {
 }
 
 describe("LearningItemsPage", () => {
-  it("says where items are stored and how to keep a copy", async () => {
-    renderWithProviders(<LearningItemsPage />);
-    expect(await screen.findByText(STORAGE_NOTE)).toBeInTheDocument();
+  it("keeps the header to the title and count, without explanatory copy", async () => {
+    renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
+    await screen.findByText("第二句。");
+    expect(screen.queryByText(/02 — Learning items/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lines you saved while listening/)).not.toBeInTheDocument();
+    // The storage fact lives once, inside the Anki import help.
+    expect(screen.getAllByText(/outside this browser/)).toHaveLength(1);
+    expect(screen.queryByText(/saved in this browser/)).not.toBeInTheDocument();
   });
 
   it("resets demo data only after confirmation", async () => {
@@ -77,7 +82,7 @@ describe("LearningItemsPage", () => {
     expect(screen.getByText("The second sentence.")).toBeInTheDocument();
     expect(screen.getByText("kept note")).toBeInTheDocument();
     expect(screen.getByText("Source deleted")).toBeInTheDocument();
-    expect(screen.getByText(SOURCE_DELETED_HELP)).toBeInTheDocument();
+    expect(screen.queryByText(/This item is saved/)).not.toBeInTheDocument();
     expect(screen.getByText(/Test episode · 0:03/)).toBeInTheDocument();
     expect(screen.queryByText(/· source deleted/)).not.toBeInTheDocument(); // the badge says it
     expect(screen.queryByRole("link", { name: /Test episode/ })).not.toBeInTheDocument();
@@ -135,7 +140,6 @@ describe("LearningItemsPage", () => {
   it("groups items under their episode with its Chinese title and a count", async () => {
     renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
     expect(screen.getByRole("heading", { level: 1, name: "Learning items" })).toBeInTheDocument();
-    expect(screen.getByText("02 — Learning items")).toBeInTheDocument();
     const group = await screen.findByRole("region", { name: /Test episode/ });
     expect(within(group).getByRole("heading", { level: 2 })).toHaveTextContent("Test episode");
     expect(await within(group).findByText("测试节目")).toHaveAttribute("lang", "zh-CN");
@@ -150,14 +154,10 @@ describe("LearningItemsPage", () => {
     );
   });
 
-  it("copies the Chinese text only, with the reader's confirmation", async () => {
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  it("has no copy action on cards (copying lives in the reader)", async () => {
     renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Copy Chinese text for this line" }),
-    );
-    expect(writeText).toHaveBeenCalledWith("第二句。");
-    expect(await screen.findByText("Copied")).toHaveAttribute("role", "status");
+    await screen.findByText("第二句。");
+    expect(screen.queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit note" })).toBeInTheDocument();
   });
 });

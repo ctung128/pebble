@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LearningItem } from "@pebble/schema";
@@ -8,7 +8,7 @@ import {
   testEpisode,
   testTranscript,
 } from "../../test/fixtures.tsx";
-import { AnkiExportPanel } from "./AnkiExportPanel.tsx";
+import { AnkiExportPanel, KEEP_A_COPY } from "./AnkiExportPanel.tsx";
 import { ANKI_BACK_TEMPLATE } from "./ankiCsv.ts";
 import { buildLearningItem } from "./buildLearningItem.ts";
 import { MemoryLearningStore } from "./MemoryLearningStore.ts";
@@ -33,14 +33,28 @@ const exportButton = () => screen.getByRole("button", { name: "Export CSV for An
 const exportedCsv = () => downloadText.mock.lastCall?.[1] as string;
 
 describe("AnkiExportPanel", () => {
-  it("explains the required note type and mapping before any export", () => {
-    renderWithProviders(<AnkiExportPanel items={[item(0)]} />);
-    expect(
-      screen.getByText(/import this file using a note type with fields for Chinese, Pinyin/),
-    ).toHaveTextContent(
-      "In Anki, import this file using a note type with fields for Chinese, Pinyin, Translation, Note, and Source. Map Pebble’s Translation column to the Translation field, then ensure {{Translation}} appears in the card’s Back Template.",
-    );
+  it("keeps import guidance in one collapsed disclosure, each fact once", () => {
+    const { container } = renderWithProviders(<AnkiExportPanel items={[item(0)]} />);
+    const help = container.querySelector("details")!;
+    expect(help).not.toHaveAttribute("open");
+    expect(within(help).getByText("How to import into Anki").tagName).toBe("SUMMARY");
+    expect(screen.queryByText(/In Anki, import this file/)).not.toBeInTheDocument();
+    // Guidance appears only inside the disclosure, once each.
+    expect(within(help).getByText(KEEP_A_COPY)).toBeInTheDocument();
+    expect(screen.getAllByText(KEEP_A_COPY)).toHaveLength(1);
+    expect(screen.getAllByText(/Translation → Translation/)).toHaveLength(1);
+    expect(screen.getAllByText(/\{\{#Translation\}\}/)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Export CSV for Anki" })).toBeEnabled();
     expect(screen.queryByText(/downloaded successfully/)).not.toBeInTheDocument();
+  });
+
+  it("uses a native disclosure, so the browser gives it keyboard and screen-reader support", async () => {
+    const { container } = renderWithProviders(<AnkiExportPanel items={[item(0)]} />);
+    const help = container.querySelector("details")!;
+    const summary = screen.getByText("How to import into Anki");
+    expect(help.firstElementChild).toBe(summary);
+    await userEvent.click(summary);
+    expect(help).toHaveAttribute("open");
   });
 
   it("offers expandable import help with the back template", async () => {
