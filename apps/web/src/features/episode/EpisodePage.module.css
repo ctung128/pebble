@@ -34,11 +34,13 @@
   line-height: 1.15;
 }
 
+/* Breathing room under the title, and between the Chinese title and the toolbar when they wrap. */
 .titleRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4) var(--space-3);
+  margin-top: var(--space-3);
 }
 
 .titleZh {
@@ -83,6 +85,19 @@
   box-shadow: var(--ring-selected);
 }
 
+/* Two labels in one grid cell: the button is as wide as the longer one, always. */
+.labelStack {
+  display: inline-grid;
+}
+
+.labelStack > * {
+  grid-area: 1 / 1;
+}
+
+.labelStack > [aria-hidden="true"] {
+  visibility: hidden;
+}
+
 .toolButton[aria-busy="true"] {
   cursor: progress;
 }
@@ -105,18 +120,6 @@
     serif;
 }
 
-.description {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.meta {
-  margin: 0;
-  font-size: var(--size-body-sm);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-
 /* --- Source notes: where the transcript came from. Provenance, not a warning. --- */
 
 .sourceNote {
@@ -136,27 +139,6 @@
 .sourceNote strong {
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.sourceNoteHeading {
-  margin: 0;
-  font-size: var(--size-body-sm);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.sourceNoteDetails {
-  font-size: var(--size-label);
-}
-
-.sourceNoteDetails summary {
-  width: fit-content;
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-}
-
-.sourceNoteDetails p {
-  margin-top: var(--space-1);
 }
 
 /* --- Preview transcript banner (warning). Persistent: mock text must never pass for real. --- */

@@ -34,6 +34,11 @@ export function canRequestTranslation(kind: TranscriptProvenance["kind"]): boole
   return transcriptCapabilities(kind).translation === "available";
 }
 
-export const ASR_NOTICE_HEADING = "Local transcript";
-export const ASR_NOTICE =
-  "Pebble creates a machine transcript on your computer. It can mishear or miss parts of fast or conversational speech. Replay the audio and edit any line that looks wrong.";
+/**
+ * What "About this transcript" (the i button) says. One fact, once: a local machine transcript
+ * covers its pinyin too; otherwise only the pinyin is generated. Names no model or provider.
+ */
+export const ABOUT_MACHINE_TRANSCRIPT =
+  "This transcript and its pinyin were generated automatically and may need review.";
+export const ABOUT_PINYIN =
+  "Pronunciation is generated automatically and may be imperfect for some words.";

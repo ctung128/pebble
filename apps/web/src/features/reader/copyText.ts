@@ -9,6 +9,23 @@ export const COPY_HELP =
   "Copies this line's Chinese text to your clipboard. Pasting it into another service may send it there.";
 export const COPY_FAILED = "Couldn't copy. Select the text and copy it manually.";
 
+export const COPY_TRANSCRIPT_LABEL = "Copy transcript";
+export const COPY_TRANSCRIPT_DONE = "Transcript copied";
+export const COPY_TRANSCRIPT_HELP =
+  "Copies the Chinese transcript as plain text. Pasting it into another service may send it there.";
+
+/**
+ * The whole transcript as plain text: each line's displayed Chinese (the learner's correction
+ * where there is one), in reading order, one line per transcript line, joined by newlines.
+ * Never the title, IDs, times, speakers, pinyin, English or notes.
+ */
+export function transcriptPlainText(
+  segments: readonly { id: string; text: string }[],
+  displayedText: (segmentId: string) => string | undefined,
+): string {
+  return segments.map((segment) => displayedText(segment.id) ?? segment.text).join("\n");
+}
+
 /**
  * Copies one line's displayed text to the clipboard on an explicit tap. A local browser
  * action only: no network, storage, logging or clipboard reads. `copy` must be called

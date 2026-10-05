@@ -10,7 +10,6 @@ import {
   type ReviewHint,
 } from "../../data/EpisodeSource.ts";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
-import { formatTime } from "../../lib/formatTime.ts";
 import { useAsync } from "../../lib/useAsync.ts";
 import { buildLearningItem } from "../learning/buildLearningItem.ts";
 import { useLearning } from "../learning/LearningContext.tsx";
@@ -19,6 +18,14 @@ import { PlayerBar } from "../player/PlayerBar.tsx";
 import { useAudioPlayer } from "../player/useAudioPlayer.ts";
 import { findActiveSegmentIndex } from "../reader/activeSegment.ts";
 import type { LineActions, LineView } from "../reader/lineView.ts";
+import { CopyFallback } from "../reader/CopyFallback.tsx";
+import {
+  COPY_TRANSCRIPT_DONE,
+  COPY_TRANSCRIPT_HELP,
+  COPY_TRANSCRIPT_LABEL,
+  transcriptPlainText,
+  useCopyText,
+} from "../reader/copyText.ts";
 import { TranscriptReader } from "../reader/TranscriptReader.tsx";
 import { useFollowActive } from "../reader/useFollowActive.ts";
 import { useTranslationProvider } from "../translation/TranslationContext.tsx";
@@ -26,8 +33,8 @@ import { useLineTranslations } from "../translation/useLineTranslations.ts";
 import { deriveReviewHints } from "../uncertainty/reviewHints.ts";
 import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
 import {
-  ASR_NOTICE,
-  ASR_NOTICE_HEADING,
+  ABOUT_MACHINE_TRANSCRIPT,
+  ABOUT_PINYIN,
   transcriptCapabilities,
 } from "./transcriptCapabilities.ts";
 import styles from "./EpisodePage.module.css";
@@ -100,7 +107,11 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [originalShown, setOriginalShown] = useState<ReadonlySet<string>>(new Set());
   const [confirmUnsaveId, setConfirmUnsaveId] = useState<string | null>(null);
-  const [pinyinInfoOpen, setPinyinInfoOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  // "Copy transcript": built only on click, kept only for the manual-copy fallback.
+  const transcriptCopy = useCopyText();
+  const [copiedTranscript, setCopiedTranscript] = useState("");
+  const copyTranscriptButton = useRef<HTMLButtonElement>(null);
 
   const {
     showAll: pinyinShowAll,
@@ -312,7 +323,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const isPlaceholderAudio = episode.audioProvenance.kind === "tts-placeholder";
   const isAuthoredTranscript = transcript.provenance.kind === "fixture";
   const hasPreparedTranslations = Boolean(episode.demo?.translations);
-  const lineCount = `${segments.length} ${segments.length === 1 ? "line" : "lines"}`;
 
   return (
     <article className={styles.page}>
@@ -350,37 +360,42 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             >
               {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
             </button>
+            {capabilities.copy && segments.length > 0 ? (
+              <button
+                ref={copyTranscriptButton}
+                type="button"
+                className={styles.toolButton}
+                title={COPY_TRANSCRIPT_HELP}
+                onClick={() => {
+                  const text = transcriptPlainText(segments, (id) => lines.get(id)?.text);
+                  setCopiedTranscript(text);
+                  transcriptCopy.copy(text); // inside the click: the browser sees the gesture
+                }}
+              >
+                {/* Both labels share one cell, so the button never changes width. */}
+                <span className={styles.labelStack}>
+                  <span>
+                    {transcriptCopy.status === "copied"
+                      ? COPY_TRANSCRIPT_DONE
+                      : COPY_TRANSCRIPT_LABEL}
+                  </span>
+                  <span aria-hidden="true">{COPY_TRANSCRIPT_DONE}</span>
+                </span>
+              </button>
+            ) : null}
             <button
               type="button"
               className={styles.infoButton}
-              aria-expanded={pinyinInfoOpen}
-              aria-controls="pinyin-info"
-              aria-label="About pinyin"
-              onClick={() => setPinyinInfoOpen((open) => !open)}
+              aria-expanded={aboutOpen}
+              aria-controls="transcript-about"
+              aria-label="About this transcript"
+              onClick={() => setAboutOpen((open) => !open)}
             >
               i
             </button>
           </div>
         </div>
-        <p className={styles.description}>{episode.description}</p>
-        <p className={styles.meta}>
-          {formatTime(episode.durationMs)} · {lineCount}
-        </p>
       </header>
-
-      {/* Local-only: ASR transcripts exist only in local mode, so the demo build drops this. */}
-      {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr" ? (
-        <aside className={styles.sourceNote} aria-labelledby="asr-notice-heading">
-          <h2 id="asr-notice-heading" className={styles.sourceNoteHeading}>
-            {ASR_NOTICE_HEADING}
-          </h2>
-          <p>{ASR_NOTICE}</p>
-          <details className={styles.sourceNoteDetails}>
-            <summary>Transcript details</summary>
-            <p>{transcript.provenance.notes ?? `Created by ${transcript.provenance.provider}`}</p>
-          </details>
-        </aside>
-      ) : null}
 
       {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
         <aside className={styles.sourceNote} aria-label="About this sample">
@@ -412,9 +427,12 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             {LEARNING_LOCKED_MESSAGE}
           </p>
         ) : null}
-        {pinyinInfoOpen ? (
-          <p id="pinyin-info" className={styles.help}>
-            Pronunciation is generated automatically and may be imperfect for some words.
+        {aboutOpen ? (
+          <p id="transcript-about" className={styles.help}>
+            {/* Local-only: ASR transcripts exist only in local mode. */}
+            {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr"
+              ? ABOUT_MACHINE_TRANSCRIPT
+              : ABOUT_PINYIN}
           </p>
         ) : null}
         {flagged.size > 0 ? (
@@ -423,6 +441,21 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             occasionally mishear accents, names, or fast conversation. Listen again or edit this
             line if it looks wrong.
           </p>
+        ) : null}
+        <span className={styles.visuallyHidden} role="status">
+          {transcriptCopy.status === "copied" ? COPY_TRANSCRIPT_DONE : ""}
+        </span>
+        {transcriptCopy.status === "failed" ? (
+          <CopyFallback
+            multiline
+            label="Transcript text"
+            text={copiedTranscript}
+            language={transcript.language}
+            onClose={() => {
+              transcriptCopy.dismiss();
+              copyTranscriptButton.current?.focus();
+            }}
+          />
         ) : null}
         <TranscriptReader
           ref={readerRef}

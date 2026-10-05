@@ -39,3 +39,10 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* The whole-transcript variant. */
+textarea.copyField {
+  width: 100%;
+  line-height: 1.8;
+  resize: vertical;
+}

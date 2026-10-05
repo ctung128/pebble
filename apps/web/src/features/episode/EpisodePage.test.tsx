@@ -54,6 +54,9 @@ describe("EpisodePage — listening", () => {
     renderPage();
     expect(await playButtons()).toHaveLength(3);
     expect(screen.getByRole("heading", { name: "Test episode" })).toBeInTheDocument();
+    // The header is the title and Chinese title only: no description or duration/line count.
+    expect(screen.queryByText("Used by component tests.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d:\d\d · \d+ lines?/)).not.toBeInTheDocument();
     expect(screen.getByText(/Development placeholder/)).toBeInTheDocument();
     expect(screen.getByText(/not speech-recognition output/)).toBeInTheDocument();
     expect(
@@ -155,7 +158,11 @@ describe("EpisodePage — pinyin", () => {
   it("explains that pinyin is generated", async () => {
     renderPage();
     await playButtons();
-    await userEvent.click(screen.getByRole("button", { name: "About pinyin" }));
+    const about = screen.getByRole("button", { name: "About this transcript" });
+    expect(about).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(/generated automatically/)).not.toBeInTheDocument();
+    await userEvent.click(about);
+    expect(about).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/generated automatically and may be imperfect/)).toBeInTheDocument();
   });
 });
@@ -457,24 +464,29 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
       }),
     });
 
-  it("shows the local transcript notice instead of mock or demo notices", async () => {
+  it("explains the machine transcript once, behind About this transcript", async () => {
     renderPage({ source: asrSource() });
     await playButtons();
-    const notice = screen.getByRole("complementary", { name: "Local transcript" });
-    expect(within(notice).getByRole("heading", { name: "Local transcript" })).toBeInTheDocument();
-    expect(notice).toHaveTextContent(
-      "Pebble creates a machine transcript on your computer. It can mishear or miss parts of fast or conversational speech. Replay the audio and edit any line that looks wrong.",
-    );
-    // The model is secondary: inside a collapsed "Transcript details", not the notice text.
-    const details = within(notice).getByText("Transcript details").closest("details")!;
-    expect(details).not.toHaveAttribute("open");
-    expect(details).toHaveTextContent("Transcribed on this computer with FunASR Paraformer");
-    expect(notice).not.toHaveTextContent(/iic\/|\.pebble|\.m4a|\.wav/);
+    const note = "This transcript and its pinyin were generated automatically and may need review.";
+    // Collapsed by default: nothing about it on the page until asked.
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
+    expect(screen.queryByText(/generated automatically/)).not.toBeInTheDocument();
+    const about = screen.getByRole("button", { name: "About this transcript" });
+    await userEvent.click(about);
+    expect(screen.getByText(note)).toHaveAttribute("id", about.getAttribute("aria-controls"));
+    // Said once: the separate pinyin sentence doesn't repeat it.
+    expect(screen.getAllByText(/generated automatically/)).toHaveLength(1);
+    // The old card, its heading and its "Transcript details" are gone.
+    expect(
+      screen.queryByRole("complementary", { name: "Local transcript" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Transcript details")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/FunASR|Paraformer|iic\/|funasr/);
     expect(screen.queryByRole("note", { name: "Preview transcript" })).not.toBeInTheDocument();
     expect(screen.queryByText(/prepared sample content/)).not.toBeInTheDocument();
   });
 
-  it("shows the learner's title and 'Local audio', never the file name", async () => {
+  it("shows the learner's title, never the file name or a 'Local audio' line", async () => {
     const source = fakeSource({
       getTranscript: async () => asrTranscript,
       getEpisode: async (id) => ({
@@ -490,7 +502,7 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
     renderPage({ source });
     await playButtons();
     expect(screen.getByRole("heading", { level: 1, name: "Practice clip" })).toBeInTheDocument();
-    expect(screen.getByText("Local audio", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText("Local audio")).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/invented_private_interview|\.m4a/);
   });
 
@@ -537,9 +549,9 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
   it("does not show structural review flags to learners", async () => {
     renderPage({ source: asrSource() });
     await playButtons();
-    expect(
-      screen.queryByText(/long_segment|long segment|May need review/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/long_segment|long segment/i)).not.toBeInTheDocument();
+    // The review tag itself (the machine-transcript note may say "may need review" in prose).
+    expect(screen.queryByText("May need review")).not.toBeInTheDocument();
   });
 });
 
