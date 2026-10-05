@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import type { Job } from "@pebble/schema";
 import { ConfirmButton } from "../components/ConfirmButton.tsx";
 import { SearchField } from "../components/SearchField.tsx";
 import { formatDuration, formatTime } from "../lib/formatTime.ts";
 import { matchesQuery } from "../lib/search.ts";
+import { useDebouncedAnnouncement } from "../lib/useDebouncedAnnouncement.ts";
 import { listeningState } from "../features/learning/playback.ts";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
@@ -151,16 +152,6 @@ export function LocalLibraryPage() {
       </p>
     </div>
   );
-}
-
-/** The latest message, once typing has paused (so each keystroke isn't announced). */
-function useDebouncedAnnouncement(message: string, delayMs = 600): string {
-  const [announced, setAnnounced] = useState("");
-  useEffect(() => {
-    const timer = window.setTimeout(() => setAnnounced(message), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [message, delayMs]);
-  return announced;
 }
 
 /** Real counts only, e.g. "4 episodes · 1 processing · 1 stopped". */

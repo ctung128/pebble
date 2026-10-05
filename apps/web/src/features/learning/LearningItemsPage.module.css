@@ -304,3 +304,25 @@
   font-family: var(--font-zh);
   color: var(--text-primary);
 }
+
+/* Search with nothing found. */
+.noResults {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.noResultsTitle {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

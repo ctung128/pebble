@@ -5,6 +5,9 @@ import { CURRENT_SCHEMA_VERSION } from "@pebble/schema";
 import { renderWithProviders, testEpisode, testTranscript } from "../../test/fixtures.tsx";
 import { buildLearningItem } from "./buildLearningItem.ts";
 import { LearningItemsPage } from "./LearningItemsPage.tsx";
+
+const downloadText = vi.hoisted(() => vi.fn());
+vi.mock("../../lib/downloadText.ts", () => ({ downloadText }));
 import { MemoryLearningStore } from "./MemoryLearningStore.ts";
 
 async function storeWithItem() {
@@ -159,5 +162,126 @@ describe("LearningItemsPage", () => {
     await screen.findByText("第二句。");
     expect(screen.queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit note" })).toBeInTheDocument();
+  });
+
+  describe("search", () => {
+    /** Invented items across two episodes; one edited, one whose source was deleted. */
+    async function searchableStore() {
+      const store = new MemoryLearningStore();
+      const other = {
+        ...testEpisode,
+        id: "ep-bbbbbbbbbbbb",
+        title: "Other walk",
+        titleZh: undefined,
+      };
+      await store.putItem({
+        ...buildLearningItem({
+          episode: testEpisode,
+          transcript: testTranscript,
+          segment: testTranscript.segments[1]!,
+          correction: null,
+          pinyin: "dì èr jù。",
+          translation: "The second sentence.",
+          id: "item-second",
+        }),
+        note: "remember this one",
+      });
+      await store.putItem(
+        buildLearningItem({
+          episode: other,
+          transcript: { ...testTranscript, episodeId: other.id },
+          segment: testTranscript.segments[0]!,
+          correction: {
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            episodeId: other.id,
+            segmentId: "seg-1",
+            originalText: "第一句。",
+            correctedText: "第一句话。",
+            updatedAt: "2026-10-05T00:00:00Z",
+          },
+          pinyin: null,
+          translation: null,
+          id: "item-edited",
+        }),
+      );
+      await store.putItem({
+        ...buildLearningItem({
+          episode: { ...testEpisode, id: "ep-cccccccccccc", title: "Gone episode" },
+          transcript: { ...testTranscript, episodeId: "ep-cccccccccccc" },
+          segment: testTranscript.segments[2]!,
+          correction: null,
+          pinyin: null,
+          translation: null,
+          id: "item-gone",
+        }),
+        sourceDeletedAt: "2026-10-05T12:00:00.000Z",
+      });
+      return store;
+    }
+
+    async function renderSearch() {
+      renderWithProviders(<LearningItemsPage />, { store: await searchableStore() });
+      await screen.findByText("第二句。");
+      return screen.getByRole("searchbox", { name: "Search learning items" });
+    }
+    // Only the item cards and episode groups (not the Anki panel's steps or heading).
+    const groups = () => [...document.querySelectorAll('section[aria-labelledby^="group-"]')];
+    const cards = () =>
+      groups().flatMap((g) => [...g.querySelectorAll("li")].map((li) => li.textContent ?? ""));
+    const groupTitles = () => groups().map((g) => g.querySelector("h2")?.textContent);
+
+    it.each([
+      ["Chinese", "第二", "第二句。"],
+      ["pinyin without tone marks", "di er", "第二句。"],
+      ["English, any case", "SECOND SENTENCE", "第二句。"],
+      ["a note", "remember", "第二句。"],
+      ["the original of an edited line", "第一句。", "第一句话。"],
+      ["the episode title saved with it", "other walk", "第一句话。"],
+      ["a deleted source's saved title", "Gone episode", "第三句。"],
+    ])("finds an item by %s", async (_, query, chinese) => {
+      const field = await renderSearch();
+      await userEvent.type(field, query);
+      expect(cards()).toHaveLength(1);
+      expect(cards()[0]).toContain(chinese);
+    });
+
+    it("hides episode groups with no matches and counts what's shown", async () => {
+      const field = await renderSearch();
+      expect(groupTitles()).toHaveLength(3);
+      await userEvent.type(field, "second");
+      expect(groupTitles()).toHaveLength(1);
+      expect(screen.getAllByText("1 of 3 items")[0]).toBeInTheDocument();
+      expect(
+        await screen.findByText("1 of 3 items", { selector: "[role=status]" }, { timeout: 2000 }),
+      ).toBeInTheDocument();
+    });
+
+    it("doesn't search anything the item doesn't store", async () => {
+      const field = await renderSearch();
+      await userEvent.type(field, "测试节目"); // the source's current Chinese title, not on the item
+      expect(screen.getByText("No learning items match “测试节目”.")).toBeInTheDocument();
+      expect(cards()).toHaveLength(0);
+      // The × in the field and the button in the message do the same thing.
+      const [, inMessage] = screen.getAllByRole("button", { name: "Clear search" });
+      await userEvent.click(inMessage!);
+      expect(cards()).toHaveLength(3);
+    });
+
+    it("still exports every item while searching", async () => {
+      const field = await renderSearch();
+      await userEvent.type(field, "second");
+      await userEvent.click(screen.getByRole("button", { name: "Export CSV for Anki" }));
+      await waitFor(() => expect(downloadText).toHaveBeenCalled());
+      const csv = downloadText.mock.lastCall![1] as string;
+      expect(csv).toContain("第二句。");
+      expect(csv).toContain("第一句话。");
+      expect(csv).toContain("第三句。");
+    });
+
+    it("isn't offered when there are no items", async () => {
+      renderWithProviders(<LearningItemsPage />);
+      expect(await screen.findByText("No learning items yet")).toBeInTheDocument();
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    });
   });
 });

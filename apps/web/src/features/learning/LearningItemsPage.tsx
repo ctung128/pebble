@@ -4,9 +4,12 @@ import type { LearningItem } from "@pebble/schema";
 import { ConfirmButton } from "../../components/ConfirmButton.tsx";
 import { Icon } from "../../components/Icon.tsx";
 import { PageHeader } from "../../components/PageHeader.tsx";
+import { SearchField } from "../../components/SearchField.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
 import { useAsync } from "../../lib/useAsync.ts";
+import { foldForSearch, matchesQuery } from "../../lib/search.ts";
+import { useDebouncedAnnouncement } from "../../lib/useDebouncedAnnouncement.ts";
 import { itemSource } from "./ankiCsv.ts";
 import { AnkiExportPanel } from "./AnkiExportPanel.tsx";
 import { useLearning } from "./LearningContext.tsx";
@@ -35,11 +38,33 @@ function groupByEpisode(items: readonly LearningItem[]): EpisodeGroup[] {
   return [...groups.values()];
 }
 
+/**
+ * Whether an item matches a search, using only what the item itself stores: its Chinese (and
+ * original text, if edited), pinyin, English, note and the episode title saved with it.
+ * Accents and tone marks are ignored, so "tian" finds "tiān". Never anything else about the
+ * episode, deleted or not.
+ */
+function itemMatches(item: LearningItem, query: string): boolean {
+  return [item.text, item.originalText, item.pinyin, item.translation, item.note, item.episodeTitle]
+    .filter((field): field is string => typeof field === "string")
+    .some((field) => matchesQuery(field, query, foldForSearch));
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export function LearningItemsPage() {
   const { items, persistence } = useLearning();
-  const groups = useMemo(() => groupByEpisode(items), [items]);
+  const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
+  const found = useMemo(
+    () => (searching ? items.filter((item) => itemMatches(item, query)) : items),
+    [items, query, searching],
+  );
+  // Groups with no matches disappear with their items.
+  const groups = useMemo(() => groupByEpisode(found), [found]);
+  const resultCount = useDebouncedAnnouncement(
+    searching ? `${found.length} of ${plural(items.length, "item")}` : "",
+  );
   const chineseTitles = useChineseTitles();
 
   return (
@@ -48,7 +73,13 @@ export function LearningItemsPage() {
       <PageHeader
         title="Learning items"
         vertical="学习条目"
-        meta={persistence.mode === "loading" ? null : plural(items.length, "item")}
+        meta={
+          persistence.mode === "loading"
+            ? null
+            : searching
+              ? `${found.length} of ${plural(items.length, "item")}`
+              : plural(items.length, "item")
+        }
       />
 
       <div className={styles.columns}>
@@ -62,30 +93,49 @@ export function LearningItemsPage() {
               message="Save a line from any transcript (the bookmark button, or S) and it will appear here."
             />
           ) : (
-            groups.map((group) => (
-              <section
-                key={group.episodeId}
-                className={styles.group}
-                aria-labelledby={`group-${group.episodeId}`}
-              >
-                <div className={styles.groupHeading}>
-                  <h2 id={`group-${group.episodeId}`} className={styles.groupTitle}>
-                    {group.title}
-                    {chineseTitles.get(group.episodeId) ? (
-                      <span className={styles.groupTitleZh} lang="zh-CN">
-                        {chineseTitles.get(group.episodeId)}
-                      </span>
-                    ) : null}
-                  </h2>
-                  <span className={styles.groupCount}>{plural(group.items.length, "item")}</span>
+            <>
+              <SearchField
+                label="Search learning items"
+                placeholder="Search Chinese, pinyin, English or notes"
+                value={query}
+                onChange={setQuery}
+              />
+              <p className={styles.visuallyHidden} role="status" aria-live="polite">
+                {resultCount}
+              </p>
+              {found.length === 0 ? (
+                <div className={styles.noResults}>
+                  <p className={styles.noResultsTitle}>No learning items match “{query.trim()}”.</p>
+                  <button type="button" className={styles.secondary} onClick={() => setQuery("")}>
+                    Clear search
+                  </button>
                 </div>
-                <ul className={styles.list}>
-                  {group.items.map((item) => (
-                    <ItemCard key={item.id} item={item} />
-                  ))}
-                </ul>
-              </section>
-            ))
+              ) : null}
+              {groups.map((group) => (
+                <section
+                  key={group.episodeId}
+                  className={styles.group}
+                  aria-labelledby={`group-${group.episodeId}`}
+                >
+                  <div className={styles.groupHeading}>
+                    <h2 id={`group-${group.episodeId}`} className={styles.groupTitle}>
+                      {group.title}
+                      {chineseTitles.get(group.episodeId) ? (
+                        <span className={styles.groupTitleZh} lang="zh-CN">
+                          {chineseTitles.get(group.episodeId)}
+                        </span>
+                      ) : null}
+                    </h2>
+                    <span className={styles.groupCount}>{plural(group.items.length, "item")}</span>
+                  </div>
+                  <ul className={styles.list}>
+                    {group.items.map((item) => (
+                      <ItemCard key={item.id} item={item} />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </>
           )}
         </div>
 
