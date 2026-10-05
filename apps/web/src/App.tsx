@@ -8,7 +8,9 @@ import {
   useParams,
   type RouteObject,
 } from "react-router";
+import { useState } from "react";
 import { PlusIcon } from "./components/Icon.tsx";
+import { ShortcutSlotProvider } from "./components/ShellSlot.tsx";
 import { StatusView } from "./components/StatusView.tsx";
 import { StorageNotice } from "./components/StorageNotice.tsx";
 import { useLearning } from "./features/learning/LearningContext.tsx";
@@ -37,6 +39,7 @@ const LIBRARY_SECTION = /^\/(?:$|episodes\/|jobs\/)/;
 export function Layout({ mode }: { mode: AppMode }) {
   const { items } = useLearning();
   const { pathname } = useLocation();
+  const [shortcutSlot, setShortcutSlot] = useState<HTMLElement | null>(null);
   const chip = MODE_CHIP[mode];
   return (
     <div className={styles.shell}>
@@ -73,11 +76,15 @@ export function Layout({ mode }: { mode: AppMode }) {
             {items.length > 0 ? <span className={styles.count}>{items.length}</span> : null}
           </NavLink>
         </nav>
+        {/* The episode page renders its keyboard shortcuts here (ShortcutSlot). */}
+        <div ref={setShortcutSlot} className={styles.shortcuts} />
       </header>
       <div className={styles.column}>
         <StorageNotice />
         <main className={styles.main}>
-          <Outlet />
+          <ShortcutSlotProvider value={shortcutSlot}>
+            <Outlet />
+          </ShortcutSlotProvider>
         </main>
       </div>
     </div>

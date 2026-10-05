@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
-import { Layout, type AppMode } from "./App.tsx";
+import { EpisodeRoute, Layout, type AppMode } from "./App.tsx";
 import { buildLearningItem } from "./features/learning/buildLearningItem.ts";
 import { MemoryLearningStore } from "./features/learning/MemoryLearningStore.ts";
 import { renderWithProviders, testEpisode, testTranscript } from "./test/fixtures.tsx";
@@ -10,6 +10,7 @@ function renderShell(mode: AppMode, route = "/", store = new MemoryLearningStore
   return renderWithProviders(
     <Routes>
       <Route path="/" element={<Layout mode={mode} />}>
+        <Route path="episodes/:episodeId" element={<EpisodeRoute />} />
         <Route path="*" element={<h1>Page content</h1>} />
         <Route index element={<h1>Page content</h1>} />
       </Route>
@@ -85,5 +86,14 @@ describe("Layout", () => {
       "title",
       "Runs with Pebble's worker on this computer. Your audio stays here.",
     );
+  });
+
+  it("puts an episode's keyboard shortcuts in the sidebar, not the page", async () => {
+    renderShell("demo", "/episodes/test-001");
+    const shortcuts = await screen.findByRole("region", { name: "Keyboard shortcuts" });
+    const sidebar = screen.getByRole("navigation", { name: "Main" }).closest("header");
+    expect(sidebar).toContainElement(shortcuts);
+    expect(screen.getByRole("main")).not.toContainElement(shortcuts);
+    expect(shortcuts).toHaveTextContent("play/pause");
   });
 });

@@ -77,7 +77,16 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["text-primary", "bg-muted", TEXT], // secondary buttons
   ["text-primary", "bg-hover", TEXT],
   ["warning", "bg-page", TEXT], // placeholder and preview tags
-  ["text-primary", "warning-bg", TEXT], // worker problem body
+  ["text-primary", "warning-bg", TEXT], // worker problem body, preview banner
+  ["text-secondary", "warning-bg", TEXT], // preview banner note
+  ["text-primary", "bg-active", TEXT], // the current line
+  ["text-accent", "bg-active", TEXT], // its time
+  ["text-secondary", "bg-active", TEXT], // its pinyin
+  ["text-secondary", "bg-inset", TEXT], // line action glyphs
+  ["text-primary", "bg-inset", TEXT], // translation panel, keycaps
+  ["text-on-accent", "accent-hover", TEXT], // a pressed line action, hovered
+  ["accent", "bg-active", UI], // current-line marker
+  ["focus-ring", "bg-active", UI],
 ];
 
 describe.each(Object.entries(themes))("%s theme contrast", (_, theme) => {

@@ -72,15 +72,19 @@ export const SegmentRow = memo(function SegmentRow({
         onClick={() => actions.select(segment)}
       >
         <span className={styles.meta}>
+          {/* Always laid out, so times line up whether or not the line is current. */}
+          <span className={styles.marker} aria-hidden="true" />
           <span className={styles.time}>{time}</span>
+        </span>
+        <span className={styles.line}>
           {showSpeaker && segment.speaker ? (
             <span className={styles.speaker} aria-label={`Speaker ${segment.speaker}`}>
               {segment.speaker}
             </span>
           ) : null}
-        </span>
-        <span className={styles.text} lang={language} data-review={view.needsReview || undefined}>
-          {view.text}
+          <span className={styles.text} lang={language} data-review={view.needsReview || undefined}>
+            {view.text}
+          </span>
         </span>
       </button>
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, useSearchParams } from "react-router";
 import type { Transcript } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
+import { ShortcutSlot } from "../../components/ShellSlot.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
 import {
   describeSourceError,
@@ -331,56 +332,12 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
 
       <header className={styles.header}>
         <h1 className={styles.title}>{episode.title}</h1>
-        {episode.titleZh ? (
-          <p className={styles.titleZh} lang={transcript.language}>
-            {episode.titleZh}
-          </p>
-        ) : null}
-        <p className={styles.description}>{episode.description}</p>
-        <p className={styles.meta}>
-          {formatTime(episode.durationMs)} · {lineCount}
-        </p>
-      </header>
-
-      {/* Local-only: ASR transcripts exist only in local mode, so the demo build drops this. */}
-      {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr" ? (
-        <aside className={styles.sourceNote} aria-labelledby="asr-notice-heading">
-          <h2 id="asr-notice-heading" className={styles.sourceNoteHeading}>
-            {ASR_NOTICE_HEADING}
-          </h2>
-          <p>{ASR_NOTICE}</p>
-          <details className={styles.sourceNoteDetails}>
-            <summary>Transcript details</summary>
-            <p>{transcript.provenance.notes ?? `Created by ${transcript.provenance.provider}`}</p>
-          </details>
-        </aside>
-      ) : null}
-
-      {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
-        <aside className={styles.notice} aria-label="About this sample">
-          {isPlaceholderAudio ? (
-            <p>
-              <strong>Development placeholder.</strong> The audio is a synthetic voice reading an
-              original script. It is not a real podcast.
+        <div className={styles.titleRow}>
+          {episode.titleZh ? (
+            <p className={styles.titleZh} lang={transcript.language}>
+              {episode.titleZh}
             </p>
           ) : null}
-          {isAuthoredTranscript ? (
-            <p>
-              The transcript is the authored script with measured timings, not speech-recognition
-              output, so it doesn't reflect transcription accuracy.
-            </p>
-          ) : null}
-          {hasPreparedTranslations ? (
-            <p>Translations in this demo are prepared sample content.</p>
-          ) : null}
-        </aside>
-      ) : null}
-
-      <section aria-labelledby="transcript-heading">
-        <div className={styles.sectionHead}>
-          <h2 id="transcript-heading" className={styles.sectionTitle}>
-            Transcript
-          </h2>
           <div className={styles.toolbar}>
             <button
               type="button"
@@ -405,6 +362,51 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             </button>
           </div>
         </div>
+        <p className={styles.description}>{episode.description}</p>
+        <p className={styles.meta}>
+          {formatTime(episode.durationMs)} · {lineCount}
+        </p>
+      </header>
+
+      {/* Local-only: ASR transcripts exist only in local mode, so the demo build drops this. */}
+      {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr" ? (
+        <aside className={styles.sourceNote} aria-labelledby="asr-notice-heading">
+          <h2 id="asr-notice-heading" className={styles.sourceNoteHeading}>
+            {ASR_NOTICE_HEADING}
+          </h2>
+          <p>{ASR_NOTICE}</p>
+          <details className={styles.sourceNoteDetails}>
+            <summary>Transcript details</summary>
+            <p>{transcript.provenance.notes ?? `Created by ${transcript.provenance.provider}`}</p>
+          </details>
+        </aside>
+      ) : null}
+
+      {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
+        <aside className={styles.sourceNote} aria-label="About this sample">
+          {isPlaceholderAudio ? (
+            <p>
+              <strong>Development placeholder.</strong> The audio is a synthetic voice reading an
+              original script. It is not a real podcast.
+            </p>
+          ) : null}
+          {isAuthoredTranscript ? (
+            <p>
+              The transcript is the authored script with measured timings, not speech-recognition
+              output, so it doesn't reflect transcription accuracy.
+            </p>
+          ) : null}
+          {hasPreparedTranslations ? (
+            <p>Translations in this demo are prepared sample content.</p>
+          ) : null}
+        </aside>
+      ) : null}
+
+      <section aria-labelledby="transcript-heading">
+        {/* The display toggles sit in the header row; the heading keeps the outline. */}
+        <h2 id="transcript-heading" className={styles.visuallyHidden}>
+          Transcript
+        </h2>
         {learningLocked ? (
           <p id={LOCKED_HELP_ID} className={styles.help}>
             {LEARNING_LOCKED_MESSAGE}
@@ -434,23 +436,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           showTranslation={!translationHidden}
           showCopy={capabilities.copy}
         />
-        <p className={styles.keys} aria-label="Keyboard shortcuts">
-          <kbd>Space</kbd> play/pause · <kbd>R</kbd> replay · <kbd>←</kbd>
-          <kbd>→</kbd> previous/next
-          {learningLocked ? null : (
-            <>
-              {" "}
-              · <kbd>P</kbd> pinyin
-              {translationAvailable ? (
-                <>
-                  {" "}
-                  · <kbd>T</kbd> English
-                </>
-              ) : null}{" "}
-              · <kbd>S</kbd> save line
-            </>
-          )}
-        </p>
+        <ShortcutSlot>
+          <Shortcuts learningLocked={learningLocked} translationAvailable={translationAvailable} />
+        </ShortcutSlot>
       </section>
 
       {!isFollowing && activeIndex >= 0 ? (
@@ -463,6 +451,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       <audio ref={audioRef} src={episode.audioUrl} preload="metadata" crossOrigin="anonymous" />
       <PlayerBar
         player={player}
+        lineIndex={activeIndex}
+        lineCount={segments.length}
         canGoPrevious={activeIndex > 0}
         canGoNext={activeIndex < segments.length - 1}
         onPrevious={previous}
@@ -470,5 +460,44 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         onNext={next}
       />
     </article>
+  );
+}
+
+/** The keys that work on this page, as keycaps; P, T and S only where those tools work. */
+function Shortcuts({
+  learningLocked,
+  translationAvailable,
+}: {
+  learningLocked: boolean;
+  translationAvailable: boolean;
+}) {
+  const rows: [keys: string[], label: string][] = [
+    [["Space"], "play/pause"],
+    [["R"], "replay"],
+    [["←", "→"], "previous/next"],
+  ];
+  if (!learningLocked) {
+    rows.push([["P"], "pinyin"]);
+    if (translationAvailable) rows.push([["T"], "English"]);
+    rows.push([["S"], "save line"]);
+  }
+  return (
+    <section className={styles.shortcuts} aria-label="Keyboard shortcuts">
+      <p className={styles.shortcutsTitle} aria-hidden="true">
+        Shortcuts
+      </p>
+      <dl className={styles.shortcutList}>
+        {rows.map(([keys, label]) => (
+          <div key={label} className={styles.shortcut}>
+            <dt className={styles.keycaps}>
+              {keys.map((key) => (
+                <kbd key={key}>{key}</kbd>
+              ))}
+            </dt>
+            <dd>{label}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

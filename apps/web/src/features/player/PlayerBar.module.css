@@ -1,85 +1,112 @@
+/*
+ * Design system AudioPlayer: docked full width under the content column (never floating),
+ * rice-paper chrome with a hairline rule and no shadow; the inner row matches the column.
+ */
 .bar {
+  --thumb-width: 18px;
+  --thumb-height: 16px;
+  --track-height: 8px;
+
   position: fixed;
-  /* Docked under the content column, beside the sidebar (restyled in the player stage). */
   inset: auto 0 0 var(--sidebar-width);
   z-index: 10;
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-bar);
-  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  display: grid;
+  align-content: center;
+  min-height: var(--player-height);
+  padding: var(--space-3) var(--space-6) calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+  background: var(--bg-subtle);
 }
 
 .inner {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-6);
+  width: 100%;
   max-width: var(--content-width);
   margin: 0 auto;
 }
 
+/* --- Play/pause (the pebble) and line navigation --- */
+
 .controls {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
-.iconButton,
-.playButton {
+.playButton,
+.iconButton {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 50%;
-  color: var(--text);
-  background: transparent;
   cursor: pointer;
-}
-
-.iconButton {
-  width: 40px;
-  height: 40px;
-}
-
-.iconButton:hover:not(:disabled) {
-  background: var(--surface-2);
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
 
 .playButton {
-  width: 48px;
-  height: 48px;
-  margin: 0 var(--space-1);
+  width: var(--play-width);
+  height: 60px;
+  margin-right: var(--space-2);
+  border-radius: var(--shape-pebble);
   background: var(--accent);
-  color: var(--accent-contrast);
+  color: var(--text-on-accent);
 }
 
 .playButton:hover:not(:disabled) {
-  background: var(--accent-strong);
+  background: var(--accent-hover);
 }
 
-.iconButton:disabled,
-.playButton:disabled {
-  opacity: 0.35;
+.iconButton {
+  width: var(--transport);
+  height: var(--transport);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+/* Replay is used most, so it sits on a fill. */
+.replay {
+  background: var(--bg-muted);
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.playButton:disabled,
+.iconButton:disabled {
+  opacity: var(--opacity-disabled);
   cursor: default;
 }
 
+/* --- Progress --- */
+
 .timeline {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.times {
   display: flex;
-  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
-  min-width: 0;
-}
-
-.time {
-  font-size: var(--text-xs);
+  margin: 0;
+  font-size: var(--size-label);
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  min-width: 4ch;
+  color: var(--text-secondary);
 }
 
+.now {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* A real range input: track and thumb are restyled, behaviour is native. */
 .scrubber {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   height: 20px;
   margin: 0;
   appearance: none;
@@ -87,60 +114,103 @@
   cursor: pointer;
 }
 
+.scrubber:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
 .scrubber::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
+  height: var(--track-height);
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     to right,
     var(--accent) var(--progress),
-    var(--border-strong) var(--progress)
+    var(--border-subtle) var(--progress)
   );
 }
 
 .scrubber::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
+  height: var(--track-height);
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     to right,
     var(--accent) var(--progress),
-    var(--border-strong) var(--progress)
+    var(--border-subtle) var(--progress)
   );
 }
 
 .scrubber::-webkit-slider-thumb {
   appearance: none;
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  border-radius: 50%;
+  width: var(--thumb-width);
+  height: var(--thumb-height);
+  margin-top: calc((var(--track-height) - var(--thumb-height)) / 2);
+  border: 0;
+  border-radius: var(--shape-pebble-small);
   background: var(--accent);
-  border: 2px solid var(--surface);
+  box-shadow: var(--ring-thumb);
 }
 
 .scrubber::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  width: var(--thumb-width);
+  height: var(--thumb-height);
+  border: 0;
+  border-radius: var(--shape-pebble-small);
   background: var(--accent);
-  border: 2px solid var(--surface);
+  box-shadow: var(--ring-thumb);
 }
 
-.speed select {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-s);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--text-sm);
+/* --- Speed: exactly three choices; the selected one sits on a fill --- */
+
+.speed {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.speedOption {
+  display: grid;
+  place-items: center;
+  min-width: var(--control-md);
+  height: var(--control-md);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--size-body-sm);
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.speedOption:hover {
+  background: var(--bg-hover);
+}
+
+.speedOption:has(input:checked) {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* The radio itself is hidden; its label shows the focus. */
+.speedOption:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.speed:disabled .speedOption {
+  opacity: var(--opacity-disabled);
+  cursor: default;
 }
 
 .error {
+  width: 100%;
   max-width: var(--content-width);
   margin: var(--space-2) auto 0;
-  font-size: var(--text-sm);
-  color: var(--danger);
+  font-size: var(--size-body-sm);
+  color: var(--error);
 }
 
 .visuallyHidden {
@@ -155,9 +225,11 @@
 @media (max-width: 899px) {
   .bar {
     left: 0;
+    padding-inline: var(--space-4);
   }
 }
 
+/* Phones: progress takes the first row; controls and speed share the second. */
 @media (max-width: 560px) {
   .inner {
     grid-template-columns: 1fr auto;
@@ -167,5 +239,15 @@
   .timeline {
     grid-column: 1 / -1;
     grid-row: 1;
+  }
+
+  .controls {
+    gap: var(--space-1);
+  }
+
+  .playButton {
+    width: 56px;
+    height: 50px;
+    margin-right: var(--space-1);
   }
 }

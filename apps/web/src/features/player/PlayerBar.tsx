@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import { Icon } from "../../components/Icon.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import type { AudioPlayer } from "./useAudioPlayer.ts";
@@ -8,6 +8,9 @@ const SPEEDS = [0.75, 0.9, 1] as const;
 
 interface PlayerBarProps {
   player: AudioPlayer;
+  /** Index of the current line (-1 before the first), for "Line X of Y". */
+  lineIndex: number;
+  lineCount: number;
   canGoPrevious: boolean;
   canGoNext: boolean;
   onPrevious: () => void;
@@ -15,8 +18,14 @@ interface PlayerBarProps {
   onNext: () => void;
 }
 
+/**
+ * The docked player (design system AudioPlayer): play/pause as the pebble, then line
+ * navigation, the progress track and playback speed.
+ */
 export function PlayerBar({
   player,
+  lineIndex,
+  lineCount,
   canGoPrevious,
   canGoNext,
   onPrevious,
@@ -24,11 +33,22 @@ export function PlayerBar({
   onNext,
 }: PlayerBarProps) {
   const disabled = player.status === "error";
+  const speedName = useId();
 
   return (
     <div className={styles.bar} role="region" aria-label="Player">
       <div className={styles.inner}>
         <div className={styles.controls}>
+          <button
+            type="button"
+            className={styles.playButton}
+            onClick={player.toggle}
+            disabled={disabled}
+            aria-label={player.isPlaying ? "Pause" : "Play"}
+            title={player.isPlaying ? "Pause (Space)" : "Play (Space)"}
+          >
+            <Icon name={player.isPlaying ? "pause" : "play"} size={28} />
+          </button>
           <button
             type="button"
             className={styles.iconButton}
@@ -41,23 +61,13 @@ export function PlayerBar({
           </button>
           <button
             type="button"
-            className={styles.iconButton}
+            className={`${styles.iconButton} ${styles.replay}`}
             onClick={onReplay}
             disabled={disabled}
             aria-label="Replay current line"
             title="Replay current line (R)"
           >
             <Icon name="replay" />
-          </button>
-          <button
-            type="button"
-            className={styles.playButton}
-            onClick={player.toggle}
-            disabled={disabled}
-            aria-label={player.isPlaying ? "Pause" : "Play"}
-            title={player.isPlaying ? "Pause (Space)" : "Play (Space)"}
-          >
-            <Icon name={player.isPlaying ? "pause" : "play"} size={24} />
           </button>
           <button
             type="button"
@@ -72,7 +82,13 @@ export function PlayerBar({
         </div>
 
         <div className={styles.timeline}>
-          <span className={styles.time}>{formatTime(player.currentTimeMs)}</span>
+          <p className={styles.times}>
+            <span>
+              <span className={styles.now}>{formatTime(player.currentTimeMs)}</span>
+              {lineIndex >= 0 ? ` · Line ${lineIndex + 1} of ${lineCount}` : null}
+            </span>
+            <span>{formatTime(player.durationMs)}</span>
+          </p>
           <input
             type="range"
             className={styles.scrubber}
@@ -90,23 +106,24 @@ export function PlayerBar({
               } as CSSProperties
             }
           />
-          <span className={styles.time}>{formatTime(player.durationMs)}</span>
         </div>
 
-        <label className={styles.speed}>
-          <span className={styles.visuallyHidden}>Playback speed</span>
-          <select
-            value={player.playbackRate}
-            onChange={(event) => player.setPlaybackRate(Number(event.target.value))}
-            disabled={disabled}
-          >
-            {SPEEDS.map((speed) => (
-              <option key={speed} value={speed}>
-                {speed}×
-              </option>
-            ))}
-          </select>
-        </label>
+        <fieldset className={styles.speed} disabled={disabled}>
+          <legend className={styles.visuallyHidden}>Playback speed</legend>
+          {SPEEDS.map((speed) => (
+            <label key={speed} className={styles.speedOption}>
+              <input
+                type="radio"
+                className={styles.visuallyHidden}
+                name={speedName}
+                value={speed}
+                checked={player.playbackRate === speed}
+                onChange={() => player.setPlaybackRate(speed)}
+              />
+              {speed}×
+            </label>
+          ))}
+        </fieldset>
       </div>
 
       {player.errorMessage ? (

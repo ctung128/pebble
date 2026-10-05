@@ -155,6 +155,16 @@
   background: var(--bg-page);
 }
 
+/* --- Shortcuts (filled by the episode page), pinned to the bottom above a rule --- */
+
+.shortcuts {
+  margin-top: auto;
+}
+
+.shortcuts:empty {
+  display: none;
+}
+
 /* --- Under 900px: a top bar with the nav as a row --- */
 
 @media (max-width: 899px) {
@@ -207,6 +217,11 @@
 
   .navLink {
     justify-content: flex-start;
+  }
+
+  /* No keyboard to speak of on phones and tablets: the list goes. */
+  .shortcuts {
+    display: none;
   }
 
   .column {
