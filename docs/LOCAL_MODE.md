@@ -129,8 +129,9 @@ on 5173; both are in the worker's default origin allowlist.)
    30 s, then every 3 s, and pauses while the tab is hidden. Cancel and retry are available
    when the worker allows them. "Finished" appears only after the transcript has loaded and
    validated.
-4. **Your local audio.** The library lists every job with its status. Completed episodes open
-   in the transcript reader, with audio streamed from the worker. **Delete** asks for
+4. **Library.** The library lists every job with its status. A finished episode's row shows
+   its date, length and line count (a preview shows no line count) and opens the transcript
+   reader, with audio streamed from the worker. **Delete** asks for
    confirmation and permanently removes that episode's audio, sections, preview transcript and
    job record — nothing else.
 

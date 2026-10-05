@@ -1,3 +1,12 @@
+/**
+ * A known length, or null when it isn't one: never "0:00" for a missing value. m:ss under an
+ * hour, h:mm:ss from an hour (formatTime's rules).
+ */
+export function formatDuration(ms: number | null | undefined): string | null {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 1000) return null;
+  return formatTime(ms);
+}
+
 /** 75_000 → "1:15", 3_725_000 → "1:02:05". Invalid or negative input renders as "0:00". */
 export function formatTime(ms: number): string {
   const totalSeconds = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;

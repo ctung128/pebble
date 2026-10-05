@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import type { Job } from "@pebble/schema";
 import { ConfirmButton } from "../components/ConfirmButton.tsx";
+import { formatDuration } from "../lib/formatTime.ts";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { EpisodeRow, RowProgress, rowStyles } from "../features/library/EpisodeRow.tsx";
@@ -32,9 +33,9 @@ export function LocalLibraryPage() {
 
   return (
     <div className={styles.page}>
-      <title>Local library · Pebble</title>
+      <title>Library · Pebble</title>
       <PageHeader
-        title="Your local audio"
+        title="Library"
         vertical="书架"
         meta={ready && jobs && jobs.length > 0 ? librarySummary(jobs) : null}
       />
@@ -85,6 +86,38 @@ function librarySummary(jobs: readonly Job[]): string {
   return parts.join(" · ");
 }
 
+/**
+ * "Oct 5, 2026 · 12:48 · 214 lines": the date always, then, for a finished episode, its length
+ * and line count when the worker reports them (1.7; an older worker sends neither). A preview's
+ * lines are placeholder text, so it never shows a line count.
+ */
+function JobMeta({ job }: { job: Job }) {
+  const finished = job.status === "completed";
+  const duration = finished ? formatDuration(job.durationMs) : null;
+  const lines =
+    finished && job.provider.kind !== "mock" && job.lineCount !== undefined && job.lineCount > 0
+      ? `${job.lineCount} ${job.lineCount === 1 ? "line" : "lines"}`
+      : null;
+  const parts = [
+    new Date(job.createdAt).toLocaleDateString(undefined, CREATED_DATE),
+    duration,
+    lines,
+  ];
+  // One run of text: each part stays whole; lines break only between parts.
+  return (
+    <span>
+      {parts
+        .filter((part): part is string => part !== null)
+        .map((part, i) => (
+          <span key={part}>
+            {i > 0 ? " · " : ""}
+            <span className={rowStyles.metaItem}>{part}</span>
+          </span>
+        ))}
+    </span>
+  );
+}
+
 const CREATED_DATE: Intl.DateTimeFormatOptions = {
   year: "numeric",
   month: "short",
@@ -122,11 +155,7 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
       number={number}
       title={job.episodeTitle}
       href={completed ? `/episodes/${job.episodeId}` : undefined}
-      meta={
-        <span className={rowStyles.metaItem}>
-          {new Date(job.createdAt).toLocaleDateString(undefined, CREATED_DATE)}
-        </span>
-      }
+      meta={<JobMeta job={job} />}
       status={<JobStatus job={job} detailsLink={retryable} />}
       actions={
         <>

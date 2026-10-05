@@ -270,7 +270,8 @@ describe("LocalLibraryPage", () => {
     });
     const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed, running, failed]) });
     renderLocal(<LocalLibraryPage />, { client });
-    expect(screen.getByRole("heading", { level: 1, name: "Your local audio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Library" })).toBeInTheDocument();
+    expect(screen.queryByText("Your local audio")).not.toBeInTheDocument();
     expect(screen.queryByText(/01 — Library/)).not.toBeInTheDocument();
     expect(await screen.findByText("3 episodes · 1 processing · 1 stopped")).toBeInTheDocument();
   });
@@ -424,5 +425,63 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
     expect(screen.getByRole("alert")).not.toHaveTextContent(/Developer detail|uv sync|model\.pt/);
     expect(screen.queryByRole("list", { name: "Local audio" })).not.toBeInTheDocument();
     expect(listJobs).not.toHaveBeenCalled();
+  });
+
+  describe("row metadata (contract 1.7)", () => {
+    const finished = (overrides: Partial<Parameters<typeof makeJob>[0]> = {}) =>
+      makeJob({
+        ...asr,
+        id: "job-aaaaaaaaaaaa",
+        episodeId: "ep-aaaaaaaaaaaa",
+        episodeTitle: "Done",
+        status: "completed",
+        stage: "merging",
+        progress: { completedChunks: 2, totalChunks: 2 },
+        ...overrides,
+      });
+    async function rowFor(job: ReturnType<typeof makeJob>) {
+      renderLocal(<LocalLibraryPage />, {
+        client: fakeWorkerClient({
+          health: async () => ({ ok: true, data: funasrHealth() }),
+          listJobs: vi.fn(async () => [job]),
+        }),
+      });
+      const list = await screen.findByRole("list", { name: "Local audio" });
+      return within(list).getAllByRole("listitem")[0]!;
+    }
+
+    it("shows date · length · lines for a finished transcript", async () => {
+      const row = await rowFor(finished({ durationMs: 768_000, lineCount: 214 }));
+      expect(row.textContent).toMatch(/\b2026 · 12:48 · 214 lines/);
+    });
+
+    it("says 1 line, and h:mm:ss from an hour", async () => {
+      const row = await rowFor(finished({ durationMs: 4_935_000, lineCount: 1 }));
+      expect(row.textContent).toMatch(/2026 · 1:22:15 · 1 line(?!s)/);
+    });
+
+    it("never shows a line count for a preview", async () => {
+      const row = await rowFor(
+        finished({ provider: { id: "mock", kind: "mock" }, durationMs: 768_000, lineCount: 12 }),
+      );
+      expect(row).toHaveTextContent("· 12:48");
+      expect(row).not.toHaveTextContent(/lines?\b/);
+    });
+
+    it("shows only the date while processing or when an older worker sends nothing", async () => {
+      const going = makeJob({
+        ...asr,
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 1, totalChunks: 3 },
+        durationMs: 768_000,
+      });
+      expect((await rowFor(going)).textContent).not.toMatch(/12:48|0:00|lines?/);
+    });
+
+    it("leaves out a length and count the worker doesn't report (1.6)", async () => {
+      const row = await rowFor(finished());
+      expect(row.textContent).not.toMatch(/·|0:00|lines?/);
+    });
   });
 });
