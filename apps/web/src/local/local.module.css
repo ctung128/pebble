@@ -242,13 +242,6 @@
   margin-top: 0.3em;
 }
 
-.privacy {
-  margin: 0;
-  max-width: 60ch;
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
 .progress label {
   display: grid;
   gap: var(--space-1);

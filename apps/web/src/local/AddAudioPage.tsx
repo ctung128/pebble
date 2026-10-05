@@ -34,9 +34,6 @@ const UPLOAD_ERRORS: Record<string, string> = {
 };
 const UPLOAD_FAILED = "The upload didn't finish. Try again.";
 
-export const TITLE_HELP =
-  "This title appears in saved learning items and Anki exports. Rename it if the file name is sensitive.";
-
 export function AddAudioPage() {
   const { client, status, mode, recheck } = useWorker();
   const copy = LOCAL_COPY[mode ?? "mock"];
@@ -44,7 +41,6 @@ export function AddAudioPage() {
   const ids = {
     file: useId(),
     title: useId(),
-    titleHelp: useId(),
     owner: useId(),
     errors: useId(),
   };
@@ -100,7 +96,8 @@ export function AddAudioPage() {
         <p className={styles.lede}>{copy.uploadDescription}</p>
       </header>
 
-      <WorkerStatusCard status={status} onRecheck={recheck} />
+      {/* Only when something needs doing; a ready Pebble just shows the form. */}
+      <WorkerStatusCard status={status} onRecheck={recheck} showReady={false} />
 
       {status.kind === "ready" ? (
         <form className={styles.form} onSubmit={submit} noValidate aria-describedby={ids.errors}>
@@ -142,15 +139,11 @@ export function AddAudioPage() {
               maxLength={MAX_TITLE_LENGTH + 20}
               disabled={busy}
               aria-invalid={showErrors && problems.title ? true : undefined}
-              aria-describedby={ids.titleHelp}
               onChange={(event) => {
                 setTitle(event.target.value);
                 setTitleEdited(true);
               }}
             />
-            <p id={ids.titleHelp} className={styles.help}>
-              {TITLE_HELP}
-            </p>
             {showErrors && problems.title ? (
               <p className={styles.fieldError}>{problems.title}</p>
             ) : null}
@@ -170,11 +163,6 @@ export function AddAudioPage() {
           {showErrors && problems.owner ? (
             <p className={styles.fieldError}>{problems.owner}</p>
           ) : null}
-
-          <p className={styles.privacy}>
-            Your audio stays private on this computer. It's saved in Pebble's data folder here and
-            is never uploaded to the internet.
-          </p>
 
           <div id={ids.errors} aria-live="polite">
             {upload.kind === "uploading" ? (

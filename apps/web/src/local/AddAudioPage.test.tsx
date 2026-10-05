@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
-import { AddAudioPage, OWNERSHIP_LABEL, TITLE_HELP } from "./AddAudioPage.tsx";
+import { AddAudioPage, OWNERSHIP_LABEL } from "./AddAudioPage.tsx";
 import { WorkerError } from "./workerClient.ts";
 
 const audio = (name = "morning_walk.m4a", size = 3) =>
@@ -10,7 +10,7 @@ const audio = (name = "morning_walk.m4a", size = 3) =>
 
 async function renderReady(client = fakeWorkerClient()) {
   const view = renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
-  await screen.findByText("Processing preview is ready.");
+  await screen.findByRole("button", { name: "Run processing preview" });
   return view;
 }
 
@@ -30,7 +30,10 @@ describe("AddAudioPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run processing preview" })).toBeInTheDocument();
     // Private and local, without naming a folder path.
-    expect(screen.getByText(/stays private on this computer/)).not.toHaveTextContent(/~|\//);
+    // Just the form: no readiness line, title help or storage sentence.
+    expect(screen.queryByText(/is ready/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/stays private on this computer/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/appears in saved learning items/)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/transcribe audio|create transcript/i);
   });
 
@@ -53,11 +56,6 @@ describe("AddAudioPage", () => {
     await userEvent.upload(fileInput(), audio("morning_walk.m4a"));
     expect(titleInput()).toHaveValue("morning walk");
     expect(titleInput()).toBeEnabled();
-    expect(titleInput()).toHaveAccessibleDescription(TITLE_HELP);
-    expect(screen.getByText(TITLE_HELP)).toBeInTheDocument();
-    expect(TITLE_HELP).toBe(
-      "This title appears in saved learning items and Anki exports. Rename it if the file name is sensitive.",
-    );
     await userEvent.clear(titleInput());
     await userEvent.type(titleInput(), "My title");
     await userEvent.upload(fileInput(), audio("other.mp3"));
@@ -166,7 +164,7 @@ describe("AddAudioPage — local transcription (FunASR)", () => {
 
   async function renderFunasr(client = funasrClient()) {
     const view = renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
-    await screen.findByText("Local transcription is ready.");
+    await screen.findByRole("button", { name: "Create transcript" });
     return view;
   }
 
