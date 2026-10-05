@@ -1,0 +1,117 @@
+/* The title with a quiet pencil beside it; the pencil never competes with the title. */
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.line > h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pencil {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--line-action);
+  height: var(--line-action);
+  margin-top: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
+}
+
+.pencil:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+/* --- Inline rename --- */
+
+.form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.field {
+  width: 100%;
+  min-height: var(--control-md);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-hairline) solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--size-display-sm);
+}
+
+.field[aria-invalid="true"] {
+  box-shadow: var(--ring-error);
+}
+
+.problem {
+  margin: 0;
+  font-size: var(--size-body-sm);
+  color: var(--error);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.save,
+.cancel {
+  min-height: var(--line-action);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+/* A secondary tile: Add audio stays the only juniper fill. */
+.save {
+  background: var(--bg-active);
+  box-shadow: var(--ring-selected);
+  color: var(--text-primary);
+}
+
+.cancel {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.cancel:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.save:disabled,
+.cancel:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

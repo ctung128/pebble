@@ -16,6 +16,8 @@ import { useLearning } from "../learning/LearningContext.tsx";
 import { usePinyin } from "../pinyin/usePinyin.ts";
 import { PlayerBar } from "../player/PlayerBar.tsx";
 import { useAudioPlayer } from "../player/useAudioPlayer.ts";
+import { useEpisodeRename } from "./episodeRename.ts";
+import { EpisodeTitle } from "./EpisodeTitle.tsx";
 import { findActiveSegmentIndex } from "../reader/activeSegment.ts";
 import type { LineActions, LineView } from "../reader/lineView.ts";
 import { CopyFallback } from "../reader/CopyFallback.tsx";
@@ -108,6 +110,13 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const [originalShown, setOriginalShown] = useState<ReadonlySet<string>>(new Set());
   const [confirmUnsaveId, setConfirmUnsaveId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  // The title can change here (rename, local mode); everything else about the episode can't.
+  const [title, setTitle] = useState(episode.title);
+  const renamer = useEpisodeRename();
+  const onRename =
+    renamer && renamer.canRename(episode.id)
+      ? async (next: string) => setTitle(await renamer.rename(episode.id, next))
+      : undefined;
   // "Copy transcript": built only on click, kept only for the manual-copy fallback.
   const transcriptCopy = useCopyText();
   const [copiedTranscript, setCopiedTranscript] = useState("");
@@ -326,7 +335,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
 
   return (
     <article className={styles.page}>
-      <title>{`${episode.title} · Pebble`}</title>
+      <title>{`${title} · Pebble`}</title>
       {learningLocked ? (
         <div className={styles.previewBanner} role="note" aria-label="Preview transcript">
           <p>
@@ -341,7 +350,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       <BackLink />
 
       <header className={styles.header}>
-        <h1 className={styles.title}>{episode.title}</h1>
+        <EpisodeTitle title={title} className={styles.title} onRename={onRename} />
         <div className={styles.titleRow}>
           {episode.titleZh ? (
             <p className={styles.titleZh} lang={transcript.language}>

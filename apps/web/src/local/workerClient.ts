@@ -51,6 +51,8 @@ export interface WorkerClient {
   cancelJob(id: string): Promise<Job>;
   retryJob(id: string): Promise<Job>;
   deleteEpisode(episodeId: string): Promise<void>;
+  /** 1.7: changes only the episode's user-facing title; resolves with its job. */
+  renameEpisode(episodeId: string, title: string): Promise<Job>;
   upload(request: UploadRequest): Promise<Job>;
 }
 
@@ -103,6 +105,19 @@ export class HttpWorkerClient implements WorkerClient {
     await this.request(`episodes/${episodeId}`, { method: "DELETE" });
   }
 
+  async renameEpisode(episodeId: string, title: string): Promise<Job> {
+    if (!LOCAL_EPISODE_ID.test(episodeId)) {
+      throw new WorkerError("NOT_FOUND", "No such episode.", { status: 404 });
+    }
+    return validJob(
+      await this.request(`episodes/${episodeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }),
+    );
+  }
+
   upload({ file, title, ownershipConfirmed, onProgress, signal }: UploadRequest): Promise<Job> {
     return new Promise((resolve, reject) => {
       const xhr = this.createXhr();
@@ -145,7 +160,7 @@ export class HttpWorkerClient implements WorkerClient {
     try {
       response = await this.fetchImpl(new URL(path, this.baseUrl).href, {
         ...init,
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", ...(init.headers as Record<string, string>) },
       });
     } catch (cause) {
       throw unreachable(cause);

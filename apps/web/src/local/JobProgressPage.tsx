@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { Job } from "@pebble/schema";
 import { StatusView } from "../components/StatusView.tsx";
+import { useEpisodeRename } from "../features/episode/episodeRename.ts";
+import { EpisodeTitle } from "../features/episode/EpisodeTitle.tsx";
 import { useEpisodeSource } from "../data/SourceContext.tsx";
 import {
   canRetry,
@@ -33,6 +35,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
     error: null,
   });
   const [verification, setVerification] = useState<Verification>({ kind: "pending" });
+  const renamer = useEpisodeRename();
   // The reason a transcript couldn't be read stays out of the UI; the headline says what happened.
 
   // "Completed" is only shown once the transcript itself loads and validates.
@@ -104,7 +107,19 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
       <header className={styles.intro}>
         {/* "Creating your transcript…" only while that's true; the headline says when it's done. */}
         {isActive(job) ? <p className={styles.eyebrow}>{copy.progressEyebrow}</p> : null}
-        <h1 className={styles.heading}>{job.episodeTitle}</h1>
+        {/* Rename once nothing is processing (finished, failed or cancelled). */}
+        <EpisodeTitle
+          title={job.episodeTitle}
+          className={styles.heading}
+          onRename={
+            renamer && !isActive(job) && renamer.canRename(job.episodeId)
+              ? async (next) => {
+                  await renamer.rename(job.episodeId, next);
+                  restart(); // the job (and its title) is read again
+                }
+              : undefined
+          }
+        />
       </header>
 
       <section className={styles.jobCard} aria-labelledby="job-status" data-status={job.status}>

@@ -85,6 +85,9 @@ export function fakeWorkerClient(overrides: Partial<WorkerClient> = {}) {
     cancelJob: vi.fn(async () => makeJob({ status: "cancelled" })),
     retryJob: vi.fn(async () => makeJob({ attempt: 2 })),
     deleteEpisode: vi.fn(async () => undefined),
+    renameEpisode: vi.fn(async (_id: string, title: string) =>
+      makeJob({ episodeTitle: title, status: "completed", stage: "merging" }),
+    ),
     upload: vi.fn(async () => makeJob()),
     ...overrides,
   } satisfies WorkerClient;

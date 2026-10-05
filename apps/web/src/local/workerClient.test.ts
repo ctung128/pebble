@@ -46,6 +46,22 @@ describe("HttpWorkerClient (fetch)", () => {
     expect(error).toMatchObject({ code: "JOB_NOT_RETRYABLE", status: 409, hint: "Fix it." });
   });
 
+  it("renames with a JSON PATCH of the title only, for local episode ids only", async () => {
+    const fetchImpl = vi.fn(async () =>
+      json(makeJob({ episodeTitle: "New", status: "completed", stage: "merging" })),
+    );
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    expect((await errorFrom(client.renameEpisode("demo-001", "x"))).code).toBe("NOT_FOUND");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const job = await client.renameEpisode("ep-0123456789ab", "New");
+    expect(job.episodeTitle).toBe("New");
+    expect(fetchImpl).toHaveBeenCalledWith(`${BASE}/episodes/ep-0123456789ab`, {
+      method: "PATCH",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "New" }),
+    });
+  });
+
   it("never sends deletes for anything but a local episode id", async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
     const client = new HttpWorkerClient(BASE, { fetchImpl });

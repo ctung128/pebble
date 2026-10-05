@@ -5,6 +5,7 @@ import type { Job } from "@pebble/schema";
 import { fakeSource, testTranscript } from "../test/fixtures.tsx";
 import { fakeWorkerClient, JOB_ID, makeJob, renderLocal } from "../test/localFixtures.tsx";
 import { JobProgressRoute } from "./JobProgressPage.tsx";
+import { LocalRenameProvider } from "./LocalRenameProvider.tsx";
 
 function renderJob(jobs: Job[] | Job, options: { transcriptFails?: boolean } = {}) {
   const sequence = Array.isArray(jobs) ? jobs : [jobs];
@@ -178,5 +179,45 @@ describe("JobProgressPage — local transcription (FunASR)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Transcript ready");
     expect(screen.queryByText("Creating your transcript")).not.toBeInTheDocument(); // it's done
     expect(screen.queryByText(/preview/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("JobProgressPage — rename", () => {
+  const failed = makeJob({
+    status: "failed",
+    stage: "probing",
+    failure: {
+      stage: "probing",
+      code: "UNSUPPORTED_MEDIA",
+      message: "x",
+      retryable: false,
+      hint: null,
+    },
+  });
+
+  function renderWithRename(job: Job) {
+    const client = fakeWorkerClient({ getJob: vi.fn(async () => job) });
+    renderLocal(
+      <LocalRenameProvider>
+        <JobProgressRoute />
+      </LocalRenameProvider>,
+      { client, path: "/jobs/:jobId", route: `/jobs/${JOB_ID}` },
+    );
+    return client;
+  }
+
+  it("renames a failed episode from its processing page", async () => {
+    const client = renderWithRename(failed);
+    await userEvent.click(await screen.findByRole("button", { name: "Rename episode" }));
+    const field = screen.getByRole("textbox", { name: "Episode title" });
+    await userEvent.clear(field);
+    await userEvent.type(field, "Broken clip{Enter}");
+    expect(client.renameEpisode).toHaveBeenCalledWith(failed.episodeId, "Broken clip");
+  });
+
+  it("offers no rename while the episode is processing", async () => {
+    renderWithRename(makeJob({ status: "running", stage: "normalizing" }));
+    expect(await screen.findByText("Preparing audio…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename episode" })).not.toBeInTheDocument();
   });
 });

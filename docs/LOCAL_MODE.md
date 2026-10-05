@@ -91,8 +91,9 @@ Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which comm
 
 **File names stay private.** The reader and library show your **Episode title** and "Local
 audio", never the audio's file name. The title starts as the file name and is editable before
-processing, and can be renamed later (`PATCH /episodes/{id}`, 1.7) once the episode isn't
-processing. Renaming changes only that title: the audio file, its name and location, and the
+processing, and can be renamed later with the pencil beside the title (on the episode page,
+or on the processing page for a failed or cancelled episode; `PATCH /episodes/{id}`, 1.7) once
+the episode isn't processing. Renaming changes only that title: the audio file, its name and location, and the
 transcript are untouched, and learning items already saved keep the title they were saved
 with. The worker keeps the original file name only in its private database and
 never returns it from the API or writes it to its log.
