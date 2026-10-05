@@ -1,0 +1,43 @@
+/* Design system FilterTabs look (34px, radius-md, counts), as toggle buttons. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.filter {
+  display: inline-flex;
+  align-items: baseline; /* label and count share a baseline */
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--size-body-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.filter:hover:not(:disabled) {
+  background: var(--bg-muted);
+}
+
+.filter[aria-pressed="true"] {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.filter:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.count {
+  font-size: var(--size-label);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}

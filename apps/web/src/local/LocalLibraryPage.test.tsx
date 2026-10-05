@@ -657,4 +657,131 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
       expect(await rowWith(unknown, position())).not.toHaveTextContent(/1:00 of/);
     });
   });
+
+  describe("filters", () => {
+    const at = (id: string, extra: Partial<Parameters<typeof makeJob>[0]> = {}) =>
+      makeJob({
+        ...asr,
+        id: `job-${id.repeat(12)}`,
+        episodeId: `ep-${id.repeat(12)}`,
+        episodeTitle: `Episode ${id}`,
+        status: "completed",
+        stage: "merging",
+        durationMs: 600_000,
+        lineCount: 10,
+        ...extra,
+      });
+    const failure = { stage: "probing" as const, message: "x", retryable: true, hint: null };
+    const jobs = [
+      at("a"), // finished processing, never played: not started
+      at("b"), // in progress
+      at("c"), // finished listening
+      at("d", {
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 1, totalChunks: 2 },
+        lineCount: undefined,
+      }),
+      at("e", {
+        status: "failed",
+        stage: "probing",
+        failure: { ...failure, code: "UNSUPPORTED_MEDIA" },
+        lineCount: undefined,
+      }),
+      at("f", {
+        status: "cancelled",
+        stage: "probing",
+        failure: { ...failure, code: "CANCELLED" },
+        lineCount: undefined,
+      }),
+      at("0", { durationMs: undefined }), // an older worker: progress can't be checked
+    ];
+    const saved = (id: string, extra: Record<string, unknown> = {}) => ({
+      episodeId: `ep-${id.repeat(12)}`,
+      positionMs: 120_000,
+      durationMs: 600_000,
+      updatedAt: "2026-10-05T12:00:00.000Z",
+      finishedAt: null,
+      ...extra,
+    });
+
+    async function renderFiltered(options: { loading?: boolean; list?: typeof jobs } = {}) {
+      const store = new MemoryLearningStore();
+      await store.putPlayback(saved("b"));
+      await store.putPlayback(
+        saved("c", { positionMs: 600_000, finishedAt: "2026-10-05T12:30:00.000Z" }),
+      );
+      await store.putPlayback(saved("0"));
+      renderLocal(<LocalLibraryPage />, {
+        store,
+        openStore: options.loading ? () => new Promise(() => {}) : undefined,
+        client: fakeWorkerClient({
+          health: async () => ({ ok: true, data: funasrHealth() }),
+          listJobs: vi.fn(async () => options.list ?? jobs),
+        }),
+      });
+      await screen.findByRole("list", { name: "Local audio" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const group = () => screen.getByRole("group", { name: "Filter episodes" });
+    const button = (name: RegExp) => within(group()).getByRole("button", { name });
+    const titles = () =>
+      within(screen.getByRole("list", { name: "Local audio" }))
+        .getAllByRole("listitem")
+        .map((row) => /Episode (\w)/.exec(row.textContent ?? "")?.[1]);
+
+    it("offers All, Not started, In progress and Finished as toggle buttons with counts", async () => {
+      await renderFiltered();
+      const labels = within(group())
+        .getAllByRole("button")
+        .map((b) => b.textContent);
+      expect(labels).toEqual(["All7", "Not started1", "In progress1", "Finished1"]);
+      expect(button(/^All/)).toHaveAttribute("aria-pressed", "true");
+      expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    });
+
+    it("filters by real listening state, for finished-processing episodes only", async () => {
+      await renderFiltered();
+      await userEvent.click(button(/^Not started/));
+      expect(button(/^Not started/)).toHaveAttribute("aria-pressed", "true");
+      expect(titles()).toEqual(["a"]); // not d/e/f (not finished processing) or 0 (no length)
+      await userEvent.click(button(/^In progress/));
+      expect(titles()).toEqual(["b"]);
+      await userEvent.click(button(/^Finished/));
+      expect(titles()).toEqual(["c"]);
+      await userEvent.click(button(/^All/));
+      expect(titles()).toEqual(["a", "b", "c", "d", "e", "f", "0"]);
+    });
+
+    it("hides filters with nothing in them, except All", async () => {
+      await renderFiltered({ list: [jobs[0]!, jobs[3]!] });
+      const labels = within(group())
+        .getAllByRole("button")
+        .map((b) => b.textContent);
+      expect(labels).toEqual(["All2", "Not started1"]);
+    });
+
+    it("turns listening filters off while browser storage is loading", async () => {
+      await renderFiltered({ loading: true });
+      expect(button(/^All/)).toBeEnabled();
+      for (const b of within(group()).getAllByRole("button").slice(1)) expect(b).toBeDisabled();
+    });
+
+    it("counts within the current search, and offers a way out of an empty result", async () => {
+      await renderFiltered();
+      await userEvent.click(button(/^In progress/));
+      await userEvent.type(screen.getByRole("searchbox", { name: "Search episodes" }), "Episode b");
+      expect(titles()).toEqual(["b"]);
+      expect(
+        within(group())
+          .getAllByRole("button")
+          .map((b) => b.textContent),
+      ).toEqual(["All1", "In progress1"]);
+      await userEvent.clear(screen.getByRole("searchbox", { name: "Search episodes" }));
+      await userEvent.type(screen.getByRole("searchbox", { name: "Search episodes" }), "Episode a");
+      expect(screen.getByText("No episodes match “Episode a”.")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Show all" }));
+      expect(titles()).toEqual(["a"]);
+    });
+  });
 });

@@ -110,6 +110,8 @@ interface LocalRenderOptions {
   source?: EpisodeSource;
   path?: string;
   route?: string;
+  /** Overrides how browser storage opens (e.g. never, to test the loading state). */
+  openStore?: () => Promise<MemoryLearningStore>;
 }
 
 /** Renders a local-mode page inside the worker, source, translation and learning providers. */
@@ -121,7 +123,7 @@ export function renderLocal(ui: ReactNode, options: LocalRenderOptions = {}) {
     <WorkerProvider client={client}>
       <SourceProvider source={options.source ?? fakeSource()}>
         <TranslationProviderContext provider={translation}>
-          <LearningProvider openStore={() => Promise.resolve(store)}>
+          <LearningProvider openStore={options.openStore ?? (() => Promise.resolve(store))}>
             <MemoryRouter initialEntries={[options.route ?? "/"]}>
               <Routes>
                 <Route path={options.path ?? "/"} element={ui} />

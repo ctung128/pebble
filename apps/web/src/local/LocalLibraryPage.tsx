@@ -23,6 +23,12 @@ import { LOCAL_EPISODE_ID, WorkerError } from "./workerClient.ts";
 import { useLearning } from "../features/learning/LearningContext.tsx";
 import { useWorker } from "./WorkerContext.tsx";
 import { WorkerStatusCard } from "./WorkerStatusCard.tsx";
+import {
+  emptyMessage,
+  LibraryFilters,
+  listeningFilterOf,
+  type LibraryFilter,
+} from "./LibraryFilters.tsx";
 import styles from "./local.module.css";
 
 export const DELETE_PROMPT =
@@ -33,15 +39,28 @@ export function LocalLibraryPage() {
   const ready = status.kind === "ready";
   const { jobs, error, refresh } = useJobList(client, ready);
   const announcement = useJobAnnouncements(jobs);
+  const { playbackFor, persistence } = useLearning();
   const [query, setQuery] = useState("");
+  const [chosenFilter, setFilter] = useState<LibraryFilter>("all");
+  // Listening filters wait for browser storage; until then only All is honest.
+  const listeningReady = persistence.mode !== "loading";
+  const filter = listeningReady ? chosenFilter : "all";
   // Titles only: never file names, paths, transcripts, notes or anything else.
-  const shown = useMemo(
+  const searched = useMemo(
     () => (jobs ?? []).filter((job) => matchesQuery(job.episodeTitle, query)),
     [jobs, query],
   );
+  const stateOf = (job: Job) => listeningFilterOf(job, playbackFor(job.episodeId));
+  const counts: Record<LibraryFilter, number> = {
+    all: searched.length,
+    "not-started": searched.filter((job) => stateOf(job) === "not-started").length,
+    "in-progress": searched.filter((job) => stateOf(job) === "in-progress").length,
+    finished: searched.filter((job) => stateOf(job) === "finished").length,
+  };
+  const shown = filter === "all" ? searched : searched.filter((job) => stateOf(job) === filter);
   const searching = query.trim() !== "";
   const resultCount = useDebouncedAnnouncement(
-    searching && jobs ? `${shown.length} of ${jobs.length} episodes` : "",
+    (searching || filter !== "all") && jobs ? `${shown.length} of ${jobs.length} episodes` : "",
   );
 
   return (
@@ -80,16 +99,37 @@ export function LocalLibraryPage() {
               value={query}
               onChange={setQuery}
             />
+            <LibraryFilters
+              value={filter}
+              onChange={setFilter}
+              counts={counts}
+              listeningReady={listeningReady}
+            />
             {shown.length === 0 ? (
               <div className={styles.noResults}>
-                <p className={styles.noResultsTitle}>No episodes match “{query.trim()}”.</p>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => setQuery("")}
-                >
-                  Clear search
-                </button>
+                <p className={styles.noResultsTitle}>
+                  {searching ? `No episodes match “${query.trim()}”.` : emptyMessage(filter)}
+                </p>
+                <div className={styles.actions}>
+                  {searching ? (
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => setQuery("")}
+                    >
+                      Clear search
+                    </button>
+                  ) : null}
+                  {filter !== "all" ? (
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => setFilter("all")}
+                    >
+                      Show all
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <ol className={rowStyles.list} aria-label="Local audio">
