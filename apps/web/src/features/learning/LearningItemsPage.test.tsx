@@ -75,12 +75,13 @@ describe("LearningItemsPage", () => {
     expect(await screen.findByText("第二句。")).toBeInTheDocument();
     expect(screen.getByText("dì èr jù。")).toBeInTheDocument();
     expect(screen.getByText("The second sentence.")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("kept note")).toBeInTheDocument();
+    expect(screen.getByText("kept note")).toBeInTheDocument();
     expect(screen.getByText("Source deleted")).toBeInTheDocument();
     expect(screen.getByText(SOURCE_DELETED_HELP)).toBeInTheDocument();
     expect(screen.getByText(/Test episode · 0:03/)).toBeInTheDocument();
     expect(screen.queryByText(/· source deleted/)).not.toBeInTheDocument(); // the badge says it
     expect(screen.queryByRole("link", { name: /Test episode/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Go to line" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export CSV for Anki" })).toBeEnabled();
   });
 
@@ -105,7 +106,11 @@ describe("LearningItemsPage", () => {
   it("edits and saves a note", async () => {
     const store = await storeWithItem();
     renderWithProviders(<LearningItemsPage />, { store });
-    const note = await screen.findByRole("textbox", { name: "Note" });
+    const edit = await screen.findByRole("button", { name: "Edit note" });
+    expect(screen.queryByRole("textbox", { name: "Note" })).not.toBeInTheDocument();
+    await userEvent.click(edit);
+    expect(edit).toHaveAttribute("aria-expanded", "true");
+    const note = screen.getByRole("textbox", { name: "Note" });
     const save = screen.getByRole("button", { name: "Save note" });
     expect(save).toBeDisabled();
     await userEvent.type(note, "第二 = second{Enter}heard twice");
@@ -125,5 +130,34 @@ describe("LearningItemsPage", () => {
     await userEvent.click(within(card).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText("No learning items yet")).toBeInTheDocument();
     await waitFor(async () => expect(await store.listItems()).toEqual([]));
+  });
+
+  it("groups items under their episode with its Chinese title and a count", async () => {
+    renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
+    expect(screen.getByRole("heading", { level: 1, name: "Learning items" })).toBeInTheDocument();
+    expect(screen.getByText("02 — Learning items")).toBeInTheDocument();
+    const group = await screen.findByRole("region", { name: /Test episode/ });
+    expect(within(group).getByRole("heading", { level: 2 })).toHaveTextContent("Test episode");
+    expect(await within(group).findByText("测试节目")).toHaveAttribute("lang", "zh-CN");
+    expect(within(group).getByText("1 item")).toBeInTheDocument();
+  });
+
+  it("offers Go to line, which cues the line in its episode", async () => {
+    renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
+    expect(await screen.findByRole("link", { name: "Go to line" })).toHaveAttribute(
+      "href",
+      "/episodes/test-001?segment=seg-2",
+    );
+  });
+
+  it("copies the Chinese text only, with the reader's confirmation", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Copy Chinese text for this line" }),
+    );
+    expect(writeText).toHaveBeenCalledWith("第二句。");
+    expect(await screen.findByText("Copied")).toHaveAttribute("role", "status");
   });
 });

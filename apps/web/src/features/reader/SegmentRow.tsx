@@ -3,7 +3,8 @@ import type { Segment } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import { CorrectionEditor } from "../corrections/CorrectionEditor.tsx";
-import { COPY_FAILED, COPY_HELP, COPY_LABEL, useCopyText } from "./copyText.ts";
+import { CopyFallback } from "./CopyFallback.tsx";
+import { COPY_HELP, COPY_LABEL, useCopyText } from "./copyText.ts";
 import type { LineActions, LineView } from "./lineView.ts";
 import styles from "./TranscriptReader.module.css";
 
@@ -267,42 +268,3 @@ export const SegmentRow = memo(function SegmentRow({
     </div>
   );
 });
-
-/** Shown when the clipboard refuses: the line, selected, ready for ⌘C / Ctrl+C. */
-function CopyFallback({
-  text,
-  language,
-  onClose,
-}: {
-  text: string;
-  language: string;
-  onClose: () => void;
-}) {
-  const field = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    field.current?.focus();
-    field.current?.select();
-  }, []);
-  return (
-    <div className={styles.copyFallback}>
-      <p aria-live="polite">{COPY_FAILED}</p>
-      <div className={styles.copyFallbackRow}>
-        <input
-          ref={field}
-          className={styles.copyField}
-          readOnly
-          value={text}
-          lang={language}
-          aria-label="Chinese text for this line"
-          onFocus={(event) => event.currentTarget.select()}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") onClose();
-          }}
-        />
-        <button type="button" className={styles.link} onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </div>
-  );
-}

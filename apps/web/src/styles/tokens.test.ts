@@ -86,6 +86,9 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["text-primary", "bg-inset", TEXT], // translation panel, keycaps
   ["text-on-accent", "accent-hover", TEXT], // a pressed line action, hovered
   ["accent", "bg-active", UI], // current-line marker
+  ["text-accent", "bg-subtle", TEXT], // source link on a learning item card
+  ["error", "bg-subtle", TEXT], // Delete on a learning item card
+  ["border-control", "bg-inset", UI], // the note field inside its panel
   ["focus-ring", "bg-active", UI],
 ];
 

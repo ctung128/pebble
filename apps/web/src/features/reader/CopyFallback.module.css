@@ -1,0 +1,41 @@
+/* Shown when the clipboard refuses: the line, selected, ready to copy by hand. */
+.copyFallback {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--size-body-sm);
+  color: var(--text-secondary);
+}
+
+.copyFallback p {
+  margin: 0;
+}
+
+.copyFallbackRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.copyField {
+  min-width: min(28rem, 100%);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width-hairline) solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-zh);
+  font-size: var(--size-body);
+}
+
+.close {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
