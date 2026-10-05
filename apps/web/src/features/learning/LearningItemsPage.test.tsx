@@ -148,12 +148,13 @@ describe("LearningItemsPage", () => {
     expect(within(group).getByText("1 item")).toBeInTheDocument();
   });
 
-  it("offers Go to line, which cues the line in its episode", async () => {
+  it("links back to the line through its source, with no separate Go to line", async () => {
     renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
-    expect(await screen.findByRole("link", { name: "Go to line" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: /Test episode · 0:03/ })).toHaveAttribute(
       "href",
       "/episodes/test-001?segment=seg-2",
     );
+    expect(screen.queryByRole("link", { name: "Go to line" })).not.toBeInTheDocument();
   });
 
   it("has no copy action on cards (copying lives in the reader)", async () => {

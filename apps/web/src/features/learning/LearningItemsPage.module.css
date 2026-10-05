@@ -166,12 +166,6 @@
   color: var(--text-on-accent);
 }
 
-/* "Go to line": the back chevron, pointing forward. */
-.goGlyph {
-  display: grid;
-  transform: scaleX(-1);
-}
-
 .deleteSlot {
   margin-left: auto;
 }

@@ -180,13 +180,6 @@ function ItemCard({ item }: { item: LearningItem }) {
   return (
     <li className={styles.card}>
       <div className={styles.tools}>
-        {item.sourceDeletedAt ? null : (
-          <Link to={lineHref} className={styles.tool} aria-label="Go to line" title="Go to line">
-            <span className={styles.goGlyph}>
-              <Icon name="back" size={18} />
-            </span>
-          </Link>
-        )}
         <button
           type="button"
           className={styles.tool}
