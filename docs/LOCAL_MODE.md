@@ -91,8 +91,10 @@ Pebble defaults to 127.0.0.1:8790 to avoid conflict with AnkiConnect, which comm
 
 **File names stay private.** The reader and library show your **Episode title** and "Local
 audio", never the audio's file name. The title starts as the file name and is editable before
-processing; it is what saved learning items and Anki exports carry, so rename it if the file
-name is sensitive. The worker keeps the original file name only in its private database and
+processing, and can be renamed later (`PATCH /episodes/{id}`, 1.7) once the episode isn't
+processing. Renaming changes only that title: the audio file, its name and location, and the
+transcript are untouched, and learning items already saved keep the title they were saved
+with. The worker keeps the original file name only in its private database and
 never returns it from the API or writes it to its log.
 
 Local mode is a separate build of the web app; the public demo never contains it. In two
@@ -301,6 +303,7 @@ a sentence without an end time): that `PROVIDER_ERROR` is not retryable. See
 | `GET /episodes/{id}`               | One ready episode                                                    |
 | `GET /episodes/{id}/audio`         | The source audio, with HTTP Range support for seeking                |
 | `GET /episodes/{id}/transcript`    | The validated transcript                                             |
+| `PATCH /episodes/{id}`             | `{ "title" }` → `{ job }` (1.7): rename the user-facing title only   |
 | `DELETE /episodes/{id}`            | Remove an episode and all its files                                  |
 | `GET /jobs`, `GET /jobs/{id}`      | Job status (poll while processing)                                   |
 | `POST /jobs/{id}/cancel`, `/retry` | Cancel or retry                                                      |

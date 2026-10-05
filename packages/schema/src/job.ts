@@ -56,6 +56,10 @@ export const JobSchema = z
     provider: z.object({ id: z.string().min(1), kind: z.enum(["mock", "asr"]) }),
     createdAt: IsoDateTimeSchema,
     updatedAt: IsoDateTimeSchema,
+    /** 1.7: the audio's measured length in ms, once known. Absent while unknown. */
+    durationMs: z.number().int().positive().optional(),
+    /** 1.7: how many transcript lines a completed job produced. Absent otherwise. */
+    lineCount: z.number().int().nonnegative().optional(),
   })
   .superRefine((job, ctx) => {
     if (job.progress && job.progress.completedChunks > job.progress.totalChunks) {

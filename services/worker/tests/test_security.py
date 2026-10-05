@@ -116,6 +116,24 @@ def test_preflight_from_allowlisted_origin(client):
     assert "DELETE" in response.headers["access-control-allow-methods"]
 
 
+def test_preflight_allows_rename_from_the_allowlisted_origin(client):
+    response = client.options(
+        "/episodes/ep-0123456789ab",
+        headers={"Origin": ALLOWED_ORIGIN, "Access-Control-Request-Method": "PATCH"},
+    )
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
+def test_rename_from_another_origin_is_refused(client):
+    response = client.patch(
+        "/episodes/ep-0123456789ab",
+        headers={"Origin": "http://evil.example"},
+        json={"title": "x"},
+    )
+    assert response.status_code == 403
+
+
 def test_preflight_from_other_origin_is_rejected(client):
     response = client.options(
         "/jobs", headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "POST"}

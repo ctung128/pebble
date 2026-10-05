@@ -4,7 +4,7 @@
  * a different major is rejected as unsupported.
  */
 export const SUPPORTED_MAJOR = 1;
-export const CURRENT_SCHEMA_VERSION = "1.6";
+export const CURRENT_SCHEMA_VERSION = "1.7";
 
 const VERSION_PATTERN = /^(\d+)\.(\d+)$/;
 

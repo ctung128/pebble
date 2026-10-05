@@ -17,6 +17,7 @@ from test_funasr_provider import SPECS, install_models
 from pebble_worker.checks import port_state, run_checks
 from pebble_worker.cli import main
 from pebble_worker.config import Settings
+from pebble_worker.contract import CURRENT_SCHEMA_VERSION
 from pebble_worker.errors import ConfigError
 from pebble_worker.health import check_health
 from pebble_worker.models.verify import model_dir
@@ -170,7 +171,7 @@ def test_health_reports_the_instance_id_only_when_set(tmp_path):
     assert "instanceId" not in plain
     nonce = "0123456789abcdef0123456789abcdef"
     tagged = check_health(Settings(data_dir=storage.root, instance_id=nonce), storage, []).dump()
-    assert tagged["instanceId"] == nonce and tagged["schemaVersion"] == "1.6"
+    assert tagged["instanceId"] == nonce and tagged["schemaVersion"] == CURRENT_SCHEMA_VERSION
 
 
 @pytest.mark.parametrize("bad", ["short", "0123456789ABCDEF0123456789ABCDEF", "x" * 32])

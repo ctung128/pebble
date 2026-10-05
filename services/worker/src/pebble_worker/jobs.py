@@ -201,7 +201,10 @@ class JobService:
 
 
 _JOB_SELECT = """
-    SELECT j.*, e.title AS episode_title FROM jobs j JOIN episodes e ON e.id = j.episode_id
+    SELECT j.*, e.title AS episode_title, e.duration_ms AS duration_ms,
+           (SELECT json_array_length(t.body, '$.segments') FROM transcripts t
+             WHERE t.episode_id = j.episode_id) AS line_count
+    FROM jobs j JOIN episodes e ON e.id = j.episode_id
 """
 
 
@@ -223,6 +226,11 @@ def _to_contract(row: sqlite3.Row) -> Job:
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
+    # 1.7, additive: only real values (a 0 or missing duration is unknown, not "0:00").
+    if row["duration_ms"]:
+        payload["durationMs"] = row["duration_ms"]
+    if row["status"] == "completed" and row["line_count"] is not None:
+        payload["lineCount"] = row["line_count"]
     return require_valid(parse_job(payload))
 
 

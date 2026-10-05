@@ -247,3 +247,130 @@ def test_display_path_abbreviates_home():
 
     assert display_path(Path.home() / ".pebble") == "~/.pebble"
     assert display_path(Path("/Volumes/Archive/pebble")) == "/Volumes/Archive/pebble"
+
+
+# --- Rename (1.7) ---------------------------------------------------------------------------
+
+
+#: Invented. Chinese and Latin punctuation must survive a rename untouched.
+PUNCTUATED = "第二期：慢慢听 — Part 2 (rev. #3)!"  # noqa: RUF001 — the full-width colon is the point
+
+
+def _source_state(settings, episode_id: str) -> dict:
+    """Every file under the episode's folder, with size and modification time."""
+    root = settings.data_dir / "episodes" / episode_id
+    return {
+        str(path.relative_to(root)): (path.stat().st_size, path.stat().st_mtime_ns)
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and "work" not in path.relative_to(root).parts
+    }
+
+
+def test_rename_changes_only_the_user_facing_title(make_client, settings, audio, tmp_path):
+    import shutil
+    import sqlite3
+
+    named = tmp_path / f"{INVENTED_FILENAME}{audio['short'].suffix}"
+    shutil.copy(audio["short"], named)
+    client = make_client()
+    job = wait_for_job(client, upload(client, named, title="First title")["body"]["job"]["id"])
+    episode_id = job["episodeId"]
+    before = _source_state(settings, episode_id)
+    with sqlite3.connect(settings.data_dir / "pebble.db") as db:
+        stored_before = db.execute(
+            "SELECT original_filename, source_path FROM episodes WHERE id = ?", (episode_id,)
+        ).fetchone()
+
+    response = client.patch(f"/episodes/{episode_id}", json={"title": f"  {PUNCTUATED}  "})
+    assert response.status_code == 200
+    body = response.json()
+    assert parse_job(body).ok
+    assert body["episodeTitle"] == PUNCTUATED
+    assert set(body) <= {
+        "schemaVersion", "id", "episodeId", "episodeTitle", "status", "stage", "attempt",
+        "progress", "failure", "provider", "createdAt", "updatedAt", "durationMs", "lineCount",
+    }  # fmt: skip
+    for text in (response.text, client.get("/jobs").text, client.get("/episodes").text):
+        assert INVENTED_FILENAME not in text
+        assert str(settings.data_dir) not in text and "source." not in text
+
+    assert client.get(f"/episodes/{episode_id}").json()["title"] == body["episodeTitle"]
+    assert client.get(f"/jobs/{job['id']}").json()["episodeTitle"] == body["episodeTitle"]
+    # The audio and everything else about the episode stay exactly as they were.
+    assert _source_state(settings, episode_id) == before
+    with sqlite3.connect(settings.data_dir / "pebble.db") as db:
+        stored_after = db.execute(
+            "SELECT original_filename, source_path FROM episodes WHERE id = ?", (episode_id,)
+        ).fetchone()
+    assert stored_after == stored_before
+    assert client.get(f"/episodes/{episode_id}/audio").status_code == 200
+
+
+def test_rename_validates_the_title(client, audio):
+    job = wait_for_job(client, upload(client, audio["short"])["body"]["job"]["id"])
+    url = f"/episodes/{job['episodeId']}"
+
+    def code(payload):
+        response = client.patch(url, json=payload)
+        return response.status_code, response.json().get("error", {}).get("code")
+
+    for bad in ("", "   ", "x" * 201, "two\nlines", "tab\tinside", "a\u2028b"):
+        assert code({"title": bad}) == (422, "INVALID_TITLE"), bad
+    assert code({"title": 123}) == (422, "INVALID_REQUEST")
+    assert code({"title": "ok", "originalFilename": "x.m4a"}) == (422, "INVALID_REQUEST")
+    assert code({}) == (422, "INVALID_REQUEST")
+    # Exactly 200 code points is fine, in any script.
+    long_title = "听" * 199 + "!"
+    response = client.patch(url, json={"title": long_title})
+    assert response.status_code == 200 and response.json()["episodeTitle"] == long_title
+
+
+def test_rename_unknown_episodes_are_not_found(client):
+    for episode_id in ("ep-0123456789ab", "not-an-id", "..%2f..%2fetc"):
+        response = client.patch(f"/episodes/{episode_id}", json={"title": "x"})
+        assert response.status_code == 404
+
+
+def test_rename_is_refused_while_processing(make_client, audio):
+    client = make_client(start_runner=False)
+    job = upload(client, audio["short"])["body"]["job"]
+    response = client.patch(f"/episodes/{job['episodeId']}", json={"title": "New"})
+    assert response.status_code == 409
+    assert response.json()["error"] == {
+        "code": "JOB_ACTIVE",
+        "message": "This episode is still processing.",
+    }
+    assert client.get(f"/jobs/{job['id']}").json()["episodeTitle"] == "Morning walk"
+
+
+def test_rename_works_for_cancelled_and_failed_episodes(make_client, audio):
+    idle = make_client(start_runner=False)
+    queued = upload(idle, audio["short"])["body"]["job"]
+    assert idle.post(f"/jobs/{queued['id']}/cancel").json()["status"] == "cancelled"
+    renamed = idle.patch(f"/episodes/{queued['episodeId']}", json={"title": "Stopped one"})
+    assert renamed.status_code == 200 and renamed.json()["status"] == "cancelled"
+    assert renamed.json()["episodeTitle"] == "Stopped one"
+
+    client = make_client()
+    broken = wait_for_job(client, upload(client, audio["not_audio"])["body"]["job"]["id"])
+    assert broken["status"] == "failed"
+    renamed = client.patch(f"/episodes/{broken['episodeId']}", json={"title": "Broken one"})
+    assert renamed.status_code == 200 and renamed.json()["episodeTitle"] == "Broken one"
+
+
+# --- Job duration and line count (1.7) ------------------------------------------------------
+
+
+def test_jobs_report_duration_and_line_count_only_when_real(make_client, audio):
+    idle = make_client(start_runner=False)
+    queued = upload(idle, audio["short"])["body"]["job"]
+    assert "durationMs" not in queued and "lineCount" not in queued
+    idle.__exit__(None, None, None)
+
+    client = make_client()
+    done = wait_for_job(client, queued["id"])
+    assert parse_job(done).ok
+    assert 1400 <= done["durationMs"] <= 1600  # short.wav is 1.5 s
+    transcript = client.get(f"/episodes/{done['episodeId']}/transcript").json()
+    assert done["lineCount"] == len(transcript["segments"]) > 0
+    assert client.get("/jobs").json()["jobs"][0]["lineCount"] == done["lineCount"]

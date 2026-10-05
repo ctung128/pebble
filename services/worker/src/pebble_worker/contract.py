@@ -26,7 +26,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.6"
+CURRENT_SCHEMA_VERSION = "1.7"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -268,6 +268,12 @@ class Job(Model):
     provider: JobProvider
     created_at: IsoDateTime
     updated_at: IsoDateTime
+    #: 1.7: the audio's measured length, once known (omitted until then).
+    duration_ms: Annotated[int, Field(gt=0)] | None = None
+    #: 1.7: transcript lines, once a transcript exists (omitted until then).
+    line_count: Annotated[int, Field(ge=0)] | None = None
+
+    _omit_when_none = frozenset({"duration_ms", "line_count"})
 
 
 # --- Worker health ------------------------------------------------------------------------

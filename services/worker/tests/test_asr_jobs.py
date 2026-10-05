@@ -9,7 +9,7 @@ from conftest import upload, wait_for_job
 from test_funasr_provider import RUNTIME, SPECS, install_models
 
 from pebble_worker.config import Settings
-from pebble_worker.contract import parse_transcript
+from pebble_worker.contract import CURRENT_SCHEMA_VERSION, parse_transcript
 from pebble_worker.errors import ConfigError
 from pebble_worker.providers.factory import build_provider
 from pebble_worker.providers.funasr import FunASRProvider
@@ -158,7 +158,7 @@ def test_review_thresholds_come_from_the_environment(tmp_path):
 
 def _provider_status(client):
     body = client.get("/health").json()
-    assert body["schemaVersion"] == "1.6"
+    assert body["schemaVersion"] == CURRENT_SCHEMA_VERSION
     [provider] = body["providers"]
     return body["status"], provider
 

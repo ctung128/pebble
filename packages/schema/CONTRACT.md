@@ -6,7 +6,7 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.6`.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.7`.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -15,6 +15,11 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.7** — Jobs may include `durationMs` (the audio's measured length, once known) and
+  `lineCount` (transcript lines, completed jobs only). Both are omitted while unknown, never
+  `0`. The local worker adds `PATCH /episodes/{id}` with `{ "title" }` to rename an episode's
+  user-facing title (see [docs/LOCAL_MODE.md](../../docs/LOCAL_MODE.md)); it changes nothing
+  else about the episode and returns the episode's job.
 - **1.6** — Worker health may include `instanceId` (32 lowercase hex characters): a random
   nonce for one run of a worker started by `npm run pebble:start`. It exists so
   `npm run pebble:stop` only ever signals the worker that run started; it is not a secret or a
@@ -166,6 +171,8 @@ change transcript `confidence` (which stays `null`). Apps keep its origin as
 | `failure`                         | `{ stage, code, message, retryable, hint }`; set exactly when `status` is `failed` or `cancelled`                                             |
 | `provider`                        | `{ id, kind: "mock" \| "asr" }`                                                                                                               |
 | `createdAt`, `updatedAt`          | ISO 8601                                                                                                                                      |
+| `durationMs?`                     | 1.7: integer > 0, the audio's measured length; omitted until known                                                                            |
+| `lineCount?`                      | 1.7: integer ≥ 0, transcript lines; only on `completed` jobs                                                                                  |
 
 Failure codes: `FFMPEG_NOT_FOUND`, `UNSUPPORTED_MEDIA`, `NO_AUDIO_STREAM`, `AUDIO_TOO_LONG`,
 `STORAGE_ERROR`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ERROR`, `NO_SPEECH_DETECTED` (1.4),

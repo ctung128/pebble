@@ -5,15 +5,17 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import unicodedata
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, Request, Response, UploadFile
+from fastapi import Body, FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -43,6 +45,26 @@ AUDIO_EXTENSIONS: dict[str, str] = {
 }
 MAX_TITLE_LENGTH = 200
 _COPY_BUFFER = 1024 * 1024
+
+
+class RenameRequest(BaseModel):
+    """PATCH /episodes/{id} (1.7): the user-facing title, and nothing else."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+    title: str
+
+
+def clean_title(title: str) -> str | None:
+    """
+    The stored form of a learner's title, or None if it isn't acceptable: trimmed, 1–200
+    characters (Unicode code points), on one line. Punctuation and any script are fine.
+    """
+    cleaned = title.strip()
+    if not cleaned or len(cleaned) > MAX_TITLE_LENGTH:
+        return None
+    if any(unicodedata.category(ch) in ("Cc", "Zl", "Zp") for ch in cleaned):
+        return None
+    return cleaned
 
 
 class ApiError(Exception):
@@ -217,8 +239,8 @@ def create_app(
                 "OWNERSHIP_NOT_CONFIRMED",
                 "Confirm that you own this audio or are authorized to process it.",
             )
-        clean_title = title.strip()
-        if not clean_title or len(clean_title) > MAX_TITLE_LENGTH:
+        stored_title = clean_title(title)
+        if stored_title is None:
             raise ApiError(
                 422,
                 "INVALID_TITLE",
@@ -253,7 +275,7 @@ def create_app(
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (
                         episode_id,
-                        clean_title,
+                        stored_title,
                         filename,
                         storage.relative(source),
                         mime_type,
@@ -311,6 +333,32 @@ def create_app(
         with db.tx() as conn:
             conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
         return Response(status_code=204)
+
+    @app.patch("/episodes/{episode_id}")
+    def rename_episode(
+        episode_id: str, request: Annotated[RenameRequest, Body()]
+    ) -> dict[str, Any]:
+        """
+        Changes only the episode's user-facing title. The audio file, its name and location,
+        and the transcript are untouched. Returns the episode's job, which carries the title
+        in every state.
+        """
+        row = episode_row(episode_id)
+        if row["job_status"] in ACTIVE_STATUSES:
+            raise ApiError(409, "JOB_ACTIVE", "This episode is still processing.")
+        title = clean_title(request.title)
+        if title is None:
+            raise ApiError(
+                422,
+                "INVALID_TITLE",
+                f"Give the episode a title of 1–{MAX_TITLE_LENGTH} characters, on one line.",
+            )
+        with db.tx() as conn:
+            conn.execute("UPDATE episodes SET title = ? WHERE id = ?", (title, episode_id))
+            job_id = conn.execute(
+                "SELECT id FROM jobs WHERE episode_id = ?", (episode_id,)
+            ).fetchone()["id"]
+        return job_or_404(job_id).dump()
 
     @app.get("/jobs")
     def list_jobs() -> dict[str, Any]:
