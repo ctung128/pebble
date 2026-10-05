@@ -15,6 +15,7 @@ import {
   type Segment,
 } from "@pebble/schema";
 import { correctionKey, type LearningStore } from "./LearningStore.ts";
+import type { PlaybackRecord } from "./playback.ts";
 
 export type Persistence =
   | { mode: "loading" }
@@ -40,6 +41,11 @@ interface LearningContextValue {
    */
   markSourceDeleted: (episodeId: string) => void;
   resetAll: () => void;
+  /** Listening progress per episode (browser-local; see playback.ts). */
+  playback: ReadonlyMap<string, PlaybackRecord>;
+  playbackFor: (episodeId: string) => PlaybackRecord | null;
+  savePlayback: (record: PlaybackRecord) => void;
+  clearPlayback: (episodeId: string) => void;
 }
 
 const LearningContext = createContext<LearningContextValue | null>(null);
@@ -60,15 +66,17 @@ export function LearningProvider({
   const [persistence, setPersistence] = useState<Persistence>({ mode: "loading" });
   const [corrections, setCorrections] = useState<ReadonlyMap<string, Correction>>(new Map());
   const [items, setItems] = useState<ReadonlyMap<string, LearningItem>>(new Map());
+  const [playback, setPlayback] = useState<ReadonlyMap<string, PlaybackRecord>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const store = await openStore();
-        const [storedCorrections, storedItems] = await Promise.all([
+        const [storedCorrections, storedItems, storedPlayback] = await Promise.all([
           store.listCorrections(),
           store.listItems(),
+          store.listPlayback(),
         ]);
         if (cancelled) return;
         storeRef.current = store;
@@ -76,6 +84,11 @@ export function LearningProvider({
           new Map(storedCorrections.map((c) => [correctionKey(c.episodeId, c.segmentId), c])),
         );
         setItems(new Map(storedItems.map((item) => [item.id, item])));
+        // Merged, not replaced: anything saved this session before storage opened wins.
+        setPlayback(
+          (current) =>
+            new Map([...storedPlayback.map((r) => [r.episodeId, r] as const), ...current]),
+        );
         setPersistence({ mode: "persistent" });
       } catch (error) {
         if (cancelled) return;
@@ -193,8 +206,35 @@ export function LearningProvider({
     [items, saveItem],
   );
 
+  const playbackFor = useCallback(
+    (episodeId: string) => playback.get(episodeId) ?? null,
+    [playback],
+  );
+
+  const savePlayback = useCallback(
+    (record: PlaybackRecord) => {
+      setPlayback((current) => new Map(current).set(record.episodeId, record));
+      persist((store) => store.putPlayback(record));
+    },
+    [persist],
+  );
+
+  const clearPlayback = useCallback(
+    (episodeId: string) => {
+      setPlayback((current) => {
+        if (!current.has(episodeId)) return current;
+        const next = new Map(current);
+        next.delete(episodeId);
+        return next;
+      });
+      persist((store) => store.deletePlayback(episodeId));
+    },
+    [persist],
+  );
+
   const markSourceDeleted = useCallback(
     (episodeId: string) => {
+      clearPlayback(episodeId); // its listening position goes with the audio
       setCorrections((current) => {
         const next = new Map(current);
         for (const [key, correction] of current) {
@@ -218,12 +258,13 @@ export function LearningProvider({
         for (const item of marked) await store.putItem(item);
       });
     },
-    [items, persist],
+    [items, persist, clearPlayback],
   );
 
   const resetAll = useCallback(() => {
     setCorrections(new Map());
     setItems(new Map());
+    setPlayback(new Map());
     persist((store) => store.clear());
   }, [persist]);
 
@@ -241,6 +282,10 @@ export function LearningProvider({
       updateNote,
       markSourceDeleted,
       resetAll,
+      playback,
+      playbackFor,
+      savePlayback,
+      clearPlayback,
     }),
     [
       persistence,
@@ -255,6 +300,10 @@ export function LearningProvider({
       updateNote,
       markSourceDeleted,
       resetAll,
+      playback,
+      playbackFor,
+      savePlayback,
+      clearPlayback,
     ],
   );
 

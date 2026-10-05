@@ -90,4 +90,73 @@ describe("IndexedDbLearningStore", () => {
   it("rejects when IndexedDB is unavailable", async () => {
     await expect(IndexedDbLearningStore.open(undefined)).rejects.toThrow(/not available/);
   });
+
+  it("upgrades a version 1 database, keeping corrections and items", async () => {
+    const factory = new IDBFactory();
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.open("pebble", 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        db.createObjectStore("corrections", { keyPath: ["episodeId", "segmentId"] }).put(
+          correction,
+        );
+        db.createObjectStore("items", { keyPath: "id" }).put(item);
+      };
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const store = await IndexedDbLearningStore.open(factory);
+    expect(await store.listCorrections()).toEqual([correction]);
+    expect(await store.listItems()).toEqual([item]);
+    expect(await store.listPlayback()).toEqual([]);
+  });
+
+  it("stores playback positions by episode, and nothing but their five fields", async () => {
+    const factory = new IDBFactory();
+    const store = await IndexedDbLearningStore.open(factory);
+    const position = {
+      episodeId: "ep-0123456789ab",
+      positionMs: 60_000,
+      durationMs: 768_000,
+      updatedAt: "2026-10-05T12:00:00.000Z",
+      finishedAt: null,
+    };
+    // Even if a caller passes more, only the five fields are written.
+    await store.putPlayback({ ...position, title: "Morning walk" } as typeof position);
+    await store.putPlayback({ ...position, episodeId: "demo-001" });
+    expect(await store.listPlayback()).toEqual(
+      expect.arrayContaining([position, { ...position, episodeId: "demo-001" }]),
+    );
+    await store.deletePlayback("demo-001");
+    expect(await store.listPlayback()).toEqual([position]);
+    await store.clear();
+    expect(await store.listPlayback()).toEqual([]);
+  });
+
+  it("skips playback rows that aren't valid records", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const factory = new IDBFactory();
+    const store = await IndexedDbLearningStore.open(factory);
+    store.close();
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.open("pebble", 2);
+      request.onsuccess = () => {
+        const tx = request.result.transaction("playback", "readwrite");
+        tx.objectStore("playback").put({ episodeId: "ep-0123456789ab", positionMs: -5 });
+        tx.oncomplete = () => {
+          request.result.close();
+          resolve();
+        };
+      };
+      request.onerror = () => reject(request.error);
+    });
+    const reopened = await IndexedDbLearningStore.open(factory);
+    expect(await reopened.listPlayback()).toEqual([]);
+    expect(String(warn.mock.calls[0]?.[0])).not.toMatch(/ep-0123456789ab/); // no row data logged
+    warn.mockRestore();
+  });
 });

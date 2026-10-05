@@ -6,11 +6,14 @@ import {
   type ParseResult,
 } from "@pebble/schema";
 import type { LearningStore } from "./LearningStore.ts";
+import { parsePlaybackRecord, type PlaybackRecord } from "./playback.ts";
 
 const DB_NAME = "pebble";
-const DB_VERSION = 1;
+/** 2 adds the browser-local `playback` store; corrections and items are untouched. */
+const DB_VERSION = 2;
 const CORRECTIONS = "corrections";
 const ITEMS = "items";
+const PLAYBACK = "playback";
 
 function settle<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -71,6 +74,9 @@ export class IndexedDbLearningStore implements LearningStore {
         if (!db.objectStoreNames.contains(ITEMS)) {
           db.createObjectStore(ITEMS, { keyPath: "id" });
         }
+        if (!db.objectStoreNames.contains(PLAYBACK)) {
+          db.createObjectStore(PLAYBACK, { keyPath: "episodeId" });
+        }
       };
       request.onsuccess = () => resolve(new IndexedDbLearningStore(request.result));
       request.onerror = () => reject(request.error ?? new Error("Could not open IndexedDB."));
@@ -116,10 +122,34 @@ export class IndexedDbLearningStore implements LearningStore {
     return this.write(ITEMS, (store) => store.delete(id));
   }
 
+  async listPlayback(): Promise<PlaybackRecord[]> {
+    const rows = await settle(this.db.transaction(PLAYBACK).objectStore(PLAYBACK).getAll());
+    const valid: PlaybackRecord[] = [];
+    for (const row of rows) {
+      const record = parsePlaybackRecord(row);
+      if (record) valid.push(record);
+      else console.warn("Pebble: skipped an unreadable stored playback position.");
+    }
+    return valid;
+  }
+
+  putPlayback(record: PlaybackRecord) {
+    // Exactly the five fields: nothing else about the episode is ever written here.
+    const { episodeId, positionMs, durationMs, updatedAt, finishedAt } = record;
+    return this.write(PLAYBACK, (store) =>
+      store.put({ episodeId, positionMs, durationMs, updatedAt, finishedAt }),
+    );
+  }
+
+  deletePlayback(episodeId: string) {
+    return this.write(PLAYBACK, (store) => store.delete(episodeId));
+  }
+
   clear() {
-    const transaction = this.db.transaction([CORRECTIONS, ITEMS], "readwrite");
+    const transaction = this.db.transaction([CORRECTIONS, ITEMS, PLAYBACK], "readwrite");
     transaction.objectStore(CORRECTIONS).clear();
     transaction.objectStore(ITEMS).clear();
+    transaction.objectStore(PLAYBACK).clear();
     return done(transaction);
   }
 

@@ -1,10 +1,12 @@
 import type { Correction, LearningItem } from "@pebble/schema";
 import { correctionKey, type LearningStore } from "./LearningStore.ts";
+import type { PlaybackRecord } from "./playback.ts";
 
 /** Non-persistent store for tests. */
 export class MemoryLearningStore implements LearningStore {
   private readonly corrections = new Map<string, Correction>();
   private readonly items = new Map<string, LearningItem>();
+  private readonly playback = new Map<string, PlaybackRecord>();
 
   async listCorrections() {
     return [...this.corrections.values()];
@@ -36,8 +38,21 @@ export class MemoryLearningStore implements LearningStore {
     this.items.delete(id);
   }
 
+  async listPlayback() {
+    return [...this.playback.values()];
+  }
+
+  async putPlayback(record: PlaybackRecord) {
+    this.playback.set(record.episodeId, record);
+  }
+
+  async deletePlayback(episodeId: string) {
+    this.playback.delete(episodeId);
+  }
+
   async clear() {
     this.corrections.clear();
     this.items.clear();
+    this.playback.clear();
   }
 }
