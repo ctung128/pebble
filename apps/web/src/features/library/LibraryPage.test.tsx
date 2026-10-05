@@ -27,7 +27,10 @@ describe("LibraryPage", () => {
         },
       }),
     });
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load content");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't load content");
+    expect(alert).toHaveTextContent("Pebble couldn't load this. Try again.");
+    expect(alert).not.toHaveTextContent(/manifest\.json|HTTP 500/); // the raw reason stays out
   });
 
   it("heads the page plainly and numbers each row with its titles and facts", async () => {

@@ -20,18 +20,19 @@ export const OWNERSHIP_LABEL =
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading"; loaded: number; total: number }
-  | { kind: "error"; message: string; hint: string | null };
+  | { kind: "error"; message: string };
 
+/** Plain copy by error code. The worker's own message and hint are never shown. */
 const UPLOAD_ERRORS: Record<string, string> = {
-  UNREACHABLE:
-    "Pebble's local worker stopped responding. Start it with npm run pebble:start, then try again.",
-  FILE_TOO_LARGE: "This file is larger than the worker's upload limit.",
-  UNSUPPORTED_MEDIA: "The worker doesn't accept this file type.",
+  UNREACHABLE: "Pebble isn't responding. Check that it's running, then try again.",
+  FILE_TOO_LARGE: "This file is too large. Pebble accepts files up to 2 GB.",
+  UNSUPPORTED_MEDIA: "This file type isn't supported. Try an MP3, M4A or WAV file.",
   EMPTY_FILE: "This file is empty.",
-  STORAGE_ERROR: "The worker couldn't save the file. Check free disk space.",
+  STORAGE_ERROR: "Pebble couldn't save the file. Check that there's free disk space.",
   ORIGIN_NOT_ALLOWED:
-    "The worker didn't accept this page. Open local mode at http://localhost:5175.",
+    "Pebble can't accept uploads from this page. Open Pebble from the address it gives you when it starts.",
 };
+const UPLOAD_FAILED = "The upload didn't finish. Try again.";
 
 export const TITLE_HELP =
   "This title appears in saved learning items and Anki exports. Rename it if the file name is sensitive.";
@@ -83,9 +84,7 @@ export function AddAudioPage() {
       const worker = error instanceof WorkerError ? error : null;
       setUpload({
         kind: "error",
-        message:
-          (worker && UPLOAD_ERRORS[worker.code]) ?? worker?.message ?? "The upload didn't finish.",
-        hint: worker?.hint ?? null,
+        message: (worker && UPLOAD_ERRORS[worker.code]) ?? UPLOAD_FAILED,
       });
       if (worker?.code === "UNREACHABLE") recheck();
     } finally {
@@ -173,22 +172,15 @@ export function AddAudioPage() {
           ) : null}
 
           <p className={styles.privacy}>
-            Your audio stays private on this computer. It's saved in Pebble's local data folder
-            {status.health.dataDir ? (
-              <>
-                {" "}
-                (<code>{status.health.dataDir.path}</code>)
-              </>
-            ) : null}{" "}
-            and is never uploaded to the internet.
+            Your audio stays private on this computer. It's saved in Pebble's data folder here and
+            is never uploaded to the internet.
           </p>
 
           <div id={ids.errors} aria-live="polite">
             {upload.kind === "uploading" ? (
               <div className={styles.progress}>
                 <label>
-                  Sending to the local worker… {formatBytes(upload.loaded)} of{" "}
-                  {formatBytes(upload.total)}
+                  Sending your audio… {formatBytes(upload.loaded)} of {formatBytes(upload.total)}
                   <progress max={upload.total} value={upload.loaded} />
                 </label>
               </div>
@@ -196,7 +188,6 @@ export function AddAudioPage() {
             {upload.kind === "error" ? (
               <div className={styles.formError} role="alert">
                 <p>{upload.message}</p>
-                {upload.hint ? <p className={styles.help}>{upload.hint}</p> : null}
               </div>
             ) : null}
           </div>

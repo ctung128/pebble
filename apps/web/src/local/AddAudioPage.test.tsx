@@ -29,7 +29,8 @@ describe("AddAudioPage", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run processing preview" })).toBeInTheDocument();
-    expect(screen.getByText(/stays private on this computer/)).toHaveTextContent("~/.pebble");
+    // Private and local, without naming a folder path.
+    expect(screen.getByText(/stays private on this computer/)).not.toHaveTextContent(/~|\//);
     expect(document.body.textContent).not.toMatch(/transcribe audio|create transcript/i);
   });
 
@@ -113,9 +114,7 @@ describe("AddAudioPage", () => {
     const form = submitButton().closest("form")!;
     fireEvent.submit(form);
     fireEvent.submit(form); // a second submit in the same tick
-    expect(
-      await screen.findByText(/Sending to the local worker… 1.0 MB of 4.0 MB/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Sending your audio… 1.0 MB of 4.0 MB/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
     expect(client.upload).toHaveBeenCalledTimes(1);
     expect(client.upload).toHaveBeenCalledWith(
@@ -126,7 +125,7 @@ describe("AddAudioPage", () => {
     expect(await screen.findByText("Job page job-aaaaaaaaaaaa")).toBeInTheDocument();
   });
 
-  it("explains worker refusals and allows another attempt", async () => {
+  it("explains refusals in plain words and allows another attempt", async () => {
     const client = fakeWorkerClient({
       upload: vi.fn(async () => {
         throw new WorkerError("FILE_TOO_LARGE", "Too big.", { status: 413 });
@@ -137,9 +136,27 @@ describe("AddAudioPage", () => {
     await userEvent.click(ownership());
     await userEvent.click(submitButton());
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This file is larger than the worker's upload limit.",
+      "This file is too large. Pebble accepts files up to 2 GB.",
     );
     await waitFor(() => expect(submitButton()).toBeEnabled());
+  });
+
+  it("never shows the worker's own error message or hint", async () => {
+    const client = fakeWorkerClient({
+      upload: vi.fn(async () => {
+        throw new WorkerError("WEIRD_FAILURE", "Traceback: /srv/pebble-test-data/x.wav", {
+          status: 500,
+          hint: "Run uv sync in services/worker.",
+        });
+      }),
+    });
+    await renderReady(client);
+    await userEvent.upload(fileInput(), audio());
+    await userEvent.click(ownership());
+    await userEvent.click(submitButton());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The upload didn't finish. Try again.");
+    expect(alert).not.toHaveTextContent(/Traceback|pebble-test-data|uv sync|worker/);
   });
 });
 

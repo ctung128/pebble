@@ -5,7 +5,15 @@ import { ConfirmButton } from "../components/ConfirmButton.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { EpisodeRow, RowProgress, rowStyles } from "../features/library/EpisodeRow.tsx";
-import { canRetry, isActive, sectionProgress, statusLabel } from "./jobCopy.ts";
+import {
+  activityLabel,
+  canRetry,
+  failureCopy,
+  isActive,
+  requestProblem,
+  statusLabel,
+} from "./jobCopy.ts";
+import { useJobAnnouncements } from "./useJobAnnouncements.ts";
 import { useJobList } from "./useJobList.ts";
 import { LOCAL_EPISODE_ID, WorkerError } from "./workerClient.ts";
 import { useLearning } from "../features/learning/LearningContext.tsx";
@@ -20,6 +28,7 @@ export function LocalLibraryPage() {
   const { client, status, recheck } = useWorker();
   const ready = status.kind === "ready";
   const { jobs, error, refresh } = useJobList(client, ready);
+  const announcement = useJobAnnouncements(jobs);
 
   return (
     <div className={styles.page}>
@@ -38,7 +47,7 @@ export function LocalLibraryPage() {
           <StatusView
             kind="error"
             title="Couldn't load your local audio"
-            message={error.message}
+            message="Check that Pebble is running, then try again."
             onRetry={refresh}
           />
         ) : jobs === null ? (
@@ -57,6 +66,11 @@ export function LocalLibraryPage() {
           </ol>
         )
       ) : null}
+
+      {/* Announces a job starting, finishing or failing; never section-by-section progress. */}
+      <p className={styles.visuallyHidden} role="status" aria-live="polite">
+        {announcement}
+      </p>
     </div>
   );
 }
@@ -90,7 +104,11 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
       await operation();
       onChanged();
     } catch (caught) {
-      setProblem(caught instanceof WorkerError ? caught.message : "That didn't work.");
+      setProblem(
+        caught instanceof WorkerError
+          ? requestProblem(caught.code, "That didn't work. Try again.")
+          : "That didn't work. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -166,17 +184,15 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
  */
 function JobStatus({ job, detailsLink }: { job: Job; detailsLink: boolean }) {
   if (isActive(job)) {
-    const transcribing = job.status === "running" && job.stage === "transcribing";
-    const label = transcribing && job.progress ? sectionProgress(job) : statusLabel(job);
     const fraction = job.progress ? job.progress.completedChunks / job.progress.totalChunks : null;
-    return <RowProgress label={label} fraction={fraction} />;
+    return <RowProgress label={activityLabel(job)} fraction={fraction} />;
   }
   if (job.status === "failed") {
     return (
       <p className={rowStyles.failure}>
-        <strong>{statusLabel(job)}.</strong> {job.failure?.message}{" "}
+        <strong>{statusLabel(job)}.</strong> {failureCopy(job).reason}{" "}
         {detailsLink ? (
-          // Retry is the row's action; the hint for this failure is on the job page.
+          // Retry is the row's action; what to do next is on the job page.
           <Link to={`/jobs/${job.id}`} className={styles.inlineLink}>
             Details
           </Link>

@@ -45,18 +45,25 @@ export class SourceError extends Error {
   }
 }
 
+/**
+ * Learner-facing words for a content error. The error's own message stays out of the UI: it
+ * can name files, HTTP details or (in local mode) the worker.
+ */
 export function describeSourceError(error: unknown): { title: string; detail: string } {
   if (!(error instanceof SourceError)) {
-    return { title: "Something went wrong", detail: "An unexpected error occurred." };
+    return { title: "Something went wrong", detail: "Try again." };
   }
   switch (error.code) {
     case "NOT_FOUND":
-      return { title: "Not found", detail: error.message };
+      return { title: "Not found", detail: "This episode isn't in your library." };
     case "NETWORK":
-      return { title: "Couldn't load content", detail: error.message };
+      return { title: "Couldn't load content", detail: "Pebble couldn't load this. Try again." };
     case "INVALID_PAYLOAD":
-      return { title: "Content is malformed", detail: error.message };
+      return { title: "Content is malformed", detail: "This content couldn't be read." };
     case "UNSUPPORTED_VERSION":
-      return { title: "Unsupported content version", detail: error.message };
+      return {
+        title: "Unsupported content version",
+        detail: "This content needs a different version of Pebble.",
+      };
   }
 }

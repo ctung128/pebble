@@ -3,15 +3,21 @@ import { Link, useParams } from "react-router";
 import type { Job } from "@pebble/schema";
 import { StatusView } from "../components/StatusView.tsx";
 import { useEpisodeSource } from "../data/SourceContext.tsx";
-import { canRetry, isActive, sectionProgress, stageSteps, statusLabel } from "./jobCopy.ts";
+import {
+  canRetry,
+  failureCopy,
+  isActive,
+  requestProblem,
+  stageSteps,
+  statusLabel,
+} from "./jobCopy.ts";
 import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobPolling } from "./useJobPolling.ts";
 import { WorkerError } from "./workerClient.ts";
 import { useWorker } from "./WorkerContext.tsx";
 import styles from "./local.module.css";
 
-type Verification =
-  { kind: "pending" } | { kind: "verified" } | { kind: "invalid"; message: string };
+type Verification = { kind: "pending" } | { kind: "verified" } | { kind: "invalid" };
 
 export function JobProgressRoute() {
   const { jobId = "" } = useParams();
@@ -27,6 +33,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
     error: null,
   });
   const [verification, setVerification] = useState<Verification>({ kind: "pending" });
+  // The reason a transcript couldn't be read stays out of the UI; the headline says what happened.
 
   // "Completed" is only shown once the transcript itself loads and validates.
   const completedEpisode = job?.status === "completed" ? job.episodeId : null;
@@ -35,12 +42,7 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
     let cancelled = false;
     source.getTranscript(completedEpisode).then(
       () => !cancelled && setVerification({ kind: "verified" }),
-      (caught: unknown) =>
-        !cancelled &&
-        setVerification({
-          kind: "invalid",
-          message: caught instanceof Error ? caught.message : "The transcript couldn't be read.",
-        }),
+      () => !cancelled && setVerification({ kind: "invalid" }),
     );
     return () => {
       cancelled = true;
@@ -57,7 +59,10 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
     } catch (caught) {
       setAction({
         busy: false,
-        error: caught instanceof WorkerError ? caught.message : "That didn't work. Try again.",
+        error:
+          caught instanceof WorkerError
+            ? requestProblem(caught.code, "That didn't work. Try again.")
+            : "That didn't work. Try again.",
       });
     }
   };
@@ -69,9 +74,11 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
           <BackToLibrary />
           <StatusView
             kind="error"
-            title={error.code === "NOT_FOUND" ? "Job not found" : "Can't reach the local worker"}
+            title={error.code === "NOT_FOUND" ? "Not found" : "Can't reach Pebble"}
             message={
-              error.code === "NOT_FOUND" ? "This processing job doesn't exist." : error.message
+              error.code === "NOT_FOUND"
+                ? "This audio isn't being processed."
+                : "Check that Pebble is running, then try again."
             }
           />
         </div>
@@ -95,7 +102,8 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
       <title>{`${job.episodeTitle} · Processing · Pebble`}</title>
       <BackToLibrary />
       <header className={styles.intro}>
-        <p className={styles.eyebrow}>{copy.progressEyebrow}</p>
+        {/* "Creating your transcript…" only while that's true; the headline says when it's done. */}
+        {isActive(job) ? <p className={styles.eyebrow}>{copy.progressEyebrow}</p> : null}
         <h1 className={styles.heading}>{job.episodeTitle}</h1>
       </header>
 
@@ -103,31 +111,32 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
         <p id="job-status" className={styles.jobHeadline} role="status" aria-live="polite">
           {headline}
         </p>
-        {sectionProgress(job) ? <p className={styles.jobProgress}>{sectionProgress(job)}</p> : null}
-
-        <ol className={styles.stages} aria-label="Stages">
-          {steps.map((step, index) => (
-            <li key={step.stage} data-state={stepState(job, index, finished)}>
-              {step.label}
-            </li>
-          ))}
-        </ol>
-
-        {job.failure && job.status !== "completed" ? (
-          <div className={styles.failure} role={job.status === "failed" ? "alert" : undefined}>
-            <p>{job.failure.message}</p>
-            {job.failure.hint ? <p className={styles.help}>{job.failure.hint}</p> : null}
-            <p className={styles.code}>{job.failure.code}</p>
+        {job.failure && job.status === "failed" ? (
+          <div className={styles.failure} role="alert">
+            <p>{failureCopy(job).reason}</p>
+            <p className={styles.help}>{failureCopy(job).next}</p>
           </div>
         ) : null}
         {verification.kind === "invalid" ? (
           <p className={styles.formError} role="alert">
-            {verification.message}
+            Try processing this audio again.
           </p>
         ) : null}
         {error && isActive(job) ? (
-          <p className={styles.help}>Lost contact with the worker; still trying…</p>
+          <p className={styles.help}>Lost contact with Pebble; still trying…</p>
         ) : null}
+
+        {/* The stages behind the headline, for anyone who wants them. */}
+        <details className={styles.stepsDetails}>
+          <summary>Processing steps</summary>
+          <ol className={styles.stages} aria-label="Stages">
+            {steps.map((step, index) => (
+              <li key={step.stage} data-state={stepState(job, index, finished)}>
+                {step.label}
+              </li>
+            ))}
+          </ol>
+        </details>
         {action.error ? (
           <p className={styles.formError} role="alert">
             {action.error}
@@ -164,7 +173,6 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
         {job.status === "running" && action.busy ? (
           <p className={styles.help}>Stopping at the next safe point…</p>
         ) : null}
-        <p className={styles.help}>Attempt {job.attempt}</p>
       </section>
     </div>
   );
@@ -188,7 +196,7 @@ function stepState(job: Job, index: number, finished: boolean): string {
 function BackToLibrary() {
   return (
     <Link to="/" className={styles.back}>
-      ← Local library
+      ← Library
     </Link>
   );
 }

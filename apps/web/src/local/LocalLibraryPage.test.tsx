@@ -287,8 +287,8 @@ describe("LocalLibraryPage", () => {
     renderLocal(<LocalLibraryPage />, { client });
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [waiting, normalizing] = within(list).getAllByRole("listitem");
-    expect(waiting).toHaveTextContent("Waiting to start");
-    expect(normalizing).toHaveTextContent("Preparing the audio");
+    expect(waiting).toHaveTextContent("Preparing audio…");
+    expect(normalizing).toHaveTextContent("Preparing audio…");
     expect(list).not.toHaveTextContent(/%|left|almost/i);
   });
 
@@ -310,7 +310,10 @@ describe("LocalLibraryPage", () => {
     const [row] = within(await screen.findByRole("list", { name: "Local audio" })).getAllByRole(
       "listitem",
     );
-    expect(row).toHaveTextContent("Processing stopped. Boom.");
+    expect(row).toHaveTextContent(
+      "Couldn't process this audio. Something went wrong while processing.",
+    );
+    expect(row).not.toHaveTextContent("Boom."); // the worker's own message never shows
     expect(within(row!).getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(within(row!).getByRole("link", { name: "Details" })).toHaveAttribute(
       "href",
@@ -395,7 +398,8 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
       ).toEqual([]);
     }
     expect(going).toHaveTextContent("Processing section 2 of 2");
-    expect(broke).toHaveTextContent("didn't find any speech");
+    expect(broke).toHaveTextContent("No speech was found in this audio.");
+    expect(broke).not.toHaveTextContent("didn't find any speech"); // worker wording stays out
     expect(stopped).toHaveTextContent("Cancelled");
     expect(list).not.toHaveTextContent(/placeholder|preview/i);
   });

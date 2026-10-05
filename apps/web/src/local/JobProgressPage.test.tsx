@@ -43,8 +43,10 @@ describe("JobProgressPage", () => {
         progress: { completedChunks: 1, totalChunks: 5 },
       }),
     );
-    expect(await screen.findByText("Processing section 2 of 5")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Processing sections");
+    expect(await screen.findByText("Processing section 2 of 5")).toHaveAttribute("role", "status");
+    // The steps are there on request, collapsed by default.
+    const steps = screen.getByText("Processing steps").closest("details")!;
+    expect(steps).not.toHaveAttribute("open");
     const stages = screen.getAllByRole("listitem").map((li) => li.getAttribute("data-state"));
     expect(stages).toEqual(["done", "done", "done", "current", "pending"]);
     expect(document.body.textContent).not.toMatch(/%/);
@@ -63,13 +65,14 @@ describe("JobProgressPage", () => {
       "href",
       "/episodes/ep-0123456789ab",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Processing preview finished");
+    expect(screen.getByRole("status")).toHaveTextContent("Preview ready");
   });
 
   it("does not claim completion when the transcript doesn't validate", async () => {
     renderJob(makeJob({ status: "completed", stage: "merging" }), { transcriptFails: true });
-    expect(await screen.findByText("Transcript is invalid")).toBeInTheDocument();
+    expect(await screen.findByText("Try processing this audio again.")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("couldn't be read");
+    expect(screen.queryByText("Transcript is invalid")).not.toBeInTheDocument(); // raw reason stays out
     expect(screen.queryByRole("link", { name: "Open preview transcript" })).not.toBeInTheDocument();
   });
 
@@ -83,14 +86,16 @@ describe("JobProgressPage", () => {
       }),
       makeJob({ status: "queued", attempt: 2 }),
     ]);
-    expect(
-      await screen.findByText("The mock provider failed on chunk 3 (simulated)."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("PROVIDER_ERROR")).toBeInTheDocument();
-    expect(screen.getByText("2 of 6 sections processed")).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Something went wrong while processing.");
+    expect(alert).toHaveTextContent("Try again. If it keeps happening, restart Pebble.");
+    // The worker's message, hint and code stay out of the UI, and so does the attempt count.
+    expect(document.body).not.toHaveTextContent(
+      /mock provider|chunk 3|PROVIDER_ERROR|Retry the job|Attempt/,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Retry from the start" }));
     expect(client.retryJob).toHaveBeenCalledWith(JOB_ID);
-    expect(await screen.findByText("Attempt 2")).toBeInTheDocument();
+    expect(await screen.findByText("Preparing audio…")).toBeInTheDocument();
   });
 
   it("offers no retry for permanent failures", async () => {
@@ -101,7 +106,9 @@ describe("JobProgressPage", () => {
         failure: { ...failure(false), stage: "probing" },
       }),
     );
-    expect(await screen.findByText("Not audio.")).toBeInTheDocument();
+    expect(await screen.findByText("This file type isn't supported.")).toBeInTheDocument();
+    expect(screen.getByText("Try an MP3, M4A or WAV file.")).toBeInTheDocument();
+    expect(screen.queryByText("Not audio.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
@@ -132,7 +139,9 @@ describe("JobProgressPage", () => {
   it("keeps the mock's preview wording", async () => {
     renderJob(makeJob({ status: "running", stage: "merging" }));
     expect(await screen.findByText("Preparing processing preview")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Assembling the preview transcript");
+    expect(screen.getByRole("status")).toHaveTextContent("Processing audio…");
+    // The stage names (never "transcribing" for the mock) stay in the steps disclosure.
+    expect(screen.getByText("Assembling the preview transcript")).toBeInTheDocument();
   });
 });
 
@@ -166,7 +175,8 @@ describe("JobProgressPage — local transcription (FunASR)", () => {
     );
     const open = await screen.findByRole("link", { name: "Open transcript" });
     expect(open).toHaveAttribute("href", "/episodes/ep-0123456789ab");
-    expect(screen.getByRole("status")).toHaveTextContent("Transcript finished");
+    expect(screen.getByRole("status")).toHaveTextContent("Transcript ready");
+    expect(screen.queryByText("Creating your transcript")).not.toBeInTheDocument(); // it's done
     expect(screen.queryByText(/preview/i)).not.toBeInTheDocument();
   });
 });
