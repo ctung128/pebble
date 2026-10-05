@@ -71,7 +71,8 @@ describe("LocalLibraryPage", () => {
 
     // A finished row is quiet: it opens by its title, with no "finished" wording or Open button.
     expect(done).not.toHaveTextContent(/preview finished|transcript finished|ready/i);
-    expect(done).toHaveTextContent("Preview · placeholder text");
+    // No placeholder chip in the Library; the preview banner on its episode page says so.
+    expect(done).not.toHaveTextContent(/placeholder/i);
     expect(within(done!).getByRole("link", { name: "Finished walk" })).toHaveAttribute(
       "href",
       "/episodes/ep-aaaaaaaaaaaa",
@@ -482,6 +483,178 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
     it("leaves out a length and count the worker doesn't report (1.6)", async () => {
       const row = await rowFor(finished());
       expect(row.textContent).not.toMatch(/·|0:00|lines?/);
+    });
+  });
+
+  describe("title search", () => {
+    const titled = (
+      id: string,
+      episodeTitle: string,
+      extra: Partial<Parameters<typeof makeJob>[0]> = {},
+    ) =>
+      makeJob({
+        ...asr,
+        id: `job-${id.repeat(12)}`,
+        episodeId: `ep-${id.repeat(12)}`,
+        episodeTitle,
+        status: "completed",
+        stage: "merging",
+        ...extra,
+      });
+    const library = [
+      titled("a", "Morning walk"),
+      titled("b", "第二期：慢慢听 | Slow listening"),
+      titled("c", "Market day", {
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 1, totalChunks: 3 },
+      }),
+      titled("d", "Broken walk", {
+        status: "failed",
+        stage: "probing",
+        failure: {
+          stage: "probing",
+          code: "UNSUPPORTED_MEDIA",
+          message: "x",
+          retryable: false,
+          hint: null,
+        },
+      }),
+    ];
+
+    async function renderLibrary(jobs = library) {
+      renderLocal(<LocalLibraryPage />, {
+        client: fakeWorkerClient({
+          health: async () => ({ ok: true, data: funasrHealth() }),
+          listJobs: vi.fn(async () => jobs),
+        }),
+      });
+      await screen.findByRole("list", { name: "Local audio" });
+      return screen.getByRole("searchbox", { name: "Search episodes" });
+    }
+    const rows = () =>
+      within(screen.getByRole("list", { name: "Local audio" }))
+        .getAllByRole("listitem")
+        .map((row) => row.textContent ?? "");
+
+    it("matches titles only, including processing and failed rows", async () => {
+      const field = await renderLibrary();
+      await userEvent.type(field, "WALK");
+      expect(rows()).toHaveLength(2);
+      expect(rows()[0]).toContain("Morning walk");
+      expect(rows()[1]).toContain("Broken walk");
+      await userEvent.clear(field);
+      await userEvent.type(field, "ep-aaaa"); // an id is not a title
+      expect(screen.getByText("No episodes match “ep-aaaa”.")).toBeInTheDocument();
+    });
+
+    it("matches Chinese and mixed-script titles", async () => {
+      const field = await renderLibrary();
+      await userEvent.type(field, "慢慢");
+      expect(rows()).toHaveLength(1);
+      await userEvent.clear(field);
+      await userEvent.type(field, "ＳＬＯＷ"); // full-width letters fold with NFKC
+      expect(rows()[0]).toContain("Slow listening");
+      await userEvent.clear(field);
+      await userEvent.type(field, "Market");
+      expect(rows()[0]).toContain("Processing section 2 of 3");
+    });
+
+    it("offers a way back from no results", async () => {
+      const field = await renderLibrary();
+      await userEvent.type(field, "nothing like this");
+      expect(screen.queryByRole("list", { name: "Local audio" })).not.toBeInTheDocument();
+      // The × in the field and the button in the message do the same thing.
+      const [, inMessage] = screen.getAllByRole("button", { name: "Clear search" });
+      await userEvent.click(inMessage!);
+      expect(rows()).toHaveLength(4);
+    });
+
+    it("announces the result count once typing pauses", async () => {
+      const field = await renderLibrary();
+      await userEvent.type(field, "walk");
+      expect(await screen.findByText("2 of 4 episodes", {}, { timeout: 2000 })).toHaveAttribute(
+        "role",
+        "status",
+      );
+    });
+
+    it("isn't offered for an empty library", async () => {
+      renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
+      expect(await screen.findByText("No local audio yet")).toBeInTheDocument();
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("listening status", () => {
+    const done = makeJob({
+      ...asr,
+      id: "job-aaaaaaaaaaaa",
+      episodeId: "ep-aaaaaaaaaaaa",
+      episodeTitle: "Done",
+      status: "completed",
+      stage: "merging",
+      durationMs: 768_000,
+      lineCount: 214,
+    });
+    const position = (overrides: Record<string, unknown> = {}) => ({
+      episodeId: "ep-aaaaaaaaaaaa",
+      positionMs: 60_000,
+      durationMs: 768_000,
+      updatedAt: "2026-10-05T12:00:00.000Z",
+      finishedAt: null,
+      ...overrides,
+    });
+
+    async function rowWith(job: ReturnType<typeof makeJob>, saved?: ReturnType<typeof position>) {
+      const store = new MemoryLearningStore();
+      if (saved) await store.putPlayback(saved);
+      renderLocal(<LocalLibraryPage />, {
+        store,
+        client: fakeWorkerClient({
+          health: async () => ({ ok: true, data: funasrHealth() }),
+          listJobs: vi.fn(async () => [job]),
+        }),
+      });
+      const list = await screen.findByRole("list", { name: "Local audio" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return within(list).getAllByRole("listitem")[0]!;
+    }
+
+    it("shows how far the learner has listened", async () => {
+      const row = await rowWith(done, position());
+      expect(await within(row).findByText("1:00 of 12:48")).toBeInTheDocument();
+    });
+
+    it("shows a quiet Finished after a real end", async () => {
+      const row = await rowWith(
+        done,
+        position({ positionMs: 768_000, finishedAt: "2026-10-05T12:30:00.000Z" }),
+      );
+      expect(await within(row).findByText("Finished")).toBeInTheDocument();
+      expect(row).not.toHaveTextContent(/Transcript finished/);
+    });
+
+    it("stays quiet before 5 s, while processing, or without a known length", async () => {
+      expect(await rowWith(done, position({ positionMs: 3_000 }))).not.toHaveTextContent(
+        / of |Finished/,
+      );
+    });
+
+    it("never shows listening status on a processing row", async () => {
+      const going = makeJob({
+        ...done,
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 1, totalChunks: 3 },
+        lineCount: undefined,
+      });
+      expect(await rowWith(going, position())).not.toHaveTextContent(/1:00 of/);
+    });
+
+    it("needs the episode's length from the worker", async () => {
+      const unknown = makeJob({ ...done, durationMs: undefined });
+      expect(await rowWith(unknown, position())).not.toHaveTextContent(/1:00 of/);
     });
   });
 });

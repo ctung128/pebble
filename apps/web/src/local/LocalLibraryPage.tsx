@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import type { Job } from "@pebble/schema";
 import { ConfirmButton } from "../components/ConfirmButton.tsx";
-import { formatDuration } from "../lib/formatTime.ts";
+import { SearchField } from "../components/SearchField.tsx";
+import { formatDuration, formatTime } from "../lib/formatTime.ts";
+import { matchesQuery } from "../lib/search.ts";
+import { listeningState } from "../features/learning/playback.ts";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { EpisodeRow, RowProgress, rowStyles } from "../features/library/EpisodeRow.tsx";
@@ -30,6 +33,16 @@ export function LocalLibraryPage() {
   const ready = status.kind === "ready";
   const { jobs, error, refresh } = useJobList(client, ready);
   const announcement = useJobAnnouncements(jobs);
+  const [query, setQuery] = useState("");
+  // Titles only: never file names, paths, transcripts, notes or anything else.
+  const shown = useMemo(
+    () => (jobs ?? []).filter((job) => matchesQuery(job.episodeTitle, query)),
+    [jobs, query],
+  );
+  const searching = query.trim() !== "";
+  const resultCount = useDebouncedAnnouncement(
+    searching && jobs ? `${shown.length} of ${jobs.length} episodes` : "",
+  );
 
   return (
     <div className={styles.page}>
@@ -60,11 +73,35 @@ export function LocalLibraryPage() {
             message="Process an audio file you own and it will appear here."
           />
         ) : (
-          <ol className={rowStyles.list} aria-label="Local audio">
-            {jobs.map((job, i) => (
-              <JobRow key={job.id} job={job} number={i + 1} onChanged={refresh} />
-            ))}
-          </ol>
+          <>
+            <SearchField
+              label="Search episodes"
+              placeholder="Search titles"
+              value={query}
+              onChange={setQuery}
+            />
+            {shown.length === 0 ? (
+              <div className={styles.noResults}>
+                <p className={styles.noResultsTitle}>No episodes match “{query.trim()}”.</p>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setQuery("")}
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              <ol className={rowStyles.list} aria-label="Local audio">
+                {shown.map((job, i) => (
+                  <JobRow key={job.id} job={job} number={i + 1} onChanged={refresh} />
+                ))}
+              </ol>
+            )}
+            <p className={styles.visuallyHidden} role="status" aria-live="polite">
+              {resultCount}
+            </p>
+          </>
         )
       ) : null}
 
@@ -74,6 +111,16 @@ export function LocalLibraryPage() {
       </p>
     </div>
   );
+}
+
+/** The latest message, once typing has paused (so each keystroke isn't announced). */
+function useDebouncedAnnouncement(message: string, delayMs = 600): string {
+  const [announced, setAnnounced] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAnnounced(message), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [message, delayMs]);
+  return announced;
 }
 
 /** Real counts only, e.g. "4 episodes · 1 processing · 1 stopped". */
@@ -236,10 +283,28 @@ function JobStatus({ job, detailsLink }: { job: Job; detailsLink: boolean }) {
     );
   }
   if (job.status === "completed") {
-    // Finished rows stay quiet; a preview keeps its label so it never passes for a transcript.
-    return job.provider.kind === "mock" ? (
-      <span className={rowStyles.warningTag}>Preview · placeholder text</span>
-    ) : null;
+    // A preview's placeholder status is shown on its episode page (the preview banner).
+    return <ListeningStatus job={job} />;
   }
   return <RowProgress label={statusLabel(job)} />;
+}
+
+/**
+ * How far the learner has listened, from browser-local playback (finished episodes only):
+ * "12:48 of 1:22:15" with a bar while in progress, a quiet "Finished" after a real end, and
+ * nothing before they start (or when the worker doesn't report the episode's length).
+ */
+function ListeningStatus({ job }: { job: Job }) {
+  const { playbackFor } = useLearning();
+  const record = playbackFor(job.episodeId);
+  const state = listeningState(record, job.durationMs);
+  if (!record || state === "not-started" || !job.durationMs) return null;
+  if (state === "finished") return <span className={rowStyles.quietStatus}>Finished</span>;
+  return (
+    <RowProgress
+      label={`${formatTime(record.positionMs)} of ${formatTime(job.durationMs)}`}
+      fraction={Math.min(record.positionMs / job.durationMs, 1)}
+      tone="listening"
+    />
+  );
 }

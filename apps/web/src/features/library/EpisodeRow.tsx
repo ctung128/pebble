@@ -89,9 +89,12 @@ export function EpisodeRow({
 export function RowProgress({
   label,
   fraction,
+  tone,
 }: {
   label: ReactNode;
   fraction?: number | null | undefined;
+  /** "listening": how far the learner has listened (juniper), not processing work. */
+  tone?: "listening";
 }) {
   return (
     <>
@@ -100,6 +103,7 @@ export function RowProgress({
         <span
           className={styles.bar}
           data-indeterminate={fraction === null || undefined}
+          data-tone={tone}
           style={
             fraction === null
               ? undefined
@@ -124,4 +128,5 @@ export const rowStyles = {
   failure: styles.failure,
   fieldError: styles.fieldError,
   metaItem: styles.metaItem,
+  quietStatus: styles.quietStatus,
 };

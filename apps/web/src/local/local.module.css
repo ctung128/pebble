@@ -425,3 +425,17 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Library search with nothing found. */
+.noResults {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+}
+
+.noResultsTitle {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}

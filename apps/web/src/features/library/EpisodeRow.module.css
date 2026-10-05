@@ -192,6 +192,16 @@
 }
 
 /* Nothing measurable yet: a short segment drifts across (still under reduced motion). */
+/* Listening progress is the learner's own: the restrained juniper accent. */
+.bar[data-tone="listening"] > span {
+  background: var(--accent);
+}
+
+/* A fact, not news: e.g. "Finished" listening. */
+.quietStatus {
+  color: var(--text-secondary);
+}
+
 .bar[data-indeterminate] > span {
   width: 30%;
   animation: drift 1.6s var(--easing-standard) infinite alternate;

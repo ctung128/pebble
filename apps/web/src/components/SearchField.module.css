@@ -1,0 +1,71 @@
+/* Design system SearchField: 40px, filled, radius-md, the 16px magnifier inside on the left. */
+.search {
+  position: relative;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  display: grid;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.field {
+  width: 100%;
+  min-height: var(--control-md);
+  padding: var(--space-2) var(--control-md) var(--space-2) 36px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-size: var(--size-body); /* 16px: no zoom-on-focus on phones */
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.field:hover {
+  background: var(--bg-hover);
+}
+
+.field::placeholder {
+  color: var(--text-secondary);
+}
+
+/* One clear control: ours, visible and labelled, instead of the browser's. */
+.field::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.clear {
+  position: absolute;
+  top: 50%;
+  right: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
