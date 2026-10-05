@@ -36,26 +36,43 @@
   text-decoration: none;
 }
 
-/* Worker status */
+/* Worker status (design system StatusBanner: neutral while checking, warning when blocked) */
 .status {
   display: grid;
   justify-items: start;
   gap: var(--space-2);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-l);
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.status[data-tone="ok"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
 }
 
 .status[data-tone="problem"] {
-  background: var(--warn-bg);
-  border-color: transparent;
-  color: var(--warn-text);
+  background: var(--warning-bg);
+  box-shadow: inset 0 0 0 var(--border-width-hairline) var(--warning-border);
+  color: var(--text-primary);
+}
+
+.status[data-tone="problem"] .statusTitle {
+  color: var(--warning);
+}
+
+/* Ready: a quiet line under the page header. */
+.readyLine {
+  margin: 0;
+  font-size: var(--size-body-sm);
+  color: var(--text-secondary);
+}
+
+.readyTitle {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.inlineLink {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .statusTitle {
@@ -118,15 +135,6 @@
 .secondaryButton:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.dangerLink {
-  padding: var(--space-2) var(--space-2);
-  border: 0;
-  background: transparent;
-  color: var(--danger);
-  font-size: var(--text-sm);
-  cursor: pointer;
 }
 
 /* Upload form */
@@ -303,68 +311,4 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-/* Local library */
-.jobList {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.jobRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  background: var(--surface);
-}
-
-.jobMain {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.jobTitle {
-  margin: 0;
-  font-weight: 600;
-}
-
-.jobMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--text-faint);
-}
-
-.badge {
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
-.badge[data-status="completed"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.badge[data-status="failed"] {
-  background: var(--warn-bg);
-  color: var(--danger);
-}
-
-.previewTag {
-  padding: 1px var(--space-2);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-pill);
 }

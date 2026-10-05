@@ -1,27 +1,32 @@
 import { useCallback } from "react";
-import { Link } from "react-router";
+import { PageHeader } from "../../components/PageHeader.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
 import { describeSourceError } from "../../data/EpisodeSource.ts";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
 import { useAsync } from "../../lib/useAsync.ts";
-import { ResetDemoData } from "../learning/ResetDemoData.tsx";
+import { EpisodeRow, rowStyles } from "./EpisodeRow.tsx";
 import styles from "./LibraryPage.module.css";
 
 export function LibraryPage() {
   const source = useEpisodeSource();
   const load = useCallback(() => source.listEpisodes(), [source]);
   const state = useAsync(load);
+  const count = state.status === "success" ? state.data.length : null;
 
   return (
     <div className={styles.page}>
-      <header className={styles.intro}>
-        <h1 className={styles.heading}>Library</h1>
+      <PageHeader
+        index="01 — Library"
+        title="Library"
+        vertical="书架"
+        meta={count === null ? null : `${count} ${count === 1 ? "episode" : "episodes"}`}
+      >
         <p className={styles.lede}>
           Listen to Mandarin audio alongside a timestamped transcript. Tap any line to hear it
           again.
         </p>
-      </header>
+      </PageHeader>
 
       {state.status === "loading" ? <StatusView kind="loading" title="Loading episodes…" /> : null}
 
@@ -43,30 +48,33 @@ export function LibraryPage() {
       ) : null}
 
       {state.status === "success" && state.data.length > 0 ? (
-        <ul className={styles.list}>
-          {state.data.map((episode) => (
-            <li key={episode.id}>
-              <Link to={`/episodes/${episode.id}`} className={styles.card}>
-                <span className={styles.cardTitle}>{episode.title}</span>
-                {episode.titleZh ? (
-                  <span className={styles.cardTitleZh} lang={episode.language}>
-                    {episode.titleZh}
-                  </span>
-                ) : null}
-                <span className={styles.cardDescription}>{episode.description}</span>
-                <span className={styles.cardMeta}>
-                  <span>{formatTime(episode.durationMs)}</span>
+        <ol className={rowStyles.list} aria-label="Episodes">
+          {state.data.map((episode, i) => (
+            <EpisodeRow
+              key={episode.id}
+              number={i + 1}
+              title={episode.title}
+              titleZh={episode.titleZh}
+              language={episode.language}
+              href={`/episodes/${episode.id}`}
+              meta={
+                <>
+                  <span className={rowStyles.metaItem}>{formatTime(episode.durationMs)}</span>
                   {!episode.audioProvenance.publishable ? (
-                    <span className={styles.tag}>Placeholder audio</span>
+                    <span className={rowStyles.warningTag}>Placeholder audio</span>
                   ) : null}
+                </>
+              }
+              // The title link covers the row; this is its visible affordance, not a second link.
+              actions={
+                <span className={rowStyles.action} aria-hidden="true">
+                  Open
                 </span>
-              </Link>
-            </li>
+              }
+            />
           ))}
-        </ul>
+        </ol>
       ) : null}
-
-      <ResetDemoData />
     </div>
   );
 }

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 import type { Job } from "@pebble/schema";
 import { ConfirmButton } from "../components/ConfirmButton.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
+import { EpisodeRow, RowProgress, rowStyles } from "../features/library/EpisodeRow.tsx";
 import { canRetry, isActive, sectionProgress, statusLabel } from "./jobCopy.ts";
 import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobList } from "./useJobList.ts";
@@ -23,51 +25,64 @@ export function LocalLibraryPage() {
   return (
     <div className={styles.page}>
       <title>Local library · Pebble</title>
-      <header className={styles.intro}>
-        <h1 className={styles.heading}>Your local audio</h1>
+      <PageHeader
+        index="01 — Library"
+        title="Your local audio"
+        vertical="书架"
+        meta={ready && jobs && jobs.length > 0 ? librarySummary(jobs) : null}
+      >
         <p className={styles.lede}>
           Audio you processed with Pebble's worker on this computer. It never leaves this machine.
         </p>
-      </header>
+      </PageHeader>
 
       <WorkerStatusCard status={status} onRecheck={recheck} />
 
       {ready ? (
-        <>
-          <p>
-            <Link to="/process" className={styles.primaryButton}>
-              {LOCAL_COPY[status.mode].uploadHeading}
-            </Link>
-          </p>
-          {error ? (
-            <StatusView
-              kind="error"
-              title="Couldn't load your local audio"
-              message={error.message}
-              onRetry={refresh}
-            />
-          ) : jobs === null ? (
-            <StatusView kind="loading" title="Loading your local audio…" />
-          ) : jobs.length === 0 ? (
-            <StatusView
-              kind="empty"
-              title="No local audio yet"
-              message="Process an audio file you own and it will appear here."
-            />
-          ) : (
-            <ul className={styles.jobList} aria-label="Local audio">
-              {jobs.map((job) => (
-                <JobRow key={job.id} job={job} onChanged={refresh} />
-              ))}
-            </ul>
-          )}
-        </>
+        error ? (
+          <StatusView
+            kind="error"
+            title="Couldn't load your local audio"
+            message={error.message}
+            onRetry={refresh}
+          />
+        ) : jobs === null ? (
+          <StatusView kind="loading" title="Loading your local audio…" />
+        ) : jobs.length === 0 ? (
+          <StatusView
+            kind="empty"
+            title="No local audio yet"
+            message="Process an audio file you own and it will appear here."
+          />
+        ) : (
+          <ol className={rowStyles.list} aria-label="Local audio">
+            {jobs.map((job, i) => (
+              <JobRow key={job.id} job={job} number={i + 1} onChanged={refresh} />
+            ))}
+          </ol>
+        )
       ) : null}
     </div>
   );
 }
 
-function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
+/** Real counts only, e.g. "4 episodes · 1 processing · 1 stopped". */
+function librarySummary(jobs: readonly Job[]): string {
+  const parts = [`${jobs.length} ${jobs.length === 1 ? "episode" : "episodes"}`];
+  const active = jobs.filter(isActive).length;
+  const stopped = jobs.filter((job) => job.status === "failed").length;
+  if (active > 0) parts.push(`${active} processing`);
+  if (stopped > 0) parts.push(`${stopped} stopped`);
+  return parts.join(" · ");
+}
+
+const CREATED_DATE: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+};
+
+function JobRow({ job, number, onChanged }: { job: Job; number: number; onChanged: () => void }) {
   const { client } = useWorker();
   const { markSourceDeleted } = useLearning();
   const [busy, setBusy] = useState(false);
@@ -86,68 +101,101 @@ function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
     }
   };
 
-  const progress = sectionProgress(job);
+  const retryable = canRetry(job);
   return (
-    <li className={styles.jobRow} data-status={job.status}>
-      <div className={styles.jobMain}>
-        <p className={styles.jobTitle}>{job.episodeTitle}</p>
-        <p className={styles.jobMeta}>
-          <span className={styles.badge} data-status={job.status}>
-            {statusLabel(job)}
-          </span>
-          {progress && isActive(job) ? <span>{progress}</span> : null}
-          {job.provider.kind === "mock" ? (
-            <span className={styles.previewTag}>Preview · placeholder text</span>
+    <EpisodeRow
+      number={number}
+      title={job.episodeTitle}
+      meta={
+        <span className={rowStyles.metaItem}>
+          {new Date(job.createdAt).toLocaleDateString(undefined, CREATED_DATE)}
+        </span>
+      }
+      status={<JobStatus job={job} detailsLink={retryable} />}
+      actions={
+        <>
+          {job.status === "completed" ? (
+            <Link to={`/episodes/${job.episodeId}`} className={rowStyles.action}>
+              {LOCAL_COPY[modeForJob(job)].libraryOpenAction}
+            </Link>
+          ) : isActive(job) ? (
+            <Link to={`/jobs/${job.id}`} className={rowStyles.action}>
+              View progress
+            </Link>
+          ) : retryable ? (
+            <button
+              type="button"
+              className={rowStyles.action}
+              disabled={busy}
+              onClick={() => void act(() => client.retryJob(job.id))}
+            >
+              Retry
+            </button>
+          ) : (
+            <Link to={`/jobs/${job.id}`} className={rowStyles.action}>
+              Details
+            </Link>
+          )}
+          {!isActive(job) && LOCAL_EPISODE_ID.test(job.episodeId) ? (
+            <ConfirmButton
+              className={rowStyles.delete}
+              prompt={DELETE_PROMPT}
+              confirmLabel="Delete"
+              aria-label={`Delete ${job.episodeTitle}`}
+              onConfirm={() =>
+                void act(async () => {
+                  // Browser data changes only after the worker has deleted the episode.
+                  await client.deleteEpisode(job.episodeId);
+                  markSourceDeleted(job.episodeId);
+                })
+              }
+            >
+              Delete
+            </ConfirmButton>
           ) : null}
-          <span>{new Date(job.createdAt).toLocaleString()}</span>
-        </p>
-        {job.failure && job.status === "failed" ? (
-          <p className={styles.help}>{job.failure.message}</p>
-        ) : null}
-        {problem ? (
-          <p className={styles.fieldError} role="alert">
+        </>
+      }
+      footer={
+        problem ? (
+          <p className={rowStyles.fieldError} role="alert">
             {problem}
           </p>
-        ) : null}
-      </div>
-      <div className={styles.rowActions}>
-        {job.status === "completed" ? (
-          <Link to={`/episodes/${job.episodeId}`} className={styles.secondaryButton}>
-            {LOCAL_COPY[modeForJob(job)].libraryOpenAction}
+        ) : null
+      }
+    />
+  );
+}
+
+/**
+ * The worker's real state. The bar fills by completed sections once their total is known and
+ * is indeterminate before that; the text never shows a percentage or a time estimate.
+ */
+function JobStatus({ job, detailsLink }: { job: Job; detailsLink: boolean }) {
+  if (isActive(job)) {
+    const transcribing = job.status === "running" && job.stage === "transcribing";
+    const label = transcribing && job.progress ? sectionProgress(job) : statusLabel(job);
+    const fraction = job.progress ? job.progress.completedChunks / job.progress.totalChunks : null;
+    return <RowProgress label={label} fraction={fraction} />;
+  }
+  if (job.status === "failed") {
+    return (
+      <p className={rowStyles.failure}>
+        <strong>{statusLabel(job)}.</strong> {job.failure?.message}{" "}
+        {detailsLink ? (
+          // Retry is the row's action; the hint for this failure is on the job page.
+          <Link to={`/jobs/${job.id}`} className={styles.inlineLink}>
+            Details
           </Link>
-        ) : (
-          <Link to={`/jobs/${job.id}`} className={styles.secondaryButton}>
-            {isActive(job) ? "View progress" : "Details"}
-          </Link>
-        )}
-        {canRetry(job) ? (
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            disabled={busy}
-            onClick={() => void act(() => client.retryJob(job.id))}
-          >
-            Retry
-          </button>
         ) : null}
-        {!isActive(job) && LOCAL_EPISODE_ID.test(job.episodeId) ? (
-          <ConfirmButton
-            className={styles.dangerLink}
-            prompt={DELETE_PROMPT}
-            confirmLabel="Delete"
-            aria-label={`Delete ${job.episodeTitle}`}
-            onConfirm={() =>
-              void act(async () => {
-                // Browser data changes only after the worker has deleted the episode.
-                await client.deleteEpisode(job.episodeId);
-                markSourceDeleted(job.episodeId);
-              })
-            }
-          >
-            Delete
-          </ConfirmButton>
-        ) : null}
-      </div>
-    </li>
+      </p>
+    );
+  }
+  return (
+    <>
+      <RowProgress label={statusLabel(job)} />
+      {job.status === "completed" && job.provider.kind === "mock" ? (
+        <span className={rowStyles.warningTag}>Preview · placeholder text</span>
+      ) : null}
+    </>
   );
 }

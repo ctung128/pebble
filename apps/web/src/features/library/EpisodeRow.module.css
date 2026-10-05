@@ -1,0 +1,316 @@
+/*
+ * Design system EpisodeRow. Rows are split by hairlines, not cards, and the list is pulled out
+ * by the row padding so numbers align with the page header. The sizes below come from the
+ * EpisodeRow spec and have no token.
+ */
+.list {
+  --row-pad: var(--space-4);
+
+  margin: 0 calc(-1 * var(--row-pad));
+  padding: 0;
+  list-style: none;
+  container-type: inline-size; /* rows adapt to the list's width, not the window's */
+}
+
+.row {
+  --number-width: 36px;
+  --cover-width: 52px;
+  --cover-height: 66px;
+  --status-width: 200px; /* the spec's 250px leaves titles too little room beside two actions */
+  /* Fixed (not auto) so status and actions line up across rows; fits "Open transcript". */
+  --action-width: 144px;
+  --title-size: 1.25rem; /* 20px */
+  --title-zh-size: 0.9375rem; /* 15px */
+
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    var(--number-width) var(--cover-width) minmax(0, 1fr) var(--status-width)
+    var(--action-width);
+  grid-template-areas: "number cover titles status actions";
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) var(--row-pad, var(--space-4));
+  border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+  border-radius: 0;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.row:first-child {
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+}
+
+.row[data-linked]:hover {
+  background: var(--bg-subtle);
+}
+
+/* The title link covers the row; show its focus around the whole row. */
+.row:has(.titleLink:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.number {
+  grid-area: number;
+  font-family: var(--font-display);
+  font-size: var(--size-display-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.cover {
+  grid-area: cover;
+  display: grid;
+  place-items: center;
+  width: var(--cover-width);
+  height: var(--cover-height);
+  background: var(--img-xuan);
+  color: var(--img-sumi);
+  font-family: var(--font-display);
+  font-size: var(--size-display-sm);
+}
+
+.titles {
+  grid-area: titles;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--title-size);
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.titleLink {
+  text-decoration: none;
+}
+
+.titleLink:focus-visible {
+  outline: none; /* drawn around the row instead (see .row:has) */
+}
+
+.titleLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--size-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.titleZh {
+  font-family: var(--font-display);
+  font-size: var(--title-zh-size);
+}
+
+.metaItem {
+  white-space: nowrap;
+}
+
+/* --- Status column --- */
+
+.status {
+  grid-area: status;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--size-label);
+  color: var(--text-secondary);
+}
+
+.statusLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+
+.bar > span {
+  display: block;
+  width: var(--progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-pending);
+}
+
+/* Nothing measurable yet: a short segment drifts across (still under reduced motion). */
+.bar[data-indeterminate] > span {
+  width: 30%;
+  animation: drift 1.6s var(--easing-standard) infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(233%);
+  }
+}
+
+.failure {
+  margin: 0;
+  color: var(--error);
+}
+
+.failure strong {
+  font-weight: 600;
+}
+
+.tag,
+.warningTag {
+  justify-self: start;
+  padding: var(--space-half) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.tag {
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.warningTag {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+/* --- Actions --- */
+
+.actions {
+  grid-area: actions;
+  position: relative; /* above the row's stretched link */
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+/* A delete confirmation needs the row's full width. */
+.actions:has([role="group"]) {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--line-action);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.action:hover {
+  background: var(--bg-hover);
+}
+
+.action:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* The first step of a delete is quiet; only the confirm step is filled (ConfirmButton). */
+.delete {
+  min-height: var(--line-action);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--error);
+  font-size: var(--size-body-sm);
+  cursor: pointer;
+}
+
+.delete:hover {
+  color: var(--error-hover);
+  background: var(--error-bg);
+}
+
+.footer {
+  grid-column: 1 / -1;
+}
+
+.fieldError {
+  margin: 0;
+  font-size: var(--size-body-sm);
+  color: var(--error);
+}
+
+/* --- Medium (the column beside the sidebar at ~900px): status moves under the titles --- */
+
+@container (max-width: 680px) {
+  .row {
+    grid-template-columns:
+      var(--number-width) var(--cover-width) minmax(0, 1fr)
+      var(--action-width);
+    grid-template-areas:
+      "number cover titles actions"
+      "number cover status actions";
+    align-items: start;
+  }
+
+  .number,
+  .cover,
+  .actions {
+    align-self: center;
+  }
+}
+
+/* --- Narrow (phones): cover beside the titles, status and actions underneath --- */
+
+@container (max-width: 480px) {
+  .row {
+    grid-template-columns: var(--cover-width) minmax(0, 1fr);
+    grid-template-areas:
+      "cover titles"
+      "cover status"
+      "actions actions";
+  }
+
+  .number {
+    display: none;
+  }
+
+  .actions {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+  }
+}

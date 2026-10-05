@@ -1,3 +1,4 @@
+/* Design system ConfirmInline: the question, Cancel (secondary) and the verb (danger). */
 .confirm {
   display: inline-flex;
   flex-wrap: wrap;
@@ -6,26 +7,36 @@
 }
 
 .prompt {
-  font-size: var(--text-sm);
-  color: var(--text);
+  font-size: var(--size-body-sm);
+  color: var(--text-primary);
 }
 
 .cancel,
 .danger {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
+  min-height: var(--line-action);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
 
 .cancel {
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.cancel:hover {
+  background: var(--bg-hover);
 }
 
 .danger {
-  border: 1px solid var(--danger);
-  background: var(--danger);
-  color: var(--surface);
+  background: var(--error);
+  color: var(--text-on-accent);
+}
+
+.danger:hover {
+  background: var(--error-hover);
 }

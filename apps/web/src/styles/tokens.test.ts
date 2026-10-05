@@ -71,6 +71,13 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["focus-ring", "bg-subtle", UI],
   ["accent-pending", "bg-page", UI], // non-text fills only
   ["accent", "bg-subtle", UI], // Add audio on the sidebar
+  ["text-on-accent", "error", TEXT], // the confirm step of a delete
+  ["text-on-accent", "error-hover", TEXT],
+  ["error-hover", "error-bg", TEXT], // a hovered delete
+  ["text-primary", "bg-muted", TEXT], // secondary buttons
+  ["text-primary", "bg-hover", TEXT],
+  ["warning", "bg-page", TEXT], // placeholder and preview tags
+  ["text-primary", "warning-bg", TEXT], // worker problem body
 ];
 
 describe.each(Object.entries(themes))("%s theme contrast", (_, theme) => {

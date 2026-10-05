@@ -1,48 +1,52 @@
+/* Design system StatusView: a centred loading, error or empty state. */
 .status {
   display: grid;
   justify-items: center;
   gap: var(--space-2);
   padding: var(--space-10) var(--space-4);
   text-align: center;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .title {
   margin: 0;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .status[data-kind="error"] .title {
-  color: var(--danger);
+  color: var(--error);
 }
 
 .message {
   margin: 0;
   max-width: 44ch;
-  font-size: var(--text-sm);
+  font-size: var(--size-body-sm);
 }
 
 .retry {
   margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  color: var(--text-primary);
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
 
 .retry:hover {
-  background: var(--surface-2);
+  background: var(--bg-hover);
 }
 
 .spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid var(--border-strong);
+  border: 2px solid var(--border-subtle);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;

@@ -1,0 +1,43 @@
+/* Sizes the design system's PageHeader spec gives that have no token. */
+.header {
+  --index-size: 0.6875rem; /* 11px */
+  --vertical-size: 0.9375rem; /* 15px */
+
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  /* Room for the vertical page name at the edge. */
+  padding-right: var(--space-8);
+}
+
+.index {
+  margin: 0;
+  font-size: var(--index-size);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--size-display-lg);
+  line-height: 1.15;
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.vertical {
+  position: absolute;
+  top: 0;
+  right: 0;
+  writing-mode: vertical-rl;
+  font-family: var(--font-display);
+  font-size: var(--vertical-size);
+  letter-spacing: 0.6em;
+  color: var(--text-secondary);
+}

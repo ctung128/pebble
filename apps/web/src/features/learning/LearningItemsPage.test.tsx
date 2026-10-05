@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { CURRENT_SCHEMA_VERSION } from "@pebble/schema";
 import { renderWithProviders, testEpisode, testTranscript } from "../../test/fixtures.tsx";
 import { buildLearningItem } from "./buildLearningItem.ts";
 import { LearningItemsPage, SOURCE_DELETED_HELP, STORAGE_NOTE } from "./LearningItemsPage.tsx";
@@ -25,6 +26,28 @@ describe("LearningItemsPage", () => {
   it("says where items are stored and how to keep a copy", async () => {
     renderWithProviders(<LearningItemsPage />);
     expect(await screen.findByText(STORAGE_NOTE)).toBeInTheDocument();
+  });
+
+  it("resets demo data only after confirmation", async () => {
+    const store = new MemoryLearningStore();
+    await store.putCorrection({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      episodeId: "test-001",
+      segmentId: "seg-1",
+      originalText: "第一句。",
+      correctedText: "第一句话。",
+      updatedAt: "2026-10-03T00:00:00Z",
+    });
+    renderWithProviders(<LearningItemsPage />, { store });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Reset demo data" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await store.listCorrections()).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Reset demo data" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await waitFor(async () => expect(await store.listCorrections()).toEqual([]));
+    expect(screen.getByText(/Demo data reset/)).toBeInTheDocument();
   });
 
   it("names the reset control for what it removes in local mode", async () => {

@@ -1,10 +1,7 @@
-import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { CURRENT_SCHEMA_VERSION } from "@pebble/schema";
 import { SourceError } from "../../data/EpisodeSource.ts";
 import { fakeSource, renderWithProviders } from "../../test/fixtures.tsx";
-import { MemoryLearningStore } from "../learning/MemoryLearningStore.ts";
 import { LibraryPage } from "./LibraryPage.tsx";
 
 describe("LibraryPage", () => {
@@ -33,25 +30,24 @@ describe("LibraryPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load content");
   });
 
-  it("resets demo data only after confirmation", async () => {
-    const store = new MemoryLearningStore();
-    await store.putCorrection({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      episodeId: "test-001",
-      segmentId: "seg-1",
-      originalText: "第一句。",
-      correctedText: "第一句话。",
-      updatedAt: "2026-10-03T00:00:00Z",
-    });
-    renderWithProviders(<LibraryPage />, { store });
+  it("heads the page and numbers each row with its cover character and facts", async () => {
+    renderWithProviders(<LibraryPage />);
+    expect(screen.getByRole("heading", { level: 1, name: "Library" })).toBeInTheDocument();
+    expect(screen.getByText("01 — Library")).toBeInTheDocument();
+    expect(await screen.findByText("1 episode")).toBeInTheDocument();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Reset demo data" }));
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(await store.listCorrections()).toHaveLength(1);
+    const [row] = within(screen.getByRole("list", { name: "Episodes" })).getAllByRole("listitem");
+    expect(row).toHaveTextContent("01");
+    expect(row).toHaveTextContent("测"); // the Chinese title's first character
+    expect(row).toHaveTextContent("测试节目");
+    expect(row).toHaveTextContent("0:09");
+    // One link per row: "Open" is the title link's visible affordance, not a second link.
+    expect(within(row!).getAllByRole("link")).toHaveLength(1);
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset demo data" }));
-    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-    await waitFor(async () => expect(await store.listCorrections()).toEqual([]));
-    expect(screen.getByText(/Demo data reset/)).toBeInTheDocument();
+  it("leaves resetting demo data to the Learning items page", async () => {
+    renderWithProviders(<LibraryPage />);
+    await screen.findByRole("link", { name: /Test episode/ });
+    expect(screen.queryByRole("button", { name: "Reset demo data" })).not.toBeInTheDocument();
   });
 });

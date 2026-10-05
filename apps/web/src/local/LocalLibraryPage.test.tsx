@@ -195,14 +195,74 @@ describe("LocalLibraryPage", () => {
     renderLocal(<LocalLibraryPage />, { client });
     expect(await screen.findByText("Pebble's local worker is not running.")).toBeInTheDocument();
     await waitFor(() => expect(client.listJobs).not.toHaveBeenCalled());
+  });
+
+  it("leaves adding audio to the sidebar's one primary button", async () => {
+    renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
+    expect(await screen.findByText("Local worker is ready.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Process audio locally" })).not.toBeInTheDocument();
   });
 
-  it("offers the mock's upload action", async () => {
-    renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
-    expect(await screen.findByRole("link", { name: "Process audio locally" })).toHaveAttribute(
+  it("heads the page with the Library index and real counts", async () => {
+    const failed = makeJob({
+      id: "job-cccccccccccc",
+      status: "failed",
+      stage: "probing",
+      failure: {
+        stage: "probing",
+        code: "UNSUPPORTED_MEDIA",
+        message: "Pebble can't read this file.",
+        retryable: false,
+        hint: null,
+      },
+    });
+    const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed, running, failed]) });
+    renderLocal(<LocalLibraryPage />, { client });
+    expect(screen.getByRole("heading", { level: 1, name: "Your local audio" })).toBeInTheDocument();
+    expect(screen.getByText("01 — Library")).toBeInTheDocument();
+    expect(await screen.findByText("3 episodes · 1 processing · 1 stopped")).toBeInTheDocument();
+  });
+
+  it("names the stage, not a made-up ratio, before section counts exist", async () => {
+    const queued = makeJob({ status: "queued", stage: null, progress: null });
+    const preparing = makeJob({
+      id: "job-dddddddddddd",
+      status: "running",
+      stage: "normalizing",
+      progress: null,
+    });
+    const client = fakeWorkerClient({ listJobs: vi.fn(async () => [queued, preparing]) });
+    renderLocal(<LocalLibraryPage />, { client });
+    const list = await screen.findByRole("list", { name: "Local audio" });
+    const [waiting, normalizing] = within(list).getAllByRole("listitem");
+    expect(waiting).toHaveTextContent("Waiting to start");
+    expect(normalizing).toHaveTextContent("Preparing the audio");
+    expect(list).not.toHaveTextContent(/%|left|almost/i);
+  });
+
+  it("keeps a retryable failure's details reachable beside Retry", async () => {
+    const failed = makeJob({
+      status: "failed",
+      stage: "transcribing",
+      failure: {
+        stage: "transcribing",
+        code: "PROVIDER_ERROR",
+        message: "Boom.",
+        retryable: true,
+        hint: null,
+      },
+    });
+    renderLocal(<LocalLibraryPage />, {
+      client: fakeWorkerClient({ listJobs: vi.fn(async () => [failed]) }),
+    });
+    const [row] = within(await screen.findByRole("list", { name: "Local audio" })).getAllByRole(
+      "listitem",
+    );
+    expect(row).toHaveTextContent("Processing stopped. Boom.");
+    expect(within(row!).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(within(row!).getByRole("link", { name: "Details" })).toHaveAttribute(
       "href",
-      "/process",
+      `/jobs/${failed.id}`,
     );
   });
 });
@@ -267,10 +327,6 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
     });
     renderLocal(<LocalLibraryPage />, { client });
     expect(await screen.findByText("Local transcription is ready.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create a transcript locally" })).toHaveAttribute(
-      "href",
-      "/process",
-    );
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [done, going, broke, stopped] = within(list).getAllByRole("listitem");
     expect(done).toHaveTextContent("Transcript finished");

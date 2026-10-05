@@ -37,14 +37,15 @@ export function WorkerStatusCard({ status, onRecheck }: WorkerStatusCardProps) {
   if (status.kind === "ready") {
     const { tools } = status.health;
     const copy = LOCAL_COPY[status.mode];
+    // Nothing needs doing: one quiet line instead of a card.
     return (
-      <section className={styles.status} data-tone="ok" role="status" aria-live="polite">
-        <p className={styles.statusTitle}>{copy.readyTitle}</p>
-        <p className={styles.statusBody}>
+      <p className={styles.readyLine} role="status" aria-live="polite">
+        <span className={styles.readyTitle}>{copy.readyTitle}</span>{" "}
+        <span>
           FFmpeg {tools.ffmpeg.version} · {copy.readyCapability} · worker{" "}
           {status.health.workerVersion}
-        </p>
-      </section>
+        </span>
+      </p>
     );
   }
 
