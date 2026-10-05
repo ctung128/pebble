@@ -64,12 +64,6 @@ export function LibraryPage() {
                   ) : null}
                 </>
               }
-              // The title link covers the row; this is its visible affordance, not a second link.
-              actions={
-                <span className={rowStyles.action} aria-hidden="true">
-                  Open
-                </span>
-              }
             />
           ))}
         </ol>

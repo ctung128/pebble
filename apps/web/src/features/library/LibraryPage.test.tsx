@@ -43,8 +43,9 @@ describe("LibraryPage", () => {
     // Covers are hidden; the title data they'd use is untouched.
     expect(within(row!).queryByText("测")).not.toBeInTheDocument();
     expect(row).toHaveTextContent("0:09");
-    // One link per row: "Open" is the title link's visible affordance, not a second link.
+    // One link per row (the title, covering the row) and no separate Open action.
     expect(within(row!).getAllByRole("link")).toHaveLength(1);
+    expect(row).not.toHaveTextContent(/\bOpen\b/);
   });
 
   it("leaves resetting demo data to the Learning items page", async () => {

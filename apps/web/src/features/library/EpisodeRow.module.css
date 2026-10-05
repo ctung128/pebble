@@ -46,8 +46,19 @@
   border-top: var(--border-width-hairline) solid var(--border-subtle);
 }
 
+/* A row that opens something: the whole row is the link's target. */
+.row[data-linked] {
+  cursor: pointer;
+}
+
 .row[data-linked]:hover {
   background: var(--bg-subtle);
+}
+
+.row[data-linked]:hover .titleLink {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 /* The title link covers the row; show its focus around the whole row. */
@@ -83,7 +94,18 @@
   min-width: 0;
 }
 
+/*
+ * Titles wrap to at most two lines, then end in an ellipsis. Clamping is visual only: the
+ * full title stays in the DOM (and the link's accessible name), and the reader or processing
+ * page shows it in full. overflow-wrap lets unbroken strings and file-like names break
+ * instead of overflowing; line breaks follow the browser's own rules for Chinese.
+ */
 .title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--title-size);
@@ -136,6 +158,15 @@
   min-width: 0;
   font-size: var(--size-label);
   color: var(--text-secondary);
+}
+
+/* Nothing to report (a finished row): the title takes the status column's room too. */
+.status:empty {
+  display: none;
+}
+
+.row:has(> .status:empty) .titles {
+  grid-column: titles-start / status-end;
 }
 
 .statusLabel {

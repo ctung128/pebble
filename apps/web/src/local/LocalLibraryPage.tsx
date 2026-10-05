@@ -6,7 +6,6 @@ import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { EpisodeRow, RowProgress, rowStyles } from "../features/library/EpisodeRow.tsx";
 import { canRetry, isActive, sectionProgress, statusLabel } from "./jobCopy.ts";
-import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
 import { useJobList } from "./useJobList.ts";
 import { LOCAL_EPISODE_ID, WorkerError } from "./workerClient.ts";
 import { useLearning } from "../features/learning/LearningContext.tsx";
@@ -98,10 +97,13 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
   };
 
   const retryable = canRetry(job);
+  // A finished row opens its transcript (or preview): the title is a link covering the row.
+  const completed = job.status === "completed";
   return (
     <EpisodeRow
       number={number}
       title={job.episodeTitle}
+      href={completed ? `/episodes/${job.episodeId}` : undefined}
       meta={
         <span className={rowStyles.metaItem}>
           {new Date(job.createdAt).toLocaleDateString(undefined, CREATED_DATE)}
@@ -110,11 +112,7 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
       status={<JobStatus job={job} detailsLink={retryable} />}
       actions={
         <>
-          {job.status === "completed" ? (
-            <Link to={`/episodes/${job.episodeId}`} className={rowStyles.action}>
-              {LOCAL_COPY[modeForJob(job)].libraryOpenAction}
-            </Link>
-          ) : isActive(job) ? (
+          {completed ? null : isActive(job) ? (
             <Link to={`/jobs/${job.id}`} className={rowStyles.action}>
               View progress
             </Link>
@@ -186,12 +184,11 @@ function JobStatus({ job, detailsLink }: { job: Job; detailsLink: boolean }) {
       </p>
     );
   }
-  return (
-    <>
-      <RowProgress label={statusLabel(job)} />
-      {job.status === "completed" && job.provider.kind === "mock" ? (
-        <span className={rowStyles.warningTag}>Preview · placeholder text</span>
-      ) : null}
-    </>
-  );
+  if (job.status === "completed") {
+    // Finished rows stay quiet; a preview keeps its label so it never passes for a transcript.
+    return job.provider.kind === "mock" ? (
+      <span className={rowStyles.warningTag}>Preview · placeholder text</span>
+    ) : null;
+  }
+  return <RowProgress label={statusLabel(job)} />;
 }

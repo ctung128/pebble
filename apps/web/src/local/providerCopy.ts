@@ -26,7 +26,6 @@ export interface LocalCopy {
   finalStageLabel: string;
   completedStatus: string;
   openAction: string;
-  libraryOpenAction: string;
   checkingTranscript: string;
   unreadableTranscript: string;
   readyTitle: string;
@@ -44,7 +43,6 @@ export const LOCAL_COPY: Record<LocalMode, LocalCopy> = {
     finalStageLabel: "Assembling the preview transcript",
     completedStatus: "Processing preview finished",
     openAction: "Open preview transcript",
-    libraryOpenAction: "Open preview",
     checkingTranscript: "Checking the preview transcript…",
     unreadableTranscript: "Finished, but the preview transcript couldn't be read",
     readyTitle: "Processing preview is ready.",
@@ -60,7 +58,6 @@ export const LOCAL_COPY: Record<LocalMode, LocalCopy> = {
     finalStageLabel: "Assembling the transcript",
     completedStatus: "Transcript finished",
     openAction: "Open transcript",
-    libraryOpenAction: "Open transcript",
     checkingTranscript: "Checking the transcript…",
     unreadableTranscript: "Finished, but the transcript couldn't be read",
     readyTitle: "Local transcription is ready.",

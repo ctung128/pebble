@@ -69,12 +69,14 @@ describe("LocalLibraryPage", () => {
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [done, active] = within(list).getAllByRole("listitem");
 
-    expect(done).toHaveTextContent("Processing preview finished");
+    // A finished row is quiet: it opens by its title, with no "finished" wording or Open button.
+    expect(done).not.toHaveTextContent(/preview finished|transcript finished|ready/i);
     expect(done).toHaveTextContent("Preview · placeholder text");
-    expect(within(done!).getByRole("link", { name: "Open preview" })).toHaveAttribute(
+    expect(within(done!).getByRole("link", { name: "Finished walk" })).toHaveAttribute(
       "href",
       "/episodes/ep-aaaaaaaaaaaa",
     );
+    expect(within(done!).queryByRole("link", { name: /^Open/ })).not.toBeInTheDocument();
     expect(within(done!).getByRole("button", { name: "Delete Finished walk" })).toBeInTheDocument();
 
     expect(active).toHaveTextContent("Processing section 1 of 4");
@@ -83,6 +85,49 @@ describe("LocalLibraryPage", () => {
       "/jobs/job-bbbbbbbbbbbb",
     );
     expect(within(active!).queryByRole("button", { name: /Delete/ })).not.toBeInTheDocument();
+    expect(within(active!).queryByRole("link", { name: "Still going" })).not.toBeInTheDocument();
+  });
+
+  it("opens a finished row from its title by click or Enter", async () => {
+    const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed]) });
+    renderLocal(<LocalLibraryPage />, { client });
+    await userEvent.click(await screen.findByRole("link", { name: "Finished walk" }));
+    expect(await screen.findByText("Episode page ep-aaaaaaaaaaaa")).toBeInTheDocument();
+  });
+
+  it("opens a finished row with Enter on its focused link", async () => {
+    const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed]) });
+    renderLocal(<LocalLibraryPage />, { client });
+    (await screen.findByRole("link", { name: "Finished walk" })).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByText("Episode page ep-aaaaaaaaaaaa")).toBeInTheDocument();
+  });
+
+  it("keeps Delete and its confirmation from opening the row", async () => {
+    const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed]) });
+    renderLocal(<LocalLibraryPage />, { client });
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Finished walk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/Episode page/)).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Local audio" })).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "long English",
+      "A very long episode title about a slow walk through the morning market that keeps going on",
+    ],
+    ["Chinese", "周末去菜市场买了很多新鲜的蔬菜和水果，然后慢慢走回家做一顿午饭"],
+    ["mixed script", "S1E2 慢慢听 | Slow listening: 一颗石子 and other stories"],
+    ["unbroken", "an_extremely_long_unbroken_file_like_name_without_spaces_0123456789abcdef"],
+  ])("keeps a %s title whole for assistive tech", async (_, title) => {
+    const job = makeJob({ ...completed, episodeTitle: title });
+    renderLocal(<LocalLibraryPage />, {
+      client: fakeWorkerClient({ listJobs: vi.fn(async () => [job]) }),
+    });
+    const link = await screen.findByRole("link", { name: title });
+    expect(link).toHaveTextContent(title); // clamping is visual only
+    expect(link).not.toHaveAttribute("title"); // no hover-only tooltip
   });
 
   it("deletes only after a confirmation that explains what is removed and what stays", async () => {
@@ -337,11 +382,18 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
     expect(screen.queryByText(/is ready/)).not.toBeInTheDocument();
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [done, going, broke, stopped] = within(list).getAllByRole("listitem");
-    expect(done).toHaveTextContent("Transcript finished");
-    expect(within(done!).getByRole("link", { name: "Open transcript" })).toHaveAttribute(
+    expect(done).not.toHaveTextContent(/finished|ready/i);
+    expect(within(done!).getByRole("link", { name: "Done" })).toHaveAttribute(
       "href",
       "/episodes/ep-aaaaaaaaaaaa",
     );
+    for (const row of [going, broke, stopped]) {
+      expect(
+        within(row!)
+          .queryAllByRole("link")
+          .filter((link) => link.getAttribute("href")?.startsWith("/episodes/")),
+      ).toEqual([]);
+    }
     expect(going).toHaveTextContent("Processing section 2 of 2");
     expect(broke).toHaveTextContent("didn't find any speech");
     expect(stopped).toHaveTextContent("Cancelled");
