@@ -26,17 +26,13 @@ export function LocalLibraryPage() {
     <div className={styles.page}>
       <title>Local library · Pebble</title>
       <PageHeader
-        index="01 — Library"
         title="Your local audio"
         vertical="书架"
         meta={ready && jobs && jobs.length > 0 ? librarySummary(jobs) : null}
-      >
-        <p className={styles.lede}>
-          Audio you processed with Pebble's worker on this computer. It never leaves this machine.
-        </p>
-      </PageHeader>
+      />
 
-      <WorkerStatusCard status={status} onRecheck={recheck} />
+      {/* Only when something needs doing; a ready Pebble says nothing here. */}
+      <WorkerStatusCard status={status} onRecheck={recheck} showReady={false} />
 
       {ready ? (
         error ? (

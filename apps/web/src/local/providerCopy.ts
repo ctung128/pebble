@@ -47,8 +47,8 @@ export const LOCAL_COPY: Record<LocalMode, LocalCopy> = {
     libraryOpenAction: "Open preview",
     checkingTranscript: "Checking the preview transcript…",
     unreadableTranscript: "Finished, but the preview transcript couldn't be read",
-    readyTitle: "Local worker is ready.",
-    readyCapability: "Processing preview (placeholder transcript text)",
+    readyTitle: "Processing preview is ready.",
+    readyCapability: "It creates placeholder text for testing, not a transcript.",
     unavailableHeading: "Pebble's processing preview isn't available.",
   },
   funasr: {
@@ -64,12 +64,11 @@ export const LOCAL_COPY: Record<LocalMode, LocalCopy> = {
     checkingTranscript: "Checking the transcript…",
     unreadableTranscript: "Finished, but the transcript couldn't be read",
     readyTitle: "Local transcription is ready.",
-    readyCapability: "Mandarin speech recognition on this computer",
+    readyCapability: "Pebble transcribes Mandarin audio on this computer.",
     unavailableHeading: "Pebble's local transcription isn't available.",
   },
 };
 
 export const FUNASR_CHECKING = "Checking local speech models…";
 export const FUNASR_NEEDS_SETUP = "Pebble's local transcription needs setup.";
-export const CONFIGURATION_MISMATCH =
-  "Pebble's local worker configuration does not match this app.";
+export const CONFIGURATION_MISMATCH = "Pebble's setup doesn't match this page.";

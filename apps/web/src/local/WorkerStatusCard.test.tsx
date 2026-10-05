@@ -1,37 +1,59 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { funasrHealth, makeHealth } from "../test/localFixtures.tsx";
 import { WorkerStatusCard } from "./WorkerStatusCard.tsx";
+import type { WorkerStatus } from "./workerHealth.ts";
+
+/** Nothing a learner sees by default may name tools, versions, paths or internals. */
+const TECHNICAL =
+  /ffmpeg|funasr|paraformer|worker|model\.pt|uv sync|~\/|\/Users\/|\d+\.\d+\.\d+|PEBBLE_|npm run/i;
+
+/** The card's text with the closed "Show setup steps" disclosure left out. */
+function visibleText(card: HTMLElement): string {
+  const clone = card.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("details > :not(summary)").forEach((node) => node.remove());
+  return clone.textContent ?? "";
+}
 
 describe("WorkerStatusCard", () => {
-  it("says the mock worker is ready, unchanged", () => {
+  it("says the processing preview is ready in plain words, without versions", () => {
     render(
       <WorkerStatusCard
         status={{ kind: "ready", mode: "mock", health: makeHealth() }}
         onRecheck={vi.fn()}
       />,
     );
-    expect(screen.getByText("Local worker is ready.")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Processing preview (placeholder transcript text)",
-    );
+    const line = screen.getByRole("status");
+    expect(line).toHaveTextContent("Processing preview is ready.");
+    expect(line).toHaveTextContent("placeholder text for testing");
+    expect(line.textContent).not.toMatch(TECHNICAL);
   });
 
-  it("says local transcription is ready for FunASR, without internal names", () => {
+  it("says local transcription is ready, without internal names", () => {
     render(
       <WorkerStatusCard
         status={{ kind: "ready", mode: "funasr", health: funasrHealth() }}
         onRecheck={vi.fn()}
       />,
     );
-    const card = screen.getByRole("status");
-    expect(card).toHaveTextContent("Local transcription is ready.");
-    expect(card).toHaveTextContent("Mandarin speech recognition on this computer");
-    expect(card).not.toHaveTextContent(/FunASR|Paraformer|placeholder|model\.pt|uv sync/);
+    const line = screen.getByRole("status");
+    expect(line).toHaveTextContent("Local transcription is ready.");
+    expect(line.textContent).not.toMatch(TECHNICAL);
   });
 
-  it("shows that speech models are being checked", () => {
+  it("can stay silent once ready (the Library)", () => {
+    const { container } = render(
+      <WorkerStatusCard
+        status={{ kind: "ready", mode: "funasr", health: funasrHealth() }}
+        onRecheck={vi.fn()}
+        showReady={false}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows that it is checking, without an alert", () => {
     render(
       <WorkerStatusCard
         status={{ kind: "provider-checking", mode: "funasr" }}
@@ -42,85 +64,60 @@ describe("WorkerStatusCard", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("explains FunASR setup with only the worker's hint, its command as code", () => {
-    render(
-      <WorkerStatusCard
-        status={{
-          kind: "provider-setup",
-          mode: "funasr",
-          hint: "Download the speech models (about 1.3 GB) with: npm run pebble:setup",
-        }}
-        onRecheck={vi.fn()}
-      />,
-    );
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("Pebble's local transcription needs setup.");
-    expect(screen.getByText("npm run pebble:setup").tagName).toBe("CODE");
-    expect(alert).not.toHaveTextContent(/doctor|FunASR|uv sync/);
-  });
-
   it.each([
-    ["funasr", "Pebble's local transcription isn't available."],
-    ["mock", "Pebble's processing preview isn't available."],
-  ] as const)("names the unavailable %s provider in its own words", (mode, title) => {
-    render(
-      <WorkerStatusCard
-        status={{ kind: "provider-unavailable", mode, hint: "Restart the worker and try again." }}
-        onRecheck={vi.fn()}
-      />,
+    [{ kind: "not-running" }, "Pebble isn't running on this computer."],
+    [{ kind: "needs-ffmpeg", missing: ["ffmpeg"] }, "Pebble needs one more setup step"],
+    [
+      { kind: "version-mismatch", detail: "worker 0.0.9 is older than 0.1.0" },
+      "Pebble needs a restart.",
+    ],
+    [
+      {
+        kind: "data-dir",
+        path: "/srv/pebble-test-data",
+        hint: "Fix permissions on pebble-test-data.",
+      },
+      "Pebble can't save files on this computer.",
+    ],
+    [
+      {
+        kind: "provider-setup",
+        mode: "funasr",
+        hint: "Download the speech models (about 1.3 GB) with: npm run pebble:setup",
+      },
+      "Pebble's local transcription needs setup.",
+    ],
+    [
+      { kind: "provider-unavailable", mode: "funasr", hint: "FunASR failed: model.pt missing" },
+      "Pebble's local transcription isn't available.",
+    ],
+    [
+      { kind: "provider-unavailable", mode: "mock", hint: "Restart the worker." },
+      "Pebble's processing preview isn't available.",
+    ],
+    [{ kind: "provider-mismatch" }, "Pebble's setup doesn't match this page."],
+    [{ kind: "origin-blocked" }, "Pebble can't connect from this page."],
+  ] as const)("explains %o in plain language, with steps only on request", (status, title) => {
+    render(<WorkerStatusCard status={status as WorkerStatus} onRecheck={vi.fn()} />);
+    const card = screen.getByRole("alert");
+    expect(card).toHaveTextContent(title);
+    expect(visibleText(card)).not.toMatch(TECHNICAL);
+    // Worker-supplied hints, details and paths never render, even inside the steps.
+    expect(card).not.toHaveTextContent(
+      /1\.3 GB|model\.pt|0\.0\.9|pebble-test-data|Fix permissions/,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(title);
-    expect(screen.getByText("Restart the worker and try again.")).toBeInTheDocument();
+    const steps = card.querySelector("details")!;
+    expect(steps).not.toHaveAttribute("open");
+    expect(within(steps).getByText("Show setup steps").tagName).toBe("SUMMARY");
   });
 
-  it("explains a provider configuration mismatch", () => {
-    render(<WorkerStatusCard status={{ kind: "provider-mismatch" }} onRecheck={vi.fn()} />);
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("Pebble's local worker configuration does not match this app.");
-    expect(alert).toHaveTextContent("npm run pebble:start");
-  });
-
-  it("gives the exact command when the worker isn't running", async () => {
+  it("puts the exact commands behind Show setup steps, and rechecks on request", async () => {
     const onRecheck = vi.fn();
     render(<WorkerStatusCard status={{ kind: "not-running" }} onRecheck={onRecheck} />);
-    expect(screen.getByRole("alert")).toHaveTextContent("Pebble's local worker is not running.");
-    expect(screen.getByText("npm run pebble:start")).toBeInTheDocument();
-    expect(screen.getByText("npm run pebble:setup")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Show setup steps"));
+    expect(screen.getByText("npm run pebble:start").tagName).toBe("CODE");
+    expect(screen.getByText("npm run pebble:setup")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Check again" }));
     expect(onRecheck).toHaveBeenCalled();
-  });
-
-  it("points to FFmpeg setup and the doctor", () => {
-    render(
-      <WorkerStatusCard
-        status={{ kind: "needs-ffmpeg", missing: ["ffmpeg"] }}
-        onRecheck={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Audio processing needs FFmpeg.")).toBeInTheDocument();
-    expect(screen.getByText(/npm run pebble:doctor/)).toBeInTheDocument();
-  });
-
-  it("explains a version mismatch with a next step", () => {
-    render(
-      <WorkerStatusCard
-        status={{ kind: "version-mismatch", detail: "Too old." }}
-        onRecheck={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Pebble's app and worker versions do not match.")).toBeInTheDocument();
-    expect(screen.getByText(/start it again from this same Pebble folder/)).toBeInTheDocument();
-  });
-
-  it("shows the data folder path and the worker's hint", () => {
-    render(
-      <WorkerStatusCard
-        status={{ kind: "data-dir", path: "~/.pebble", hint: "Fix permissions, then restart." }}
-        onRecheck={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Pebble cannot access its local data folder.")).toBeInTheDocument();
-    expect(screen.getByText("~/.pebble")).toBeInTheDocument();
-    expect(screen.getByText("Fix permissions, then restart.")).toBeInTheDocument();
   });
 });

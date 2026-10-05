@@ -57,6 +57,34 @@
   color: var(--warning);
 }
 
+/* Setup steps: terminal commands, only on request. */
+.setupSteps {
+  font-size: var(--size-body-sm);
+}
+
+.setupSteps summary {
+  width: fit-content;
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.setupSteps ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-6);
+}
+
+.setupSteps code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
 /* Ready: a quiet line under the page header. */
 .readyLine {
   margin: 0;
@@ -107,33 +135,48 @@
 }
 
 /* Buttons */
+/* Buttons: the design system's primary pill (one per screen) and neutral secondary tile. */
 .primaryButton,
 .secondaryButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
+  gap: var(--space-2);
+  border: 0;
+  font-size: var(--size-body-sm);
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
 
 .primaryButton {
-  border: 1px solid var(--accent);
+  min-height: var(--control-lg);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-pill);
   background: var(--accent);
-  color: var(--accent-contrast);
+  color: var(--text-on-accent);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .secondaryButton {
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 
 .primaryButton:disabled,
 .secondaryButton:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: default;
 }
 

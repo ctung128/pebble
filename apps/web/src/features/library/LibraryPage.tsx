@@ -17,7 +17,6 @@ export function LibraryPage() {
   return (
     <div className={styles.page}>
       <PageHeader
-        index="01 — Library"
         title="Library"
         vertical="书架"
         meta={count === null ? null : `${count} ${count === 1 ? "episode" : "episodes"}`}

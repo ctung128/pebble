@@ -193,14 +193,21 @@ describe("LocalLibraryPage", () => {
       },
     });
     renderLocal(<LocalLibraryPage />, { client });
-    expect(await screen.findByText("Pebble's local worker is not running.")).toBeInTheDocument();
+    expect(await screen.findByText("Pebble isn't running on this computer.")).toBeInTheDocument();
     await waitFor(() => expect(client.listJobs).not.toHaveBeenCalled());
   });
 
-  it("leaves adding audio to the sidebar's one primary button", async () => {
+  it("leaves adding audio to the sidebar: no upload action on the page", async () => {
     renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
-    expect(await screen.findByText("Local worker is ready.")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Process audio locally" })).not.toBeInTheDocument();
+    expect(await screen.findByText("No local audio yet")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Add audio|Process audio/ })).not.toBeInTheDocument();
+  });
+
+  it("says nothing about readiness or the tools behind it once Pebble is ready", async () => {
+    renderLocal(<LocalLibraryPage />, { client: fakeWorkerClient() });
+    await screen.findByText("No local audio yet");
+    expect(document.body).not.toHaveTextContent(/ready|ffmpeg|worker|funasr|\d+\.\d+\.\d+/i);
+    expect(screen.queryByText(/Audio you processed/)).not.toBeInTheDocument();
   });
 
   it("heads the page with the Library index and real counts", async () => {
@@ -219,7 +226,7 @@ describe("LocalLibraryPage", () => {
     const client = fakeWorkerClient({ listJobs: vi.fn(async () => [completed, running, failed]) });
     renderLocal(<LocalLibraryPage />, { client });
     expect(screen.getByRole("heading", { level: 1, name: "Your local audio" })).toBeInTheDocument();
-    expect(screen.getByText("01 — Library")).toBeInTheDocument();
+    expect(screen.queryByText(/01 — Library/)).not.toBeInTheDocument();
     expect(await screen.findByText("3 episodes · 1 processing · 1 stopped")).toBeInTheDocument();
   });
 
@@ -326,7 +333,8 @@ describe("LocalLibraryPage — local transcription (FunASR)", () => {
       listJobs: vi.fn(async () => jobs),
     });
     renderLocal(<LocalLibraryPage />, { client });
-    expect(await screen.findByText("Local transcription is ready.")).toBeInTheDocument();
+    await screen.findByRole("list", { name: "Local audio" });
+    expect(screen.queryByText(/is ready/)).not.toBeInTheDocument();
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [done, going, broke, stopped] = within(list).getAllByRole("listitem");
     expect(done).toHaveTextContent("Transcript finished");

@@ -79,9 +79,13 @@ describe("Layout", () => {
     expect(screen.queryByRole("link", { name: "Add audio" })).not.toBeInTheDocument();
   });
 
-  it("offers Add audio as the primary action in local mode", () => {
-    renderShell("local");
-    expect(screen.getByRole("link", { name: "Add audio" })).toHaveAttribute("href", "/process");
+  it.each(["/", "/items"])("offers Add audio in the sidebar in local mode (on %s)", (route) => {
+    renderShell("local", route);
+    const sidebar = screen.getByRole("navigation", { name: "Main" }).closest("header")!;
+    expect(within(sidebar).getByRole("link", { name: "Add audio" })).toHaveAttribute(
+      "href",
+      "/process",
+    );
     expect(screen.getByText("Local")).toHaveAttribute(
       "title",
       "Runs with Pebble's worker on this computer. Your audio stays here.",

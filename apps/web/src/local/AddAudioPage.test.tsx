@@ -10,7 +10,7 @@ const audio = (name = "morning_walk.m4a", size = 3) =>
 
 async function renderReady(client = fakeWorkerClient()) {
   const view = renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
-  await screen.findByText("Local worker is ready.");
+  await screen.findByText("Processing preview is ready.");
   return view;
 }
 
@@ -40,7 +40,7 @@ describe("AddAudioPage", () => {
       },
     });
     renderLocal(<AddAudioPage />, { client, path: "/process", route: "/process" });
-    expect(await screen.findByText("Pebble's local worker is not running.")).toBeInTheDocument();
+    expect(await screen.findByText("Pebble isn't running on this computer.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Audio file")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Run processing preview" }),

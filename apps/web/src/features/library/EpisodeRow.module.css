@@ -24,16 +24,22 @@
 
   position: relative;
   display: grid;
-  grid-template-columns:
-    var(--number-width) var(--cover-width) minmax(0, 1fr) var(--status-width)
-    var(--action-width);
-  grid-template-areas: "number cover titles status actions";
+  grid-template-columns: var(--number-width) minmax(0, 1fr) var(--status-width) var(--action-width);
+  grid-template-areas: "number titles status actions";
   align-items: center;
   gap: var(--space-2) var(--space-4);
   padding: var(--space-4) var(--row-pad, var(--space-4));
   border-bottom: var(--border-width-hairline) solid var(--border-subtle);
   border-radius: 0;
   transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+/* With covers (SHOW_COVERS in EpisodeRow.tsx). */
+.row[data-cover] {
+  grid-template-columns:
+    var(--number-width) var(--cover-width) minmax(0, 1fr) var(--status-width)
+    var(--action-width);
+  grid-template-areas: "number cover titles status actions";
 }
 
 .row:first-child {
@@ -277,13 +283,20 @@
 
 @container (max-width: 680px) {
   .row {
+    grid-template-columns: var(--number-width) minmax(0, 1fr) var(--action-width);
+    grid-template-areas:
+      "number titles actions"
+      "number status actions";
+    align-items: start;
+  }
+
+  .row[data-cover] {
     grid-template-columns:
       var(--number-width) var(--cover-width) minmax(0, 1fr)
       var(--action-width);
     grid-template-areas:
       "number cover titles actions"
       "number cover status actions";
-    align-items: start;
   }
 
   .number,
@@ -297,6 +310,14 @@
 
 @container (max-width: 480px) {
   .row {
+    grid-template-columns: var(--number-width) minmax(0, 1fr);
+    grid-template-areas:
+      "number titles"
+      "number status"
+      "actions actions";
+  }
+
+  .row[data-cover] {
     grid-template-columns: var(--cover-width) minmax(0, 1fr);
     grid-template-areas:
       "cover titles"
@@ -304,7 +325,7 @@
       "actions actions";
   }
 
-  .number {
+  .row[data-cover] .number {
     display: none;
   }
 

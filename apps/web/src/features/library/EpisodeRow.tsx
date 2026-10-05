@@ -2,6 +2,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router";
 import styles from "./EpisodeRow.module.css";
 
+/**
+ * Covers are hidden for now (there are no cover images yet). The markup and styles stay:
+ * set this to true to bring the first-character covers back.
+ */
+export const SHOW_COVERS = false;
+
 interface EpisodeRowProps {
   /** 1-based position in the list (shown as "01"; the list itself conveys order). */
   number: number;
@@ -37,13 +43,19 @@ export function EpisodeRow({
   const coverText = titleZh || title;
   const cover = Array.from(coverText)[0] ?? "";
   return (
-    <li className={styles.row} data-linked={href ? true : undefined}>
+    <li
+      className={styles.row}
+      data-linked={href ? true : undefined}
+      data-cover={SHOW_COVERS || undefined}
+    >
       <span className={styles.number} aria-hidden="true">
         {String(number).padStart(2, "0")}
       </span>
-      <span className={styles.cover} aria-hidden="true" lang={titleZh ? language : undefined}>
-        {cover}
-      </span>
+      {SHOW_COVERS ? (
+        <span className={styles.cover} aria-hidden="true" lang={titleZh ? language : undefined}>
+          {cover}
+        </span>
+      ) : null}
       <div className={styles.titles}>
         {href ? (
           <Link to={href} className={`${styles.title} ${styles.titleLink}`}>

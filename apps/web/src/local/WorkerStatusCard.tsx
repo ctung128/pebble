@@ -11,49 +11,57 @@ import styles from "./local.module.css";
 interface WorkerStatusCardProps {
   status: WorkerStatus;
   onRecheck: () => void;
+  /** False shows nothing once Pebble is ready (the Library); the Add audio page keeps the line. */
+  showReady?: boolean;
 }
 
-/** Explains the local worker's state and, when something is wrong, the exact next step. */
-export function WorkerStatusCard({ status, onRecheck }: WorkerStatusCardProps) {
+/**
+ * Pebble's local state in plain language, and only what the learner can act on. Versions,
+ * tool names, worker hints, paths and raw errors never appear; the terminal steps that fix a
+ * problem sit behind "Show setup steps".
+ */
+export function WorkerStatusCard({ status, onRecheck, showReady = true }: WorkerStatusCardProps) {
   if (status.kind === "checking") {
     return (
-      <section className={styles.status} data-tone="neutral" role="status" aria-live="polite">
-        <p className={styles.statusTitle}>Checking Pebble's local worker…</p>
-      </section>
+      <p className={styles.readyLine} role="status" aria-live="polite">
+        Checking Pebble…
+      </p>
     );
   }
 
   if (status.kind === "provider-checking") {
     return (
-      <section className={styles.status} data-tone="neutral" role="status" aria-live="polite">
-        <p className={styles.statusTitle}>{FUNASR_CHECKING}</p>
-        <p className={styles.statusBody}>
-          This takes a few seconds. Pebble checks again on its own.
-        </p>
-      </section>
+      <p className={styles.readyLine} role="status" aria-live="polite">
+        <span className={styles.readyTitle}>{FUNASR_CHECKING}</span> Pebble checks again on its own.
+      </p>
     );
   }
 
   if (status.kind === "ready") {
-    const { tools } = status.health;
+    if (!showReady) return null;
     const copy = LOCAL_COPY[status.mode];
     // Nothing needs doing: one quiet line instead of a card.
     return (
       <p className={styles.readyLine} role="status" aria-live="polite">
         <span className={styles.readyTitle}>{copy.readyTitle}</span>{" "}
-        <span>
-          FFmpeg {tools.ffmpeg.version} · {copy.readyCapability} · worker{" "}
-          {status.health.workerVersion}
-        </span>
+        <span>{copy.readyCapability}</span>
       </p>
     );
   }
 
-  const { title, body } = PROBLEMS[status.kind](status as never);
+  const { title, body, steps } = PROBLEMS[status.kind](status as never);
   return (
     <section className={styles.status} data-tone="problem" role="alert">
       <p className={styles.statusTitle}>{title}</p>
-      <div className={styles.statusBody}>{body}</div>
+      <p className={styles.statusBody}>{body}</p>
+      <details className={styles.setupSteps}>
+        <summary>Show setup steps</summary>
+        <ol>
+          {steps.map((step, i) => (
+            <li key={i}>{step}</li>
+          ))}
+        </ol>
+      </details>
       <button type="button" className={styles.secondaryButton} onClick={onRecheck}>
         Check again
       </button>
@@ -66,114 +74,103 @@ type Problem = Exclude<
   { kind: "checking" } | { kind: "ready" } | { kind: "provider-checking" }
 >;
 
-/** Shows a worker hint, formatting its (single) `npm run …` command as code. */
-function Hint({ text }: { text: string }) {
-  const parts = text.split(/(npm run [\w:-]+(?: -- [\w-]+)?)/);
-  return <p>{parts.map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : part))}</p>;
+/** A terminal command, shown as code. */
+function Cmd({ children }: { children: string }) {
+  return <code>{children}</code>;
 }
 
+const RESTART: ReactNode = (
+  <>
+    Stop Pebble with <Cmd>npm run pebble:stop</Cmd>, then start it again with{" "}
+    <Cmd>npm run pebble:start</Cmd> from the Pebble folder.
+  </>
+);
+
+/** Plain-language title and next step for each state, plus the setup steps behind a disclosure. */
 const PROBLEMS: {
   [K in Problem["kind"]]: (status: Extract<Problem, { kind: K }>) => {
     title: string;
-    body: ReactNode;
+    body: string;
+    steps: ReactNode[];
   };
 } = {
   "not-running": () => ({
-    title: "Pebble's local worker is not running.",
-    body: (
+    title: "Pebble isn't running on this computer.",
+    body: "Start Pebble, and this page will update on its own.",
+    steps: [
       <>
-        <p>In a terminal, from the Pebble folder, run:</p>
-        <pre className={styles.command}>
-          <code>npm run pebble:start</code>
-        </pre>
-        <p>
-          If it says Pebble isn't set up yet, run <code>npm run pebble:setup</code> first. Pebble
-          checks again automatically every few seconds.
-        </p>
-      </>
-    ),
-  }),
-  "needs-ffmpeg": ({ missing }) => ({
-    title: "Audio processing needs FFmpeg.",
-    body: (
+        In a terminal, from the Pebble folder, run <Cmd>npm run pebble:start</Cmd>.
+      </>,
       <>
-        <p>
-          The worker can't find {missing.join(" and ")}. Install FFmpeg, then confirm the setup:
-        </p>
-        <pre className={styles.command}>
-          <code>{"brew install ffmpeg\nnpm run pebble:doctor"}</code>
-        </pre>
-        <p>
-          Then stop Pebble and start it again with <code>npm run pebble:start</code>.
-        </p>
-      </>
-    ),
+        If it says Pebble isn't set up yet, run <Cmd>npm run pebble:setup</Cmd> first.
+      </>,
+    ],
   }),
-  "version-mismatch": ({ detail }) => ({
-    title: "Pebble's app and worker versions do not match.",
-    body: (
+  "needs-ffmpeg": () => ({
+    title: "Pebble needs one more setup step before it can process audio.",
+    body: "Finish setting up Pebble, then check again.",
+    steps: [
       <>
-        <p>{detail}</p>
-        <p>
-          Stop Pebble with <code>npm run pebble:stop</code>, start it again from this same Pebble
-          folder with <code>npm run pebble:start</code>, and reload this page.
-        </p>
-      </>
-    ),
-  }),
-  "data-dir": ({ path, hint }) => ({
-    title: "Pebble cannot access its local data folder.",
-    body: (
+        Run <Cmd>npm run pebble:setup</Cmd> and follow its instructions, or install FFmpeg with{" "}
+        <Cmd>brew install ffmpeg</Cmd>.
+      </>,
       <>
-        {path ? (
-          <p>
-            Data folder: <code>{path}</code>
-          </p>
-        ) : null}
-        <p>
-          {hint ??
-            "Check that the folder exists and you can write to it, or choose another location with PEBBLE_DATA_DIR, then restart the worker."}
-        </p>
-      </>
-    ),
+        Confirm the setup with <Cmd>npm run pebble:doctor</Cmd>.
+      </>,
+      RESTART,
+    ],
   }),
-  "provider-setup": ({ hint }) => ({
+  "version-mismatch": () => ({
+    title: "Pebble needs a restart.",
+    body: "This page and the running copy of Pebble don't match. Restart Pebble, then reload this page.",
+    steps: [RESTART, "Reload this page."],
+  }),
+  "data-dir": () => ({
+    title: "Pebble can't save files on this computer.",
+    body: "Pebble's data folder is missing or can't be written to.",
+    steps: [
+      "Check that Pebble's data folder exists and that you can write to it.",
+      <>
+        Or choose another folder with <Cmd>PEBBLE_DATA_DIR</Cmd>.
+      </>,
+      RESTART,
+    ],
+  }),
+  "provider-setup": () => ({
     title: FUNASR_NEEDS_SETUP,
-    body: hint ? (
-      <Hint text={hint} />
-    ) : (
-      <p>
-        Run <code>npm run pebble:doctor</code> for details, then start Pebble again.
-      </p>
-    ),
+    body: "Finish setting up Pebble, then check again.",
+    steps: [
+      <>
+        Run <Cmd>npm run pebble:setup</Cmd> and follow its instructions.
+      </>,
+      RESTART,
+    ],
   }),
-  "provider-unavailable": ({ mode, hint }) => ({
+  "provider-unavailable": ({ mode }) => ({
     title: LOCAL_COPY[mode].unavailableHeading,
-    body: hint ? (
-      <Hint text={hint} />
-    ) : (
-      <p>
-        Run <code>npm run pebble:doctor</code> for details, then start Pebble again.
-      </p>
-    ),
+    body: "Restart Pebble. If that doesn't help, check the setup.",
+    steps: [
+      RESTART,
+      <>
+        For details, run <Cmd>npm run pebble:doctor</Cmd>.
+      </>,
+    ],
   }),
   "provider-mismatch": () => ({
     title: CONFIGURATION_MISMATCH,
-    body: (
-      <p>
-        Stop the worker and start Pebble again from this Pebble folder with{" "}
-        <code>npm run pebble:start</code>.
-      </p>
-    ),
+    body: "Restart Pebble from this Pebble folder, then check again.",
+    steps: [RESTART],
   }),
   "origin-blocked": () => ({
-    title: "The local worker didn't accept this page.",
-    body: (
-      <p>
-        Open Pebble's local mode at <code>http://localhost:5175</code> (
-        <code>npm run pebble:start</code>), or add this page's address to{" "}
-        <code>PEBBLE_ALLOWED_ORIGINS</code> and restart the worker.
-      </p>
-    ),
+    title: "Pebble can't connect from this page.",
+    body: "Open Pebble from the address it gives you when it starts.",
+    steps: [
+      <>
+        Start Pebble with <Cmd>npm run pebble:start</Cmd> and open <Cmd>http://localhost:5175</Cmd>.
+      </>,
+      <>
+        To use another address, add it to <Cmd>PEBBLE_ALLOWED_ORIGINS</Cmd> and restart Pebble.
+      </>,
+    ],
   }),
 };

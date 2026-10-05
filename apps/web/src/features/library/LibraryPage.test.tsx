@@ -30,16 +30,18 @@ describe("LibraryPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load content");
   });
 
-  it("heads the page and numbers each row with its cover character and facts", async () => {
+  it("heads the page plainly and numbers each row with its titles and facts", async () => {
     renderWithProviders(<LibraryPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Library" })).toBeInTheDocument();
-    expect(screen.getByText("01 — Library")).toBeInTheDocument();
+    expect(screen.queryByText(/01 — Library/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Listen to Mandarin audio/)).toBeInTheDocument(); // demo intro stays
     expect(await screen.findByText("1 episode")).toBeInTheDocument();
 
     const [row] = within(screen.getByRole("list", { name: "Episodes" })).getAllByRole("listitem");
     expect(row).toHaveTextContent("01");
-    expect(row).toHaveTextContent("测"); // the Chinese title's first character
     expect(row).toHaveTextContent("测试节目");
+    // Covers are hidden; the title data they'd use is untouched.
+    expect(within(row!).queryByText("测")).not.toBeInTheDocument();
     expect(row).toHaveTextContent("0:09");
     // One link per row: "Open" is the title link's visible affordance, not a second link.
     expect(within(row!).getAllByRole("link")).toHaveLength(1);
