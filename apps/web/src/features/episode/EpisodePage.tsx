@@ -10,14 +10,17 @@ import {
   type ReviewHint,
 } from "../../data/EpisodeSource.ts";
 import { useEpisodeSource } from "../../data/SourceContext.tsx";
+import { formatTime } from "../../lib/formatTime.ts";
 import { useAsync } from "../../lib/useAsync.ts";
 import { buildLearningItem } from "../learning/buildLearningItem.ts";
 import { useLearning } from "../learning/LearningContext.tsx";
+import { listeningState } from "../learning/playback.ts";
 import { usePinyin } from "../pinyin/usePinyin.ts";
 import { PlayerBar } from "../player/PlayerBar.tsx";
 import { useAudioPlayer } from "../player/useAudioPlayer.ts";
 import { useEpisodeRename } from "./episodeRename.ts";
 import { EpisodeTitle } from "./EpisodeTitle.tsx";
+import { usePlaybackProgress } from "./usePlaybackProgress.ts";
 import { findActiveSegmentIndex } from "../reader/activeSegment.ts";
 import type { LineActions, LineView } from "../reader/lineView.ts";
 import { CopyFallback } from "../reader/CopyFallback.tsx";
@@ -101,6 +104,16 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const activeIndex = findActiveSegmentIndex(segments, player.currentTimeMs);
   const readerRef = useRef<HTMLOListElement>(null);
   const { isFollowing, resume } = useFollowActive(readerRef, activeIndex);
+  usePlaybackProgress(audioRef, episode.id, episode.durationMs);
+  // Once anything plays here, the resume controls have done their job.
+  const [startedHere, setStartedHere] = useState(false);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onPlay = () => setStartedHere(true);
+    audio.addEventListener("play", onPlay);
+    return () => audio.removeEventListener("play", onPlay);
+  }, [audioRef]);
 
   const learning = useLearning();
   const pinyin = usePinyin();
@@ -324,6 +337,17 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   // Arriving from a learning item (#/episodes/:id?segment=…) cues up that line.
   const [searchParams] = useSearchParams();
   const cueSegmentId = searchParams.get("segment");
+  // Resume controls: only for a saved position worth resuming (or a real finish), never when
+  // the learner arrived to cue a specific line, and gone once playback starts. Nothing here
+  // plays on its own; each control acts only when pressed.
+  const saved = learning.playbackFor(episode.id);
+  const listening = listeningState(saved, episode.durationMs);
+  const showResume = !startedHere && !cueSegmentId && listening !== "not-started";
+  const startOver = () => {
+    learning.clearPlayback(episode.id);
+    resume();
+    seek(0, { play: true });
+  };
   useEffect(() => {
     const segment = segments.find((s) => s.id === cueSegmentId);
     if (segment) seek(segment.startMs);
@@ -424,6 +448,37 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             <p>Translations in this demo are prepared sample content.</p>
           ) : null}
         </aside>
+      ) : null}
+
+      {showResume && saved ? (
+        <div className={styles.resumeBar} role="group" aria-label="Listening progress">
+          {listening === "in-progress" ? (
+            <>
+              <button
+                type="button"
+                className={styles.resumeButton}
+                onClick={() => {
+                  resume();
+                  seek(saved.positionMs, { play: true });
+                }}
+              >
+                <Icon name="play" size={16} />
+                Resume {formatTime(saved.positionMs)}
+              </button>
+              <button type="button" className={styles.textButton} onClick={startOver}>
+                Start over
+              </button>
+            </>
+          ) : (
+            <>
+              <span className={styles.finished}>Finished</span>
+              <span aria-hidden="true">·</span>
+              <button type="button" className={styles.textButton} onClick={startOver}>
+                Listen again
+              </button>
+            </>
+          )}
+        </div>
       ) : null}
 
       <section aria-labelledby="transcript-heading">

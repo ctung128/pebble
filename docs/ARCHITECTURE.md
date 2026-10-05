@@ -53,6 +53,12 @@ to a `LearningStore` (IndexedDB in the browser, in-memory in tests). If the stor
 opened or a write fails, the app continues session-only and shows a notice. Corrections are
 stored separately from transcripts, keyed by episode + segment; fixture files are never
 modified. Translations are cached for the session only (`SessionCachedTranslationProvider`).
+Listening progress is browser-local learner state in the same store (IndexedDB v2 `playback`):
+one record per episode with only `episodeId`, `positionMs`, `durationMs`, `updatedAt` and
+`finishedAt`. It's saved after real playback (at most every 15 s, and on pause, end, page hide
+and leaving), "finished" only from the audio's `ended` event, and offered back as **Resume** /
+**Start over** / **Listen again** — never played automatically. Deleting a local episode or
+resetting learner data removes it; it never reaches the worker or Anki exports.
 
 ## Local worker (M0C-1)
 
