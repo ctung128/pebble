@@ -6,10 +6,13 @@ interface ConfirmButtonProps {
   /** Question shown while confirming, e.g. "Delete this item?" */
   prompt: string;
   confirmLabel: string;
+  /** The button that backs out (default "Cancel"). */
+  cancelLabel?: string;
   onConfirm: () => void;
   className?: string;
   /** Skip the confirmation step (e.g. when there's nothing to lose). */
   skipConfirm?: boolean;
+  disabled?: boolean;
   "aria-label"?: string;
 }
 
@@ -18,9 +21,11 @@ export function ConfirmButton({
   children,
   prompt,
   confirmLabel,
+  cancelLabel = "Cancel",
   onConfirm,
   className,
   skipConfirm = false,
+  disabled = false,
   "aria-label": ariaLabel,
 }: ConfirmButtonProps) {
   const [confirming, setConfirming] = useState(false);
@@ -30,6 +35,7 @@ export function ConfirmButton({
       <button
         type="button"
         className={className}
+        disabled={disabled}
         aria-label={ariaLabel}
         onClick={() => (skipConfirm ? onConfirm() : setConfirming(true))}
       >
@@ -47,7 +53,7 @@ export function ConfirmButton({
     >
       <span className={styles.prompt}>{prompt}</span>
       <button type="button" className={styles.cancel} onClick={() => setConfirming(false)}>
-        Cancel
+        {cancelLabel}
       </button>
       <button
         type="button"

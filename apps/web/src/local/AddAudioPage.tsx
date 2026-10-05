@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { WorkerError } from "./workerClient.ts";
 import { LOCAL_COPY } from "./providerCopy.ts";
@@ -53,6 +53,14 @@ export function AddAudioPage() {
   const [upload, setUpload] = useState<UploadState>({ kind: "idle" });
   // A ref, not state: blocks a second submit even within the same event loop turn.
   const submitting = useRef(false);
+  // Whether the learner is still on this page when the upload finishes.
+  const onPage = useRef(true);
+  useEffect(() => {
+    onPage.current = true;
+    return () => {
+      onPage.current = false;
+    };
+  }, []);
 
   const problems = {
     file: file ? fileProblem(file) : "Choose an audio file.",
@@ -61,6 +69,18 @@ export function AddAudioPage() {
   };
   const valid = !problems.file && !problems.title && !problems.owner;
   const busy = upload.kind === "uploading";
+
+  // Closing or reloading the tab mid-send loses the upload (Pebble never receives the file),
+  // so the browser asks first, but only while sending. Moving to another Pebble page is fine.
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = ""; // older browsers need it set to show the prompt
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -75,7 +95,8 @@ export function AddAudioPage() {
         ownershipConfirmed: true,
         onProgress: ({ loaded, total }) => setUpload({ kind: "uploading", loaded, total }),
       });
-      navigate(`/jobs/${job.id}`);
+      // If the learner moved on to another page, the new job simply appears in the Library.
+      if (onPage.current) navigate(`/jobs/${job.id}`);
     } catch (error) {
       const worker = error instanceof WorkerError ? error : null;
       setUpload({
@@ -168,7 +189,8 @@ export function AddAudioPage() {
             {upload.kind === "uploading" ? (
               <div className={styles.progress}>
                 <label>
-                  Sending your audio… {formatBytes(upload.loaded)} of {formatBytes(upload.total)}
+                  Sending your audio… {formatBytes(upload.loaded)} of {formatBytes(upload.total)}.
+                  Keep this page open until your audio is sent.
                   <progress max={upload.total} value={upload.loaded} />
                 </label>
               </div>

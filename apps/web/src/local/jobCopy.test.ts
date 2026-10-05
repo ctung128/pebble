@@ -15,7 +15,7 @@ const UNSAFE =
 
 describe("activityLabel", () => {
   it.each([
-    [{ status: "queued" as const, stage: null, progress: null }, "Preparing audio…"],
+    [{ status: "queued" as const, stage: null, progress: null }, "Waiting to start…"],
     [{ status: "running" as const, stage: "probing" as const, progress: null }, "Preparing audio…"],
     [
       { status: "running" as const, stage: "normalizing" as const, progress: null },
@@ -77,6 +77,13 @@ describe("FAILURE_COPY", () => {
       expect(copy.next).toMatch(/\.$/);
       expect(`${copy.reason} ${copy.next}`).not.toMatch(UNSAFE);
     }
+  });
+
+  it("says plainly that a worker stop means starting again", () => {
+    expect(FAILURE_COPY.WORKER_RESTARTED).toEqual({
+      reason: "Pebble stopped before processing finished.",
+      next: "Try again to restart processing.",
+    });
   });
 
   it("uses the code, never the worker's message or hint", () => {

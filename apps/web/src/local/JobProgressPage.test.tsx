@@ -96,7 +96,7 @@ describe("JobProgressPage", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Retry from the start" }));
     expect(client.retryJob).toHaveBeenCalledWith(JOB_ID);
-    expect(await screen.findByText("Preparing audio…")).toBeInTheDocument();
+    expect(await screen.findByText("Waiting to start…")).toBeInTheDocument();
   });
 
   it("offers no retry for permanent failures", async () => {
@@ -113,10 +113,56 @@ describe("JobProgressPage", () => {
     expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it("can cancel a running job and retry a cancelled one", async () => {
+  it("cancels only after a confirmation that says what stopping means", async () => {
     const client = renderJob(makeJob({ status: "running", stage: "normalizing" }));
     await userEvent.click(await screen.findByRole("button", { name: "Cancel processing" }));
+    expect(
+      screen.getByText("Stop processing? You can start it again later, from the beginning."),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keep processing" }));
+    expect(client.cancelJob).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel processing" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stop processing" }));
     expect(client.cancelJob).toHaveBeenCalledWith(JOB_ID);
+  });
+
+  it("says once, while active, that leaving is safe while Pebble runs", async () => {
+    renderJob(makeJob({ status: "queued", stage: null }));
+    expect(await screen.findByText("Waiting to start…")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Processing continues while Pebble is running and your computer stays awake.",
+      ),
+    ).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "← Library" })).toHaveAttribute("href", "/");
+  });
+
+  it("drops the note once processing has ended", async () => {
+    renderJob(makeJob({ status: "completed", stage: "merging" }));
+    expect(await screen.findByText("Preview ready")).toBeInTheDocument();
+    expect(screen.queryByText(/Processing continues/)).not.toBeInTheDocument();
+  });
+
+  it("explains a worker stop plainly, with a way to start again", async () => {
+    renderJob(
+      makeJob({
+        status: "failed",
+        stage: "transcribing",
+        failure: {
+          stage: "transcribing",
+          code: "WORKER_RESTARTED",
+          message: "The worker stopped while this job was running.",
+          retryable: true,
+          hint: "Retry to process the audio again from the start.",
+        },
+      }),
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Pebble stopped before processing finished.");
+    expect(alert).toHaveTextContent("Try again to restart processing.");
+    expect(alert).not.toHaveTextContent(/worker/i);
+    expect(screen.getByRole("button", { name: "Retry from the start" })).toBeInTheDocument();
   });
 
   it("shows a cancelled job with retry", async () => {

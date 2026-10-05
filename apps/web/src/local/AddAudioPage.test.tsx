@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Link } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { fakeWorkerClient, funasrHealth, makeJob, renderLocal } from "../test/localFixtures.tsx";
 import { AddAudioPage, OWNERSHIP_LABEL } from "./AddAudioPage.tsx";
@@ -121,6 +122,59 @@ describe("AddAudioPage", () => {
 
     finish();
     expect(await screen.findByText("Job page job-aaaaaaaaaaaa")).toBeInTheDocument();
+  });
+
+  it("asks before closing the tab only while sending", async () => {
+    let finish!: () => void;
+    const client = fakeWorkerClient({
+      upload: vi.fn(async ({ onProgress }) => {
+        onProgress?.({ loaded: 1024, total: 4096 });
+        await new Promise<void>((resolve) => (finish = resolve));
+        return makeJob({ id: "job-aaaaaaaaaaaa" });
+      }),
+    });
+    const leaving = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    await renderReady(client);
+    expect(leaving()).toBe(false); // nothing to lose before sending
+    await userEvent.upload(fileInput(), audio());
+    await userEvent.click(ownership());
+    await userEvent.click(submitButton());
+    expect(await screen.findByText(/Keep this page open until your audio is sent\./)).toBeVisible();
+    expect(leaving()).toBe(true);
+    finish();
+    expect(await screen.findByText("Job page job-aaaaaaaaaaaa")).toBeInTheDocument();
+    expect(leaving()).toBe(false); // sent: nothing left to lose
+  });
+
+  it("doesn't pull the learner back to the job after they've moved on", async () => {
+    let finish!: () => void;
+    const client = fakeWorkerClient({
+      upload: vi.fn(async () => {
+        await new Promise<void>((resolve) => (finish = resolve));
+        return makeJob({ id: "job-aaaaaaaaaaaa" });
+      }),
+    });
+    renderLocal(
+      <>
+        <AddAudioPage />
+        <Link to="/elsewhere">Learning items</Link>
+      </>,
+      { client, path: "/process", route: "/process" },
+    );
+    await screen.findByRole("button", { name: "Run processing preview" });
+    await userEvent.upload(fileInput(), audio());
+    await userEvent.click(ownership());
+    await userEvent.click(submitButton());
+    await screen.findByText(/Sending your audio/);
+    await userEvent.click(screen.getByRole("link", { name: "Learning items" })); // leaves the page
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(/Job page/)).not.toBeInTheDocument();
+    expect(client.upload).toHaveBeenCalledTimes(1); // the upload itself carried on
   });
 
   it("explains refusals in plain words and allows another attempt", async () => {

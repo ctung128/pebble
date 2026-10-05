@@ -39,13 +39,14 @@ export function canRetry(job: Job): boolean {
  * estimate or an internal step name.
  */
 export function activityLabel(job: Job): string {
+  if (job.status === "queued") return "Waiting to start…"; // e.g. behind another episode
   if (job.status === "running" && job.stage === "transcribing") {
     if (!job.progress) return "Processing audio…";
     const { completedChunks, totalChunks } = job.progress;
     return `Processing section ${Math.min(completedChunks + 1, totalChunks)} of ${totalChunks}`;
   }
   if (job.status === "running" && job.stage === "merging") return "Processing audio…";
-  return "Preparing audio…"; // queued, or checking, preparing or splitting the audio
+  return "Preparing audio…"; // checking, preparing or splitting the audio
 }
 
 export function statusLabel(job: Job): string {
@@ -104,7 +105,10 @@ export const FAILURE_COPY: Record<JobFailure["code"], FailureCopy> = {
     reason: "No speech was found in this audio.",
     next: "Choose a file with Mandarin speech in it.",
   },
-  WORKER_RESTARTED: { reason: "Pebble stopped before processing finished.", next: "Try again." },
+  WORKER_RESTARTED: {
+    reason: "Pebble stopped before processing finished.",
+    next: "Try again to restart processing.",
+  },
   CANCELLED: { reason: "Processing was cancelled.", next: "Try again to start over." },
   INTERNAL_ERROR: SOMETHING_WRONG,
 };

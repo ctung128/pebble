@@ -288,7 +288,7 @@ describe("LocalLibraryPage", () => {
     renderLocal(<LocalLibraryPage />, { client });
     const list = await screen.findByRole("list", { name: "Local audio" });
     const [waiting, normalizing] = within(list).getAllByRole("listitem");
-    expect(waiting).toHaveTextContent("Preparing audio…");
+    expect(waiting).toHaveTextContent("Waiting to start…");
     expect(normalizing).toHaveTextContent("Preparing audio…");
     expect(list).not.toHaveTextContent(/%|left|almost/i);
   });

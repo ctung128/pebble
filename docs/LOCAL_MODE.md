@@ -113,23 +113,28 @@ same flow creates real transcripts: **Create a transcript locally** → **Create
 on 5173; both are in the worker's default origin allowlist.)
 
 1. **Worker status.** The app calls `/health` first and offers uploads only when the worker's
-   one provider is ready: "Local worker is ready." (mock) or "Local transcription is ready."
-   (FunASR). Otherwise it explains what to fix — the worker isn't running (`npm run worker`,
-   or `npm run worker:funasr`), FFmpeg is missing (`brew install ffmpeg`, then
-   `npm run worker:doctor`), the app and worker versions don't match, the data folder isn't
-   accessible (with its path and the worker's hint), the worker runs a provider this app
-   doesn't know ("Pebble's local worker configuration does not match this app."), FunASR needs
-   setup or couldn't load (with the worker's one-line hint), or the worker refused this page's
-   address — and re-checks every few seconds (every second while models are being checked).
-2. **Process audio locally.** Choose a file (M4A, MP3, WAV, FLAC, OGG/Opus, WebM or AAC, up to
-   2 GB), adjust the title (prefilled from the filename), confirm _"I own this audio or am
-   authorized to process it. Pebble processes it only on this computer."_, and choose **Run
-   processing preview**. Upload progress shows real bytes sent.
-3. **Progress.** Stages are shown as they happen, with "Processing section 2 of 5" only while
-   sections are being processed — no estimated percentages. The page polls every second for
-   30 s, then every 3 s, and pauses while the tab is hidden. Cancel and retry are available
-   when the worker allows them. "Finished" appears only after the transcript has loaded and
-   validated.
+   one provider is ready. When something needs doing it says so in plain language — Pebble
+   isn't running, needs a setup step or a restart, can't save files, or can't connect from this
+   page — with the terminal commands behind **Show setup steps**, and re-checks every few
+   seconds (every second while speech models are being checked). It never shows versions, tool
+   names, paths or the worker's own hints.
+2. **Add audio.** Choose a file (M4A, MP3, WAV, FLAC, OGG/Opus, WebM or AAC, up to 2 GB),
+   adjust the title (prefilled from the filename), confirm _"I own this audio or am authorized
+   to process it. Pebble processes it only on this computer."_, and choose **Run processing
+   preview** (or **Create transcript**). Upload progress shows real bytes sent. **Keep the page
+   open until the audio is sent:** closing or reloading the tab mid-send loses the upload, so the
+   browser asks first (only then). Moving to another Pebble page is fine; the new job then
+   appears in the Library instead of opening.
+3. **Progress.** One line says where things are: "Waiting to start…" (queued behind another
+   episode), "Preparing audio…", "Processing section N of M" (real section counts only),
+   "Processing audio…", then "Transcript ready" or "Preview ready" — no percentages or time
+   estimates; the stage list is under **Processing steps**. Processing belongs to the worker,
+   not the page: leave, reload or close the browser and it carries on, as the page says,
+   "while Pebble is running and your computer stays awake". If Pebble stops mid-job, the job
+   ends with "Pebble stopped before processing finished." and **Retry from the start**
+   restarts it. **Cancel processing** asks first, since a retry starts over. The page polls
+   every second for 30 s, then every 3 s, and pauses while the tab is hidden. "Ready" appears
+   only after the transcript has loaded and validated.
 4. **Library.** The library lists every job with its status. A finished episode's row shows
    its date, length and line count (a preview shows no line count) and opens the transcript
    reader, with audio streamed from the worker. **Delete** asks for

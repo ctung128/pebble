@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { Job } from "@pebble/schema";
+import { ConfirmButton } from "../components/ConfirmButton.tsx";
 import { StatusView } from "../components/StatusView.tsx";
 import { useEpisodeRename } from "../features/episode/episodeRename.ts";
 import { EpisodeTitle } from "../features/episode/EpisodeTitle.tsx";
@@ -137,6 +138,12 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
             Try processing this audio again.
           </p>
         ) : null}
+        {/* Leaving is safe: the work belongs to Pebble on this computer, not to this page. */}
+        {isActive(job) ? (
+          <p className={styles.help}>
+            Processing continues while Pebble is running and your computer stays awake.
+          </p>
+        ) : null}
         {error && isActive(job) ? (
           <p className={styles.help}>Lost contact with Pebble; still trying…</p>
         ) : null}
@@ -165,14 +172,17 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
             </Link>
           ) : null}
           {isActive(job) ? (
-            <button
-              type="button"
+            // Stopping throws away the work so far (a retry starts over), so it asks first.
+            <ConfirmButton
               className={styles.secondaryButton}
+              prompt="Stop processing? You can start it again later, from the beginning."
+              confirmLabel="Stop processing"
+              cancelLabel="Keep processing"
               disabled={action.busy}
-              onClick={() => void run(() => client.cancelJob(job.id))}
+              onConfirm={() => void run(() => client.cancelJob(job.id))}
             >
-              {job.status === "running" ? "Cancel processing" : "Cancel"}
-            </button>
+              Cancel processing
+            </ConfirmButton>
           ) : null}
           {canRetry(job) ? (
             <button

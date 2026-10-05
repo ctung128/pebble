@@ -213,7 +213,13 @@ function JobRow({ job, number, onChanged }: { job: Job; number: number; onChange
  */
 function JobStatus({ job, detailsLink }: { job: Job; detailsLink: boolean }) {
   if (isActive(job)) {
-    const fraction = job.progress ? job.progress.completedChunks / job.progress.totalChunks : null;
+    // Waiting behind another episode: no activity to show, so no bar.
+    const fraction =
+      job.status === "queued"
+        ? undefined
+        : job.progress
+          ? job.progress.completedChunks / job.progress.totalChunks
+          : null;
     return <RowProgress label={activityLabel(job)} fraction={fraction} />;
   }
   if (job.status === "failed") {
