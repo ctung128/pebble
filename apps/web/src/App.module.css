@@ -1,32 +1,65 @@
+/*
+ * App shell: a fixed left sidebar (brand, Add audio, navigation) and one centred content column.
+ * Under 900px the sidebar becomes a top bar. The page itself scrolls (the reader follows the
+ * current line by scrolling the window), so the sidebar is fixed rather than a scroll container.
+ */
 .shell {
   min-height: 100dvh;
 }
 
-.header {
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 20;
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-6);
+  width: var(--sidebar-width);
+  padding: var(--space-6) var(--space-4);
+  overflow-y: auto;
+  border-right: var(--border-width-hairline) solid var(--border-subtle);
+  background: var(--bg-subtle);
+}
+
+.column {
+  margin-left: var(--sidebar-width);
+  padding: var(--space-6) var(--space-6) 0;
+}
+
+.main {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: var(--space-4);
+  padding: var(--space-4) 0 var(--space-10);
+}
+
+/* --- Brand --- */
+
+.brandRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 0 var(--space-2);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--text);
-  font-weight: 650;
-  font-size: var(--text-lg);
-  letter-spacing: -0.01em;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--size-display-md);
+  font-weight: 400;
+  line-height: 1;
   text-decoration: none;
 }
 
 /* Hand-drawn mark, cropped from src/assets/logo.png. Inverted on dark backgrounds. */
 .logo {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -36,49 +69,148 @@
 }
 
 .mode {
-  padding: 2px var(--space-2);
-  border: 1px solid var(--border-strong);
+  padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: var(--size-label);
+  line-height: 1.4;
 }
 
-.main {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  padding: var(--space-2) var(--space-4) var(--space-10);
+/* --- Add audio: the shell's only accent-filled control --- */
+
+.primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-lg);
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
+
+.primary:hover {
+  background: var(--accent-hover);
+}
+
+/* --- Navigation --- */
 
 .nav {
   display: flex;
+  flex-direction: column;
   gap: var(--space-1);
-  margin-left: auto;
 }
 
 .navLink {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  min-height: var(--control-md);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--size-body-sm);
   text-decoration: none;
+  transition: background-color var(--duration-fast) var(--easing-standard);
 }
 
-.navLink:hover,
-.navLink[aria-current="page"] {
-  background: var(--surface-2);
-  color: var(--text);
+.navLink:hover {
+  background: var(--bg-muted);
+}
+
+/* aria-current marks the exact page; data-section keeps Library lit on episode and job pages. */
+.navLink[aria-current="page"],
+.navLink[data-section] {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.navGlyph {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
 .count {
-  min-width: 1.4em;
-  padding: 0 var(--space-1);
+  min-width: 1.75em;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: var(--text-xs);
+  background: var(--bg-selected);
+  color: var(--text-primary);
+  font-size: var(--size-label);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+.navLink[aria-current="page"] .count {
+  background: var(--bg-page);
+}
+
+/* --- Under 900px: a top bar with the nav as a row --- */
+
+@media (max-width: 899px) {
+  .sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--space-3);
+    width: auto;
+    padding: var(--space-3) var(--space-4);
+    overflow: visible;
+    border-right: 0;
+    border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .brandRow {
+    padding: 0;
+  }
+
+  .brand {
+    font-size: var(--size-display-sm);
+  }
+
+  .logo {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Round icon button; the label stays in the accessibility tree. */
+  .primary {
+    width: var(--control-lg);
+    padding: 0;
+  }
+
+  .primaryLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .nav {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .navLink {
+    justify-content: flex-start;
+  }
+
+  .column {
+    margin-left: 0;
+    padding: var(--space-4) var(--space-4) 0;
+  }
 }

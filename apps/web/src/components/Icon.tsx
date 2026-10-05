@@ -31,3 +31,22 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     </svg>
   );
 }
+
+/** The one stroked glyph (2px, round caps), used on Add audio. Decorative, like Icon. */
+export function PlusIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}

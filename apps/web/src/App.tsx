@@ -4,9 +4,11 @@ import {
   NavLink,
   Outlet,
   RouterProvider,
+  useLocation,
   useParams,
   type RouteObject,
 } from "react-router";
+import { PlusIcon } from "./components/Icon.tsx";
 import { StatusView } from "./components/StatusView.tsx";
 import { StorageNotice } from "./components/StorageNotice.tsx";
 import { useLearning } from "./features/learning/LearningContext.tsx";
@@ -29,35 +31,55 @@ const MODE_CHIP: Record<AppMode, { label: string; title: string }> = {
   },
 };
 
+/** Episode and job pages belong to the Library: its tab stays highlighted there. */
+const LIBRARY_SECTION = /^\/(?:$|episodes\/|jobs\/)/;
+
 export function Layout({ mode }: { mode: AppMode }) {
   const { items } = useLearning();
+  const { pathname } = useLocation();
   const chip = MODE_CHIP[mode];
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
-          <img className={styles.logo} src={logoMark} alt="" width={32} height={32} />
-          Pebble
-        </Link>
-        <span className={styles.mode} title={chip.title}>
-          {chip.label}
-        </span>
+      <header className={styles.sidebar}>
+        <div className={styles.brandRow}>
+          <Link to="/" className={styles.brand}>
+            <img className={styles.logo} src={logoMark} alt="" width={36} height={36} />
+            Pebble
+          </Link>
+          <span className={styles.mode} title={chip.title}>
+            {chip.label}
+          </span>
+        </div>
+        {mode === "local" ? (
+          <NavLink to="/process" className={styles.primary}>
+            <PlusIcon size={18} />
+            <span className={styles.primaryLabel}>Add audio</span>
+          </NavLink>
+        ) : null}
         <nav className={styles.nav} aria-label="Main">
-          {mode === "local" ? (
-            <NavLink to="/process" className={styles.navLink}>
-              Process audio
-            </NavLink>
-          ) : null}
+          <NavLink
+            to="/"
+            end
+            className={styles.navLink}
+            data-section={LIBRARY_SECTION.test(pathname) || undefined}
+          >
+            Library
+            <span className={styles.navGlyph} lang="zh-CN" aria-hidden="true">
+              书架
+            </span>
+          </NavLink>
           <NavLink to="/items" className={styles.navLink}>
             Learning items
             {items.length > 0 ? <span className={styles.count}>{items.length}</span> : null}
           </NavLink>
         </nav>
       </header>
-      <StorageNotice />
-      <main className={styles.main}>
-        <Outlet />
-      </main>
+      <div className={styles.column}>
+        <StorageNotice />
+        <main className={styles.main}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

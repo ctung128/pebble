@@ -57,6 +57,8 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["text-tertiary", "bg-page", TEXT],
   ["text-tertiary", "bg-subtle", TEXT],
   ["text-tertiary", "bg-muted", TEXT],
+  ["text-secondary", "bg-muted", TEXT], // mode chip
+  ["text-secondary", "bg-selected", TEXT], // 书架 on the current nav tab
   ["text-accent", "bg-page", TEXT],
   ["text-accent", "bg-selected", TEXT],
   ["text-on-accent", "accent", TEXT],
@@ -68,6 +70,7 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["focus-ring", "bg-page", UI],
   ["focus-ring", "bg-subtle", UI],
   ["accent-pending", "bg-page", UI], // non-text fills only
+  ["accent", "bg-subtle", UI], // Add audio on the sidebar
 ];
 
 describe.each(Object.entries(themes))("%s theme contrast", (_, theme) => {
