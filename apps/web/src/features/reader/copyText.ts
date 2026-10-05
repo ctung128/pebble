@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { speakerLabel } from "./speaker.ts";
 
 export type CopyStatus = "idle" | "copied" | "failed";
 
@@ -17,13 +18,20 @@ export const COPY_TRANSCRIPT_HELP =
 /**
  * The whole transcript as plain text: each line's displayed Chinese (the learner's correction
  * where there is one), in reading order, one line per transcript line, joined by newlines.
- * Never the title, IDs, times, speakers, pinyin, English or notes.
+ * A line with a speaker label in the transcript starts "Speaker A: ", repeated on every such
+ * line so each one stands on its own when pasted; lines without one stay Chinese only.
+ * Never the title, IDs, times, pinyin, English or notes.
  */
 export function transcriptPlainText(
-  segments: readonly { id: string; text: string }[],
+  segments: readonly { id: string; text: string; speaker?: string | null }[],
   displayedText: (segmentId: string) => string | undefined,
 ): string {
-  return segments.map((segment) => displayedText(segment.id) ?? segment.text).join("\n");
+  return segments
+    .map((segment) => {
+      const text = displayedText(segment.id) ?? segment.text;
+      return segment.speaker ? `${speakerLabel(segment.speaker)}: ${text}` : text;
+    })
+    .join("\n");
 }
 
 /**

@@ -40,6 +40,8 @@ export const TranscriptReader = memo(function TranscriptReader({
   showCopy = false,
   ref,
 }: TranscriptReaderProps) {
+  const speakers = segments.some((segment) => segment.speaker);
+
   if (segments.length === 0) {
     return (
       <StatusView kind="empty" title="No transcript lines" message="This transcript is empty." />
@@ -56,7 +58,7 @@ export const TranscriptReader = memo(function TranscriptReader({
             <SegmentRow
               segment={segment}
               state={i === activeIndex ? "active" : i < activeIndex ? "past" : "upcoming"}
-              showSpeaker={segment.speaker !== segments[i - 1]?.speaker}
+              speakers={speakers}
               language={language}
               view={view}
               actions={actions}

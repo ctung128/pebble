@@ -18,7 +18,8 @@ import {
 } from "../reader/copyText.ts";
 import { EpisodePage } from "./EpisodePage.tsx";
 
-const EXPECTED = "第一句。\n第二句。\n第三句。";
+/** The test transcript's speakers are authored (A, B, A), so every line carries its label. */
+const EXPECTED = "Speaker A: 第一句。\nSpeaker B: 第二句。\nSpeaker A: 第三句。";
 
 let writeText: ReturnType<typeof vi.fn>;
 let readText: ReturnType<typeof vi.fn>;
@@ -100,7 +101,9 @@ describe("Copy transcript", () => {
     await renderEpisode({ store });
     await screen.findByText("第二句话。");
     await userEvent.click(copyButton());
-    expect(writeText).toHaveBeenCalledWith("第一句。\n第二句话。\n第三句。");
+    expect(writeText).toHaveBeenCalledWith(
+      "Speaker A: 第一句。\nSpeaker B: 第二句话。\nSpeaker A: 第三句。",
+    );
   });
 
   it("confirms with 'Transcript copied', then returns to normal", async () => {
@@ -141,6 +144,18 @@ describe("Copy transcript", () => {
     expect(copyButton()).toHaveFocus();
   });
 
+  it("copies Chinese only when the transcript has no speaker labels", async () => {
+    const source = fakeSource({
+      getTranscript: async () => ({
+        ...testTranscript,
+        segments: testTranscript.segments.map((s) => ({ ...s, speaker: null })),
+      }),
+    });
+    await renderEpisode({ source });
+    await userEvent.click(copyButton());
+    expect(writeText).toHaveBeenCalledWith("第一句。\n第二句。\n第三句。");
+  });
+
   it("isn't offered for a preview (placeholder) transcript", async () => {
     const source = fakeSource({
       getTranscript: async () => ({
@@ -168,7 +183,23 @@ describe("transcriptPlainText", () => {
   it("joins displayed lines with newlines, falling back to the transcript's text", () => {
     const lines = new Map([["seg-2", "改过。"]]);
     expect(transcriptPlainText(testTranscript.segments, (id) => lines.get(id))).toBe(
-      "第一句。\n改过。\n第三句。",
+      "Speaker A: 第一句。\nSpeaker B: 改过。\nSpeaker A: 第三句。",
+    );
+  });
+
+  it("stays Chinese only for lines without a speaker label, and repeats labels per line", () => {
+    const segments = [
+      { id: "a", text: "你好。", speaker: "A" },
+      { id: "b", text: "我觉得可以。", speaker: "A" },
+      { id: "c", text: "好，那我们开始吧。", speaker: "B" },
+      { id: "d", text: "没有标注。", speaker: null },
+    ];
+    expect(transcriptPlainText(segments, () => undefined)).toBe(
+      "Speaker A: 你好。\nSpeaker A: 我觉得可以。\nSpeaker B: 好，那我们开始吧。\n没有标注。",
+    );
+    const unlabelled = segments.map((s) => ({ ...s, speaker: null }));
+    expect(transcriptPlainText(unlabelled, () => undefined)).toBe(
+      "你好。\n我觉得可以。\n好，那我们开始吧。\n没有标注。",
     );
   });
 

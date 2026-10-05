@@ -113,4 +113,26 @@ describe("TranscriptReader", () => {
     );
     expect(screen.getByText("No transcript lines")).toBeInTheDocument();
   });
+
+  it("shows the transcript's speaker letter on every line, read as 'Speaker A'", () => {
+    const { rows } = renderReader(-1);
+    expect(rows[0]).toHaveAccessibleName(/^0:00\s*Speaker A\s*第一句。$/);
+    expect(rows[1]).toHaveAccessibleName(/^0:03\s*Speaker B\s*第二句。$/);
+  });
+
+  it("repeats the letter for the same speaker and leaves an empty slot without one", () => {
+    const turns = segments.map((s, i) => ({ ...s, speaker: i === 2 ? null : "A" }));
+    const lines = new Map(turns.map((s) => [s.id, plainLineView(s)] as const));
+    render(
+      <TranscriptReader
+        segments={turns}
+        activeIndex={-1}
+        language="zh-CN"
+        lines={lines}
+        actions={fakeActions()}
+        reviewDescriptionId="review-help"
+      />,
+    );
+    expect(screen.getAllByText("Speaker")).toHaveLength(2);
+  });
 });

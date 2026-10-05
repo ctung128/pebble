@@ -11,7 +11,8 @@ import styles from "./TranscriptReader.module.css";
 interface SegmentRowProps {
   segment: Segment;
   state: "past" | "active" | "upcoming";
-  showSpeaker: boolean;
+  /** The transcript has speaker labels: every line gets the speaker slot (design system). */
+  speakers: boolean;
   language: string;
   view: LineView;
   actions: LineActions;
@@ -24,7 +25,7 @@ interface SegmentRowProps {
 export const SegmentRow = memo(function SegmentRow({
   segment,
   state,
-  showSpeaker,
+  speakers,
   language,
   view,
   actions,
@@ -64,7 +65,12 @@ export const SegmentRow = memo(function SegmentRow({
   }, [view.editing]);
 
   return (
-    <div className={styles.row} data-state={state} data-open={expanded || undefined}>
+    <div
+      className={styles.row}
+      data-state={state}
+      data-open={expanded || undefined}
+      data-speakers={speakers || undefined}
+    >
       <button
         type="button"
         className={styles.play}
@@ -77,11 +83,20 @@ export const SegmentRow = memo(function SegmentRow({
           <span className={styles.marker} aria-hidden="true" />
           <span className={styles.time}>{time}</span>
         </span>
+        {/* Spaces keep the button's name "0:13 Speaker A 你好"; flex and grid layout ignore them. */}{" "}
         <span className={styles.line}>
-          {showSpeaker && segment.speaker ? (
-            <span className={styles.speaker} aria-label={`Speaker ${segment.speaker}`}>
-              {segment.speaker}
-            </span>
+          {speakers ? (
+            // The transcript's own label, on every line (the slot stays when a line has none, so
+            // the Chinese lines up). Screen readers hear "Speaker A"; the page shows "A".
+            <>
+              <span className={styles.speaker}>
+                {segment.speaker ? (
+                  <>
+                    <span className={styles.visuallyHidden}>Speaker</span> {segment.speaker}
+                  </>
+                ) : null}
+              </span>{" "}
+            </>
           ) : null}
           <span className={styles.text} lang={language} data-review={view.needsReview || undefined}>
             {view.text}

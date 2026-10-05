@@ -88,20 +88,30 @@
 .line {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
   min-width: 0;
+}
+
+/*
+ * Design system speaker label: the transcript's letter before the Chinese, in a fixed slot so
+ * text lines up across lines; pinyin, English and edits indent by the same amount.
+ */
+.row {
+  --speaker-slot: 12px;
+  --speaker-gap: 10px;
 }
 
 .speaker {
   flex: none;
+  min-width: var(--speaker-slot);
+  margin-right: var(--speaker-gap);
+  font-family: var(--font-ui);
   font-size: var(--size-speaker);
-  font-weight: 600;
-  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
 }
 
-/* Tertiary text doesn't hold 4.5:1 on the current line's lichen panel. */
-.row[data-state="active"] .speaker {
-  color: var(--text-secondary);
+.row[data-speakers] .details {
+  padding-left: calc(var(--speaker-slot) + var(--speaker-gap));
 }
 
 .text {
