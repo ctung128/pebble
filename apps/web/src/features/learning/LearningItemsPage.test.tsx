@@ -58,14 +58,13 @@ describe("LearningItemsPage", () => {
     expect(screen.getByText(/Demo data reset/)).toBeInTheDocument();
   });
 
-  it("names the reset control for what it removes in local mode", async () => {
+  it("offers no reset control in local mode", async () => {
     vi.stubGlobal("__PEBBLE_LOCAL__", true);
     try {
       renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
-      expect(
-        await screen.findByRole("button", { name: "Remove all edits and learning items" }),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(/demo data/i)).not.toBeInTheDocument();
+      expect(await screen.findByText("第二句。")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Remove all edits/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Reset/ })).not.toBeInTheDocument();
     } finally {
       vi.stubGlobal("__PEBBLE_LOCAL__", false);
     }

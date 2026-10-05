@@ -230,7 +230,8 @@ outside the repository is safer.
   ModelScope state, benchmark artifacts and the uv cache. The worker environment lives in the
   repository at `services/worker/.venv` and is removed separately. The next start creates an
   empty directory. Learner data in the browser (corrections,
-  learning items) is separate; clear it with **Reset demo data** in the app.
+  learning items, listening positions) is separate. Local mode has no in-app reset for now;
+  clear it by deleting the site data for the local app in your browser's settings.
 
 ## Pipeline
 

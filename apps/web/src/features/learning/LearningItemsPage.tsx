@@ -141,7 +141,8 @@ export function LearningItemsPage() {
 
         <aside className={styles.side} aria-label="Export and data">
           <AnkiExportPanel items={items} />
-          <ResetDemoData />
+          {/* Hidden in local mode for now: there it would remove the learner's real study data. */}
+          {!__PEBBLE_LOCAL__ && <ResetDemoData />}
         </aside>
       </div>
     </div>
