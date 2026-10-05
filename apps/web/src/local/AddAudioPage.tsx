@@ -42,6 +42,9 @@ export function AddAudioPage() {
     file: useId(),
     title: useId(),
     owner: useId(),
+    fileError: useId(),
+    titleError: useId(),
+    ownerError: useId(),
     errors: useId(),
   };
 
@@ -129,9 +132,11 @@ export function AddAudioPage() {
             <input
               id={ids.file}
               type="file"
+              className={styles.fileInput}
               accept={[...SUPPORTED_EXTENSIONS, "audio/*"].join(",")}
               disabled={busy}
               aria-invalid={showErrors && problems.file ? true : undefined}
+              aria-describedby={showErrors && problems.file ? ids.fileError : undefined}
               onChange={(event) => {
                 const chosen = event.target.files?.[0] ?? null;
                 setFile(chosen);
@@ -144,7 +149,9 @@ export function AddAudioPage() {
               {file ? ` Selected: ${file.name} (${formatBytes(file.size)}).` : ""}
             </p>
             {showErrors && problems.file ? (
-              <p className={styles.fieldError}>{problems.file}</p>
+              <p id={ids.fileError} className={styles.fieldError}>
+                {problems.file}
+              </p>
             ) : null}
           </div>
 
@@ -160,13 +167,16 @@ export function AddAudioPage() {
               maxLength={MAX_TITLE_LENGTH + 20}
               disabled={busy}
               aria-invalid={showErrors && problems.title ? true : undefined}
+              aria-describedby={showErrors && problems.title ? ids.titleError : undefined}
               onChange={(event) => {
                 setTitle(event.target.value);
                 setTitleEdited(true);
               }}
             />
             {showErrors && problems.title ? (
-              <p className={styles.fieldError}>{problems.title}</p>
+              <p id={ids.titleError} className={styles.fieldError}>
+                {problems.title}
+              </p>
             ) : null}
           </div>
 
@@ -177,12 +187,15 @@ export function AddAudioPage() {
               checked={confirmed}
               disabled={busy}
               aria-invalid={showErrors && problems.owner ? true : undefined}
+              aria-describedby={showErrors && problems.owner ? ids.ownerError : undefined}
               onChange={(event) => setConfirmed(event.target.checked)}
             />
             <label htmlFor={ids.owner}>{OWNERSHIP_LABEL}</label>
           </div>
           {showErrors && problems.owner ? (
-            <p className={styles.fieldError}>{problems.owner}</p>
+            <p id={ids.ownerError} className={styles.fieldError}>
+              {problems.owner}
+            </p>
           ) : null}
 
           <div id={ids.errors} aria-live="polite">

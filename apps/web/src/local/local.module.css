@@ -181,50 +181,110 @@
   cursor: default;
 }
 
-/* Upload form */
+/* Upload form: a white panel (design system panel), filled fields (design system Input). */
 .form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: start;
-  gap: var(--space-4);
+  gap: var(--space-5);
   padding: var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  background: var(--surface);
+  border-radius: var(--radius-xl);
+  background: var(--bg-page);
+  box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
 }
 
 .field {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
   width: 100%;
 }
 
 .label {
-  font-weight: 600;
-  font-size: var(--text-sm);
+  font-size: var(--size-caption);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .input {
   width: 100%;
   max-width: 32rem;
+  min-height: var(--control-md);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-s);
-  background: var(--bg);
-  color: var(--text);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-size: var(--size-body); /* 16px: no zoom-on-focus on phones */
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.input:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.input[aria-invalid="true"] {
+  box-shadow: var(--ring-error);
+}
+
+.input:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+/*
+ * Choose file: the native input, kept whole (keyboard, screen readers and dropping a file on
+ * it all stay the browser's), with its button styled as the design system's secondary button.
+ */
+.fileInput {
+  justify-self: start; /* as wide as its button and file name, so the focus ring hugs them */
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  font-size: var(--size-body-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.fileInput::file-selector-button {
+  min-height: var(--control-md);
+  margin-right: var(--space-3);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.fileInput:hover:not(:disabled)::file-selector-button {
+  background: var(--bg-hover);
+}
+
+.fileInput[aria-invalid="true"]::file-selector-button {
+  box-shadow: var(--ring-error);
+}
+
+.fileInput:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.fileInput:disabled::file-selector-button {
+  cursor: default;
 }
 
 .help {
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-muted);
+  font-size: var(--size-body-sm);
+  color: var(--text-secondary);
 }
 
 .fieldError,
 .formError {
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--danger);
+  font-size: var(--size-body-sm);
+  color: var(--error);
 }
 
 .formError p {
@@ -240,6 +300,7 @@
 
 .check input {
   margin-top: 0.3em;
+  accent-color: var(--accent);
 }
 
 .progress label {

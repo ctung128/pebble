@@ -124,6 +124,29 @@ describe("AddAudioPage", () => {
     expect(await screen.findByText("Job page job-aaaaaaaaaaaa")).toBeInTheDocument();
   });
 
+  it("keeps Choose file a native, labelled, keyboard-reachable file input", async () => {
+    await renderReady();
+    const input = fileInput();
+    expect(input).toHaveAttribute("type", "file");
+    expect(input.tagName).toBe("INPUT");
+    expect(input).not.toHaveAttribute("tabindex");
+    input.focus();
+    expect(input).toHaveFocus();
+    expect(input.getAttribute("accept")).toContain(".m4a");
+  });
+
+  it("links each field's problem to it, and marks it invalid", async () => {
+    await renderReady();
+    await userEvent.clear(titleInput());
+    await userEvent.click(submitButton());
+    expect(fileInput()).toHaveAttribute("aria-invalid", "true");
+    expect(fileInput()).toHaveAccessibleDescription("Choose an audio file.");
+    expect(titleInput()).toHaveAccessibleDescription("Give the episode a title.");
+    expect(ownership()).toHaveAccessibleDescription(
+      "Confirm that you own this audio or are authorized to process it.",
+    );
+  });
+
   it("asks before closing the tab only while sending", async () => {
     let finish!: () => void;
     const client = fakeWorkerClient({
