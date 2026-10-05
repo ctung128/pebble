@@ -24,6 +24,29 @@
         "translations": "demo-001/translations.en.json",
         "illustrativeUncertainty": "demo-001/illustrative-uncertainty.json"
       }
+    },
+    {
+      "id": "demo-002",
+      "title": "Learning Pottery in Jingdezhen",
+      "titleZh": "去景德镇学陶艺",
+      "description": "Two friends on a voice call about a pottery trip, written for the Pebble demo.",
+      "language": "zh-CN",
+      "durationMs": 46034,
+      "audio": {
+        "src": "demo-002/audio.m4a",
+        "mimeType": "audio/mp4"
+      },
+      "transcript": {
+        "src": "demo-002/transcript.json"
+      },
+      "audioProvenance": {
+        "kind": "tts-placeholder",
+        "publishable": false,
+        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+      },
+      "demo": {
+        "translations": "demo-002/translations.en.json"
+      }
     }
   ]
 }

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "demo-002",
+  "language": "zh-CN",
+  "script": "simplified",
+  "durationMs": 46034,
+  "segments": [
+    {
+      "id": "seg-0001",
+      "index": 0,
+      "startMs": 300,
+      "endMs": 4464,
+      "text": "哎我跟你说，我下个月要去景德镇学陶艺了！",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0002",
+      "index": 1,
+      "startMs": 4914,
+      "endMs": 8758,
+      "text": "啊？真的假的？你这是要搞什么大动作？",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0003",
+      "index": 2,
+      "startMs": 9208,
+      "endMs": 17038,
+      "text": "就是想找个师傅好好学一下，纯纯的沉浸式体验。听说那边的手作氛围绝绝子。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0004",
+      "index": 3,
+      "startMs": 17488,
+      "endMs": 24796,
+      "text": "可以啊！那你顺便去陶溪川逛一下呗，那边的艺术市集很顶，好多宝藏小店。",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0005",
+      "index": 4,
+      "startMs": 25246,
+      "endMs": 31996,
+      "text": "对对对，我就是想去淘点好物。听说还能砍价，我要狠狠地捡漏。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0006",
+      "index": 5,
+      "startMs": 32446,
+      "endMs": 36078,
+      "text": "哈哈哈，你别太离谱，人家手作很贵的。",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0007",
+      "index": 6,
+      "startMs": 36528,
+      "endMs": 41161,
+      "text": "放心，我心里有数。到时候给你带个杯子回来。",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0008",
+      "index": 7,
+      "startMs": 41611,
+      "endMs": 45434,
+      "text": "好耶！那我先蹲一个。记得发vlog啊！",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    }
+  ],
+  "provenance": {
+    "kind": "fixture",
+    "provider": "fixture",
+    "model": null,
+    "createdAt": "2026-10-05T22:19:41.211Z",
+    "notes": "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio)."
+  }
+}

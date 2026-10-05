@@ -1,0 +1,12 @@
+# Original script written for the Pebble demo. One line per transcript segment.
+# Scene: two friends on a WeChat voice call about learning pottery in Jingdezhen.
+# A = 小林, B = 阿豪.
+# Format: SPEAKER: text   (speakers map to voices in scripts/build-demo-fixture.mjs)
+A: 哎我跟你说，我下个月要去景德镇学陶艺了！
+B: 啊？真的假的？你这是要搞什么大动作？
+A: 就是想找个师傅好好学一下，纯纯的沉浸式体验。听说那边的手作氛围绝绝子。
+B: 可以啊！那你顺便去陶溪川逛一下呗，那边的艺术市集很顶，好多宝藏小店。
+A: 对对对，我就是想去淘点好物。听说还能砍价，我要狠狠地捡漏。
+B: 哈哈哈，你别太离谱，人家手作很贵的。
+A: 放心，我心里有数。到时候给你带个杯子回来。
+B: 好耶！那我先蹲一个。记得发vlog啊！

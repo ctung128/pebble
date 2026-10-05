@@ -11,9 +11,20 @@
 | Translations | `demo-001/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.                                                   |
 | Review marks | `demo-001/illustrative-uncertainty.json`: **simulated** "May need review" flags on two lines, chosen arbitrarily to exercise the UI. Not derived from any recognizer. |
 
+## demo-002 — "Learning Pottery in Jingdezhen" (去景德镇学陶艺)
+
+| Item         | Source                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Script       | Original text written for Pebble (`demo-002/script.zh.txt`). Not derived from any podcast.                                |
+| Audio        | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs demo-002`. |
+| Transcript   | The script text, with timings measured from the per-line renders. **Not ASR output.**                                     |
+| Confidence   | `null` for every segment — no recognizer was involved.                                                                    |
+| Translations | `demo-002/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.       |
+| Review marks | None.                                                                                                                     |
+
 ### ⚠️ Development placeholder — not for public deployment
 
-The audio is generated with operating-system voices whose terms for public redistribution
+Both episodes' audio is generated with operating-system voices whose terms for public redistribution
 have not been reviewed. It is marked `"kind": "tts-placeholder"`, `"publishable": false` in
 `manifest.json`, and the app labels it as a placeholder.
 
@@ -32,4 +43,4 @@ used with documented permission, and update this file.
 4. Record the source and permission here.
 5. Run `npm test` — `packages/schema/test/fixtures.test.ts` validates every fixture.
 
-`npm run fixtures:build` only regenerates the TTS placeholder; it is not needed for real audio.
+`npm run fixtures:build -- <episode-id>` only regenerates a TTS placeholder (default `demo-001`); it is not needed for real audio.

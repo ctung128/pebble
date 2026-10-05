@@ -9,7 +9,8 @@
  * drop in the real audio, write transcript.json by hand (or from the local worker later),
  * update durationMs in manifest.json, and run `npm test` to validate the fixture.
  *
- * Requires macOS `say` and `ffmpeg` on PATH. Usage: node scripts/build-demo-fixture.mjs
+ * Requires macOS `say` and `ffmpeg` on PATH.
+ * Usage: node scripts/build-demo-fixture.mjs [episode-id]   (default demo-001)
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -17,7 +18,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const EPISODE_ID = "demo-001";
+const EPISODE_ID = process.argv[2] ?? "demo-001";
+if (!/^demo-\d{3}$/.test(EPISODE_ID)) {
+  console.error(`build-demo-fixture: bad episode id "${EPISODE_ID}"`);
+  process.exit(1);
+}
 const DEMO_DIR = fileURLToPath(new URL("../fixtures/demo/", import.meta.url));
 const EPISODE_DIR = join(DEMO_DIR, EPISODE_ID);
 
