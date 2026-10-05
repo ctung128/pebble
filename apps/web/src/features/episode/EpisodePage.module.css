@@ -120,27 +120,6 @@
     serif;
 }
 
-/* --- Source notes: where the transcript came from. Provenance, not a warning. --- */
-
-.sourceNote {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--size-body-sm);
-}
-
-.sourceNote p {
-  margin: 0;
-}
-
-.sourceNote strong {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 /* --- Preview transcript banner (warning). Persistent: mock text must never pass for real. --- */
 
 .previewBanner {

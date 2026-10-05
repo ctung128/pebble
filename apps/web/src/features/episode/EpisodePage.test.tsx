@@ -50,18 +50,17 @@ const activeText = () =>
     ?.textContent ?? null;
 
 describe("EpisodePage — listening", () => {
-  it("shows the episode, transcript and sample disclosures", async () => {
+  it("shows the episode and transcript, without sample notes", async () => {
     renderPage();
     expect(await playButtons()).toHaveLength(3);
     expect(screen.getByRole("heading", { name: "Test episode" })).toBeInTheDocument();
     // The header is the title and Chinese title only: no description or duration/line count.
     expect(screen.queryByText("Used by component tests.")).not.toBeInTheDocument();
     expect(screen.queryByText(/\d:\d\d · \d+ lines?/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Development placeholder/)).toBeInTheDocument();
-    expect(screen.getByText(/not speech-recognition output/)).toBeInTheDocument();
+    // No sample notes above the transcript.
     expect(
-      screen.getByText("Translations in this demo are prepared sample content."),
-    ).toBeInTheDocument();
+      screen.queryByRole("complementary", { name: "About this sample" }),
+    ).not.toBeInTheDocument();
   });
 
   it("starts on the first line and steps with the arrow keys", async () => {

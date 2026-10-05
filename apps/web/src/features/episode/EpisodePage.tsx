@@ -353,10 +353,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     if (segment) seek(segment.startMs);
   }, [cueSegmentId, segments, seek]);
 
-  const isPlaceholderAudio = episode.audioProvenance.kind === "tts-placeholder";
-  const isAuthoredTranscript = transcript.provenance.kind === "fixture";
-  const hasPreparedTranslations = Boolean(episode.demo?.translations);
-
   return (
     <article className={styles.page}>
       <title>{`${title} · Pebble`}</title>
@@ -429,26 +425,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           </div>
         </div>
       </header>
-
-      {isPlaceholderAudio || isAuthoredTranscript || hasPreparedTranslations ? (
-        <aside className={styles.sourceNote} aria-label="About this sample">
-          {isPlaceholderAudio ? (
-            <p>
-              <strong>Development placeholder.</strong> The audio is a synthetic voice reading an
-              original script. It is not a real podcast.
-            </p>
-          ) : null}
-          {isAuthoredTranscript ? (
-            <p>
-              The transcript is the authored script with measured timings, not speech-recognition
-              output, so it doesn't reflect transcription accuracy.
-            </p>
-          ) : null}
-          {hasPreparedTranslations ? (
-            <p>Translations in this demo are prepared sample content.</p>
-          ) : null}
-        </aside>
-      ) : null}
 
       {showResume && saved ? (
         <div className={styles.resumeBar} role="group" aria-label="Listening progress">
