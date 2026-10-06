@@ -9,10 +9,12 @@ export interface AudioPlayer {
   durationMs: number;
   isPlaying: boolean;
   playbackRate: number;
-  play: () => void;
+  /** Resolves true once playback has started, false if the browser refused or it was interrupted. */
+  play: () => Promise<boolean>;
   pause: () => void;
   toggle: () => void;
-  seek: (timeMs: number, options?: { play?: boolean }) => void;
+  /** With `play`, returns play()'s result. */
+  seek: (timeMs: number, options?: { play?: boolean }) => Promise<boolean> | undefined;
   setPlaybackRate: (rate: number) => void;
 }
 
@@ -92,18 +94,22 @@ export function useAudioPlayer(
     return () => cancelAnimationFrame(frame);
   }, [isPlaying]);
 
-  const play = useCallback(() => {
+  const play = useCallback((): Promise<boolean> => {
     const audio = audioRef.current;
-    if (!audio) return;
-    audio.play().catch((error: unknown) => {
-      // AbortError: a newer seek/pause interrupted this play() — expected, not a failure.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      setErrorMessage(
-        error instanceof DOMException && error.name === "NotAllowedError"
-          ? "The browser blocked playback. Press play to start."
-          : "The audio could not be played.",
-      );
-    });
+    if (!audio) return Promise.resolve(false);
+    return audio.play().then(
+      () => true,
+      (error: unknown) => {
+        // AbortError: a newer seek/pause interrupted this play() — expected, not a failure.
+        if (error instanceof DOMException && error.name === "AbortError") return false;
+        setErrorMessage(
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "The browser blocked playback. Press play to start."
+            : "The audio could not be played.",
+        );
+        return false;
+      },
+    );
   }, []);
 
   const pause = useCallback(() => audioRef.current?.pause(), []);
@@ -111,18 +117,18 @@ export function useAudioPlayer(
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.paused) play();
+    if (audio.paused) void play();
     else audio.pause();
   }, [play]);
 
   const seek = useCallback(
     (timeMs: number, options?: { play?: boolean }) => {
       const audio = audioRef.current;
-      if (!audio) return;
+      if (!audio) return undefined;
       const clamped = Math.max(0, timeMs);
       audio.currentTime = clamped / 1000;
       setCurrentTimeMs(clamped); // update immediately so the highlight doesn't lag the seek
-      if (options?.play) play();
+      return options?.play ? play() : undefined;
     },
     [play],
   );

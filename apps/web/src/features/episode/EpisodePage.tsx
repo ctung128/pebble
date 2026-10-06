@@ -17,11 +17,13 @@ import { useLearning } from "../learning/LearningContext.tsx";
 import { listeningState } from "../learning/playback.ts";
 import { usePinyin } from "../pinyin/usePinyin.ts";
 import { PlayerBar } from "../player/PlayerBar.tsx";
-import { useAudioPlayer } from "../player/useAudioPlayer.ts";
+import { useAudioPlayer, type AudioPlayer } from "../player/useAudioPlayer.ts";
 import { useEpisodeRename } from "./episodeRename.ts";
 import { EpisodeTitle } from "./EpisodeTitle.tsx";
 import { usePlaybackProgress } from "./usePlaybackProgress.ts";
+import { useReplayCue } from "./useReplayCue.ts";
 import { findActiveSegmentIndex } from "../reader/activeSegment.ts";
+import { replayStartMs } from "../reader/replayStart.ts";
 import type { LineActions, LineView } from "../reader/lineView.ts";
 import { CopyFallback } from "../reader/CopyFallback.tsx";
 import {
@@ -99,9 +101,23 @@ interface EpisodeViewProps {
 
 function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const { segments } = transcript;
-  const [audioRef, player] = useAudioPlayer(episode.durationMs);
-  const { seek, toggle } = player;
-  const activeIndex = findActiveSegmentIndex(segments, player.currentTimeMs);
+  const [audioRef, rawPlayer] = useAudioPlayer(episode.durationMs);
+  const { toggle } = rawPlayer;
+  // A replayed line starts a moment early (replayStart.ts); during that pre-roll it stays the
+  // current line (useReplayCue.ts). Everything else follows the playhead.
+  const replayCue = useReplayCue(audioRef, segments, episode.id, rawPlayer.currentTimeMs);
+  const { start: startCue, fail: failCue, clear: clearCue } = replayCue;
+  const rawSeek = rawPlayer.seek;
+  // Every seek except a replay's own goes to an exact time and ends any replay cue.
+  const seek = useCallback<AudioPlayer["seek"]>(
+    (timeMs, options) => {
+      clearCue();
+      return rawSeek(timeMs, options);
+    },
+    [clearCue, rawSeek],
+  );
+  const player: AudioPlayer = { ...rawPlayer, seek };
+  const activeIndex = replayCue.cuedIndex ?? findActiveSegmentIndex(segments, player.currentTimeMs);
   const readerRef = useRef<HTMLOListElement>(null);
   const { isFollowing, resume } = useFollowActive(readerRef, activeIndex);
   usePlaybackProgress(audioRef, episode.id, episode.durationMs);
@@ -213,9 +229,19 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
 
   const actions = useMemo<LineActions>(
     () => ({
+      // Line click and replay (R): start REPLAY_PREROLL_MS early. Arrow keys, learning-item
+      // cues, resume and the scrubber still seek to exact times.
       select: (segment) => {
         resume();
-        seek(segment.startMs, { play: true });
+        const { segments } = latest.current.transcript;
+        const fromMs = replayStartMs(
+          segments,
+          segments.findIndex((s) => s.id === segment.id),
+        );
+        const token = startCue(segment, fromMs);
+        void rawSeek(fromMs, { play: true })?.then((started) => {
+          if (!started) failCue(token);
+        });
       },
       togglePinyin: (segment) => {
         if (!learningLocked) latest.current.pinyin.toggleLine(segment.id);
@@ -285,7 +311,16 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       toggleOriginal: (segment) => toggleOriginalShown(segment.id),
     }),
-    [resume, seek, translationProvider, toggleOriginalShown, learningLocked, translationAvailable],
+    [
+      resume,
+      rawSeek,
+      startCue,
+      failCue,
+      translationProvider,
+      toggleOriginalShown,
+      learningLocked,
+      translationAvailable,
+    ],
   );
 
   const goToIndex = useCallback(
