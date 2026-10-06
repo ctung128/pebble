@@ -137,8 +137,7 @@ describe("LocalLibraryPage", () => {
     renderLocal(<LocalLibraryPage />, { client });
     await userEvent.click(await screen.findByRole("button", { name: "Delete Finished walk" }));
     expect(screen.getByText(DELETE_PROMPT)).toBeInTheDocument();
-    expect(DELETE_PROMPT).toMatch(/removes the audio, its transcript, your edits to it/);
-    expect(DELETE_PROMPT).toMatch(/Learning items you saved from it stay.*Source deleted/);
+    expect(DELETE_PROMPT).toBe("Delete this audio from Pebble?");
     expect(client.deleteEpisode).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));

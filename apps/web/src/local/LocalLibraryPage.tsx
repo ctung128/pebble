@@ -32,8 +32,7 @@ import {
 } from "./LibraryFilters.tsx";
 import styles from "./local.module.css";
 
-export const DELETE_PROMPT =
-  "Delete this audio from Pebble? This removes the audio, its transcript, your edits to it and its processing files from this computer. Learning items you saved from it stay in Learning items, marked “Source deleted.” This can't be undone.";
+export const DELETE_PROMPT = "Delete this audio from Pebble?";
 
 export function LocalLibraryPage() {
   const { client, status, recheck } = useWorker();
