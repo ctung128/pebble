@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Job } from "@pebble/schema";
@@ -35,6 +35,9 @@ const failure = (retryable: boolean) => ({
   hint: retryable ? "Retry the job." : null,
 });
 
+/** The visible headline (the polite live region is separate, and throttled). */
+const headline = () => document.getElementById("job-status")!;
+
 describe("JobProgressPage", () => {
   it("shows the current stage and real section counts, never a percentage", async () => {
     renderJob(
@@ -44,10 +47,10 @@ describe("JobProgressPage", () => {
         progress: { completedChunks: 1, totalChunks: 5 },
       }),
     );
-    expect(await screen.findByText("Processing section 2 of 5")).toHaveAttribute("role", "status");
-    // The steps are there on request, collapsed by default.
-    const steps = screen.getByText("Processing steps").closest("details")!;
-    expect(steps).not.toHaveAttribute("open");
+    expect(await screen.findByText("Processing section 2 of 5")).toBe(headline());
+    // The steps stay in view while processing, not behind a disclosure.
+    expect(screen.getByRole("list", { name: "Stages" }).closest("details")).toBeNull();
+    expect(screen.getByText("Section 2 of 5 · 1 done")).toBeInTheDocument();
     const stages = screen.getAllByRole("listitem").map((li) => li.getAttribute("data-state"));
     expect(stages).toEqual(["done", "done", "done", "current", "pending"]);
     expect(document.body.textContent).not.toMatch(/%/);
@@ -66,13 +69,13 @@ describe("JobProgressPage", () => {
       "href",
       "/episodes/ep-0123456789ab",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Preview ready");
+    expect(headline()).toHaveTextContent("Preview ready");
   });
 
   it("does not claim completion when the transcript doesn't validate", async () => {
     renderJob(makeJob({ status: "completed", stage: "merging" }), { transcriptFails: true });
     expect(await screen.findByText("Try processing this audio again.")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("couldn't be read");
+    expect(headline()).toHaveTextContent("couldn't be read");
     expect(screen.queryByText("Transcript is invalid")).not.toBeInTheDocument(); // raw reason stays out
     expect(screen.queryByRole("link", { name: "Open preview transcript" })).not.toBeInTheDocument();
   });
@@ -132,7 +135,7 @@ describe("JobProgressPage", () => {
     expect(await screen.findByText("Waiting to start…")).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        "Processing continues while Pebble is running and your computer stays awake.",
+        "Processing continues while Pebble is running and your computer stays awake. You can leave this page.",
       ),
     ).toHaveLength(1);
     expect(screen.getByRole("link", { name: "← Library" })).toHaveAttribute("href", "/");
@@ -186,7 +189,7 @@ describe("JobProgressPage", () => {
   it("keeps the mock's preview wording", async () => {
     renderJob(makeJob({ status: "running", stage: "merging" }));
     expect(await screen.findByText("Preparing processing preview")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Processing audio…");
+    expect(headline()).toHaveTextContent("Processing audio…");
     // The stage names (never "transcribing" for the mock) stay in the steps disclosure.
     expect(screen.getByText("Assembling the preview transcript")).toBeInTheDocument();
   });
@@ -222,7 +225,7 @@ describe("JobProgressPage — local transcription (FunASR)", () => {
     );
     const open = await screen.findByRole("link", { name: "Open transcript" });
     expect(open).toHaveAttribute("href", "/episodes/ep-0123456789ab");
-    expect(screen.getByRole("status")).toHaveTextContent("Transcript ready");
+    expect(headline()).toHaveTextContent("Transcript ready");
     expect(screen.queryByText("Creating your transcript")).not.toBeInTheDocument(); // it's done
     expect(screen.queryByText(/preview/i)).not.toBeInTheDocument();
   });
@@ -265,5 +268,118 @@ describe("JobProgressPage — rename", () => {
     renderWithRename(makeJob({ status: "running", stage: "normalizing" }));
     expect(await screen.findByText("Preparing audio…")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rename episode" })).not.toBeInTheDocument();
+  });
+});
+
+describe("JobProgressPage — progress", () => {
+  const asr = { provider: { id: "funasr", kind: "asr" as const } };
+  const sections = (completedChunks: number, totalChunks = 4) =>
+    makeJob({
+      ...asr,
+      status: "running",
+      stage: "transcribing",
+      durationMs: 42 * 60_000,
+      progress: { completedChunks, totalChunks },
+    });
+
+  it("fills the bar from real section counts and says how much audio there is", async () => {
+    renderJob(sections(1));
+    const bar = await screen.findByRole("progressbar", { name: "Sections processed" });
+    expect(bar).toHaveAttribute("aria-valuenow", "1");
+    expect(bar).toHaveAttribute("aria-valuemax", "4");
+    expect(bar).toHaveAttribute("aria-valuetext", "1 of 4 sections");
+    expect(screen.getByText("42 min of audio · 4 sections")).toBeInTheDocument();
+  });
+
+  it("sweeps without a value before section counts exist", async () => {
+    renderJob(makeJob({ status: "running", stage: "normalizing" }));
+    const bar = await screen.findByRole("progressbar", { name: "Processing" });
+    expect(bar).not.toHaveAttribute("aria-valuenow");
+  });
+
+  it("warns that the first section can take longer, for real transcription only", async () => {
+    renderJob(sections(0));
+    expect(
+      await screen.findByText("Section 1 of 4 · 0 done. The first section can take longer."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a running clock from when the audio was added, first attempt only", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse("2026-10-03T12:03:07.000Z") });
+    try {
+      renderJob(sections(1));
+      expect(await screen.findByText("Running for 3:07")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names the progress in the tab title", async () => {
+    renderJob(sections(2));
+    await screen.findByText("Processing section 3 of 4");
+    expect(document.title).toBe("(2/4) Morning walk · Pebble");
+  });
+
+  it("estimates the time left only after seeing two sections finish", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const sequence = [sections(0, 6), sections(1, 6), sections(2, 6), sections(3, 6)];
+      const getJob = vi.fn(async () => (sequence.length > 1 ? sequence.shift()! : sequence[0]!));
+      renderLocal(<JobProgressRoute />, {
+        client: fakeWorkerClient({ getJob }),
+        source: fakeSource({ getTranscript: async () => testTranscript }),
+        path: "/jobs/:jobId",
+        route: `/jobs/${JOB_ID}`,
+      });
+      await screen.findByText("Processing section 1 of 6");
+      await act(() => vi.advanceTimersByTimeAsync(1000)); // 1 done: first change seen
+      expect(screen.queryByText(/left/)).not.toBeInTheDocument();
+      await act(() => vi.advanceTimersByTimeAsync(1000)); // 2 done
+      await act(() => vi.advanceTimersByTimeAsync(1000)); // 3 done
+      expect(screen.getByText(/Less than a minute left|About \d+ min left/)).toBeInTheDocument();
+      expect(screen.getByText("· estimate")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows only the headline and a full bar once finished", async () => {
+    renderJob(
+      makeJob({
+        ...asr,
+        status: "completed",
+        stage: "merging",
+        progress: { completedChunks: 4, totalChunks: 4 },
+      }),
+    );
+    await screen.findByRole("link", { name: "Open transcript" });
+    expect(screen.queryByRole("list", { name: "Stages" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Processed/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    // The ✓ waits for the transcript to load and validate.
+    await waitFor(() => expect(document.title).toBe("✓ Morning walk · Pebble"));
+  });
+
+  it("announces stage changes, not every section", async () => {
+    renderJob([
+      makeJob({ status: "running", stage: "chunking" }),
+      makeJob({
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 0, totalChunks: 4 },
+      }),
+      makeJob({
+        status: "running",
+        stage: "transcribing",
+        progress: { completedChunks: 1, totalChunks: 4 },
+      }),
+    ]);
+    const live = () => screen.getByRole("status");
+    await screen.findByText("Preparing audio…");
+    expect(live()).toHaveTextContent(""); // the first load isn't news
+    await screen.findByText("Processing section 1 of 4", {}, { timeout: 3000 });
+    expect(live()).toHaveTextContent("Processing section 1 of 4");
+    await screen.findByText("Processing section 2 of 4", {}, { timeout: 3000 });
+    expect(live()).toHaveTextContent("Processing section 1 of 4"); // a section tick says nothing yet
   });
 });

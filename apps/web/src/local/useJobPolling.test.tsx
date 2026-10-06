@@ -57,21 +57,23 @@ describe("useJobPolling", () => {
     expect(result.current.job?.status).toBe("completed");
   });
 
-  it("pauses while the tab is hidden and resumes immediately when visible", async () => {
+  it("slows to every 10 s while the tab is hidden and checks at once when visible", async () => {
     const client = fakeWorkerClient({ getJob: vi.fn(async () => running()) });
     renderHook(() => useJobPolling(client, JOB_ID));
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(client.getJob).toHaveBeenCalledTimes(1);
 
     act(() => setVisibility("hidden"));
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    await act(() => vi.advanceTimersByTimeAsync(9_000));
     expect(client.getJob).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(client.getJob).toHaveBeenCalledTimes(2);
 
     act(() => setVisibility("visible"));
     await act(() => vi.advanceTimersByTimeAsync(0));
-    expect(client.getJob).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(client.getJob).toHaveBeenCalledTimes(3);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(client.getJob).toHaveBeenCalledTimes(4);
   });
 
   it("keeps polling through a temporary worker error", async () => {

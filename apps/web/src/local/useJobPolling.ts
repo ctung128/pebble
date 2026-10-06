@@ -7,6 +7,8 @@ export const FAST_POLL_MS = 1000;
 export const SLOW_POLL_MS = 3000;
 /** Poll every second for the first 30 s of watching, then every 3 s. */
 export const FAST_PHASE_MS = 30_000;
+/** In a background tab: slow, but enough to keep the tab title's progress current. */
+export const HIDDEN_POLL_MS = 10_000;
 
 export function pollDelay(elapsedMs: number): number {
   return elapsedMs < FAST_PHASE_MS ? FAST_POLL_MS : SLOW_POLL_MS;
@@ -15,9 +17,9 @@ export function pollDelay(elapsedMs: number): number {
 const isHidden = () => document.visibilityState === "hidden";
 
 /**
- * Polls a job until it reaches a terminal status. Pauses while the tab is hidden and polls
- * immediately when it becomes visible again. `restart()` (after cancel/retry) resets the
- * fast phase.
+ * Polls a job until it reaches a terminal status. Slows to every 10 s while the tab is hidden
+ * (the tab title shows progress) and polls immediately when it becomes visible again.
+ * `restart()` (after cancel/retry) resets the fast phase.
  */
 export function useJobPolling(client: WorkerClient, jobId: string) {
   const [job, setJob] = useState<Job | null>(null);
@@ -31,13 +33,14 @@ export function useJobPolling(client: WorkerClient, jobId: string) {
     const startedAt = Date.now();
 
     const schedule = () => {
-      if (stopped || isHidden()) return;
-      timer = window.setTimeout(poll, pollDelay(Date.now() - startedAt));
+      if (stopped) return;
+      const delay = isHidden() ? HIDDEN_POLL_MS : pollDelay(Date.now() - startedAt);
+      timer = window.setTimeout(poll, delay);
     };
 
     async function poll() {
       timer = undefined;
-      if (stopped || inFlight || isHidden()) return;
+      if (stopped || inFlight) return;
       inFlight = true;
       try {
         const next = await client.getJob(jobId);
@@ -58,12 +61,12 @@ export function useJobPolling(client: WorkerClient, jobId: string) {
     }
 
     const onVisibility = () => {
-      if (isHidden()) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      } else if (!stopped && timer === undefined && !inFlight) {
-        void poll();
-      }
+      if (stopped || inFlight) return;
+      window.clearTimeout(timer);
+      timer = undefined;
+      // Back in view: check now. Hidden: the next poll comes at the slower pace.
+      if (isHidden()) schedule();
+      else void poll();
     };
 
     document.addEventListener("visibilitychange", onVisibility);

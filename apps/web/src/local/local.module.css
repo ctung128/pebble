@@ -316,7 +316,7 @@
 /* Job progress */
 .jobCard {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   padding: var(--space-6);
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
@@ -329,71 +329,201 @@
   font-weight: 600;
 }
 
-/* "Processing steps": collapsed by default; the headline says what matters. */
-.stepsDetails {
+/* The steps behind the headline: in view while processing; gone once the transcript is ready. */
+.jobContext {
+  margin: 0;
   font-size: var(--size-body-sm);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
 
-.stepsDetails summary {
-  width: fit-content;
-  border-radius: var(--radius-xs);
-  color: var(--text-primary);
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
+.jobMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  font-size: var(--size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
-.stepsDetails[open] summary {
-  margin-bottom: var(--space-2);
+.estimateTag {
+  color: var(--text-tertiary);
 }
 
+/* Progress bar: fills from real section counts only; otherwise an unnumbered sweep. */
+.bar {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--duration-base) var(--easing-standard);
+}
+
+.bar[data-mode="indeterminate"] .barFill {
+  width: 34%;
+  animation: barSweep 1.6s ease-in-out infinite;
+}
+
+.bar[data-mode="stopped"] .barFill {
+  background: var(--border-control);
+}
+
+@keyframes barSweep {
+  from {
+    left: -34%;
+  }
+
+  to {
+    left: 100%;
+  }
+}
+
+/* Stage list: check when done, a pulsing dot and a shimmering label on the current step. */
 .stages {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--text-sm);
+  font-size: var(--size-body-sm);
 }
 
 .stages li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: var(--space-3);
   align-items: center;
-  gap: var(--space-2);
-  color: var(--text-faint);
+  min-height: 28px;
+  color: var(--text-tertiary);
 }
 
-.stages li::before {
-  content: "";
-  width: 10px;
-  height: 10px;
+.stageMark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-control);
   border-radius: 50%;
-  border: 2px solid var(--border-strong);
+}
+
+.stageDetail {
+  grid-column: 2;
+  font-size: var(--size-caption);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
 .stages li[data-state="done"] {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
-.stages li[data-state="done"]::before {
+.stages li[data-state="done"] .stageMark {
   border-color: var(--accent);
   background: var(--accent);
 }
 
+.stages li[data-state="done"] .stageMark::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  margin-top: -2px;
+  border-bottom: 2px solid var(--text-on-accent);
+  border-left: 2px solid var(--text-on-accent);
+  transform: rotate(-45deg);
+}
+
 .stages li[data-state="current"] {
-  color: var(--text);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
-.stages li[data-state="current"]::before {
+.stages li[data-state="current"] .stageMark {
   border-color: var(--accent);
 }
 
-.stages li[data-state="failed"]::before,
-.stages li[data-state="cancelled"]::before {
-  border-color: var(--danger);
+.stages li[data-state="current"] .stageMark::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: stagePulse 1.4s ease-in-out infinite;
+}
+
+.stages li[data-state="current"] .stageLabel {
+  background: linear-gradient(
+    90deg,
+    var(--text-primary) 40%,
+    var(--accent-pending) 50%,
+    var(--text-primary) 60%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: stageShimmer 2.2s linear infinite;
+}
+
+.stages li[data-state="failed"],
+.stages li[data-state="cancelled"] {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.stages li[data-state="failed"] .stageMark,
+.stages li[data-state="cancelled"] .stageMark {
+  border-color: var(--error);
+}
+
+@keyframes stagePulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.6);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes stageShimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -150% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar[data-mode="indeterminate"] .barFill {
+    left: 0;
+    width: 100%;
+    opacity: 0.35;
+    animation: none;
+  }
+
+  .stages li[data-state="current"] .stageMark::after {
+    animation: none;
+  }
+
+  .stages li[data-state="current"] .stageLabel {
+    background: none;
+    color: var(--text-primary);
+    animation: none;
+  }
 }
 
 .failure {

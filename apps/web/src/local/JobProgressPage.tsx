@@ -13,9 +13,12 @@ import {
   requestProblem,
   stageSteps,
   statusLabel,
+  type StageStep,
 } from "./jobCopy.ts";
-import { LOCAL_COPY, modeForJob } from "./providerCopy.ts";
+import { clock, contextLine, elapsedMs, estimateLeft, tabTitle } from "./jobProgress.ts";
+import { LOCAL_COPY, modeForJob, type LocalMode } from "./providerCopy.ts";
 import { useJobPolling } from "./useJobPolling.ts";
+import { useNow, useProgressAnnouncement, useSectionChanges } from "./useJobProgress.ts";
 import { WorkerError } from "./workerClient.ts";
 import { useWorker } from "./WorkerContext.tsx";
 import styles from "./local.module.css";
@@ -37,6 +40,10 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
   });
   const [verification, setVerification] = useState<Verification>({ kind: "pending" });
   const renamer = useEpisodeRename();
+  const active = job !== null && isActive(job);
+  const now = useNow(active);
+  const sectionChanges = useSectionChanges(job);
+  const announcement = useProgressAnnouncement(job, job ? headlineFor(job, verification) : "");
   // The reason a transcript couldn't be read stays out of the UI; the headline says what happened.
 
   // "Completed" is only shown once the transcript itself loads and validates.
@@ -94,16 +101,14 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
   const copy = LOCAL_COPY[modeForJob(job)];
   const steps = stageSteps(modeForJob(job));
   const finished = job.status === "completed" && verification.kind === "verified";
-  const headline =
-    job.status === "completed" && verification.kind !== "verified"
-      ? verification.kind === "invalid"
-        ? copy.unreadableTranscript
-        : copy.checkingTranscript
-      : statusLabel(job);
+  const headline = headlineFor(job, verification);
+  const context = contextLine(job);
+  const elapsed = elapsedMs(job, now);
+  const estimate = estimateLeft(job, sectionChanges, now);
 
   return (
     <div className={styles.page}>
-      <title>{`${job.episodeTitle} · Processing · Pebble`}</title>
+      <title>{tabTitle(job, finished)}</title>
       <BackToLibrary />
       <header className={styles.intro}>
         {/* "Creating your transcript…" only while that's true; the headline says when it's done. */}
@@ -121,12 +126,30 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
               : undefined
           }
         />
+        {context ? <p className={styles.jobContext}>{context}</p> : null}
       </header>
 
       <section className={styles.jobCard} aria-labelledby="job-status" data-status={job.status}>
-        <p id="job-status" className={styles.jobHeadline} role="status" aria-live="polite">
+        <p id="job-status" className={styles.jobHeadline}>
           {headline}
         </p>
+        {/* Stage changes, and section progress at most every 30 s: not every poll. */}
+        <p className={styles.visuallyHidden} role="status" aria-live="polite">
+          {announcement}
+        </p>
+        <ProgressBar job={job} />
+        {isActive(job) && (elapsed !== null || estimate) ? (
+          <p className={styles.jobMeta}>
+            {elapsed !== null ? (
+              <span>{job.status === "queued" ? "Queued" : `Running for ${clock(elapsed)}`}</span>
+            ) : null}
+            {estimate ? (
+              <span>
+                {estimate} <span className={styles.estimateTag}>· estimate</span>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
         {job.failure && job.status === "failed" ? (
           <div className={styles.failure} role="alert">
             <p>{failureCopy(job).reason}</p>
@@ -138,27 +161,22 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
             Try processing this audio again.
           </p>
         ) : null}
+
+        {/* The steps stay in view while there's something to watch; once done, the headline is enough. */}
+        {job.status !== "completed" ? (
+          <StageList job={job} steps={steps} finished={finished} mode={modeForJob(job)} />
+        ) : null}
+
         {/* Leaving is safe: the work belongs to Pebble on this computer, not to this page. */}
         {isActive(job) ? (
           <p className={styles.help}>
-            Processing continues while Pebble is running and your computer stays awake.
+            Processing continues while Pebble is running and your computer stays awake. You can
+            leave this page.
           </p>
         ) : null}
         {error && isActive(job) ? (
           <p className={styles.help}>Lost contact with Pebble; still trying…</p>
         ) : null}
-
-        {/* The stages behind the headline, for anyone who wants them. */}
-        <details className={styles.stepsDetails}>
-          <summary>Processing steps</summary>
-          <ol className={styles.stages} aria-label="Stages">
-            {steps.map((step, index) => (
-              <li key={step.stage} data-state={stepState(job, index, finished)}>
-                {step.label}
-              </li>
-            ))}
-          </ol>
-        </details>
         {action.error ? (
           <p className={styles.formError} role="alert">
             {action.error}
@@ -201,6 +219,108 @@ export function JobProgressPage({ jobId }: { jobId: string }) {
       </section>
     </div>
   );
+}
+
+function headlineFor(job: Job, verification: Verification): string {
+  const copy = LOCAL_COPY[modeForJob(job)];
+  if (job.status === "completed" && verification.kind !== "verified") {
+    return verification.kind === "invalid" ? copy.unreadableTranscript : copy.checkingTranscript;
+  }
+  return statusLabel(job);
+}
+
+/**
+ * The bar fills only from real section counts. Before those exist it sweeps without a value
+ * (indeterminate); a stopped job keeps how far it got.
+ */
+function ProgressBar({ job }: { job: Job }) {
+  const progress = job.progress;
+  if (job.status === "completed") {
+    return (
+      <div className={styles.bar} data-mode="done" aria-hidden="true">
+        <span className={styles.barFill} style={{ width: "100%" }} />
+      </div>
+    );
+  }
+  if (job.status === "failed" || job.status === "cancelled") {
+    if (!progress) return null;
+    const width = `${(progress.completedChunks / progress.totalChunks) * 100}%`;
+    return (
+      <div className={styles.bar} data-mode="stopped" aria-hidden="true">
+        <span className={styles.barFill} style={{ width }} />
+      </div>
+    );
+  }
+  if (job.status === "running" && job.stage === "transcribing" && progress) {
+    const { completedChunks, totalChunks } = progress;
+    return (
+      <div
+        className={styles.bar}
+        data-mode="determinate"
+        role="progressbar"
+        aria-label="Sections processed"
+        aria-valuemin={0}
+        aria-valuemax={totalChunks}
+        aria-valuenow={completedChunks}
+        aria-valuetext={`${completedChunks} of ${totalChunks} sections`}
+      >
+        <span
+          className={styles.barFill}
+          style={{ width: `${(completedChunks / totalChunks) * 100}%` }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={styles.bar}
+      data-mode="indeterminate"
+      role="progressbar"
+      aria-label="Processing"
+    >
+      <span className={styles.barFill} />
+    </div>
+  );
+}
+
+function StageList({
+  job,
+  steps,
+  finished,
+  mode,
+}: {
+  job: Job;
+  steps: StageStep[];
+  finished: boolean;
+  mode: LocalMode;
+}) {
+  return (
+    <ol className={styles.stages} aria-label="Stages">
+      {steps.map((step, index) => {
+        const state = stepState(job, index, finished);
+        const detail = state === "current" ? stepDetail(job, mode) : null;
+        return (
+          <li key={step.stage} data-state={state}>
+            <span className={styles.stageMark} aria-hidden="true" />
+            <span className={styles.stageLabel}>{step.label}</span>
+            {detail ? <span className={styles.stageDetail}>{detail}</span> : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** The line under the current step: real section counts only. */
+function stepDetail(job: Job, mode: LocalMode): string | null {
+  if (job.status !== "running" || job.stage !== "transcribing" || !job.progress) return null;
+  const { completedChunks, totalChunks } = job.progress;
+  const current = Math.min(completedChunks + 1, totalChunks);
+  const counts = `Section ${current} of ${totalChunks} · ${completedChunks} done`;
+  // Speech models load on the first section, so it can run longer than the rest.
+  return completedChunks === 0 && mode === "funasr"
+    ? `${counts}. The first section can take longer.`
+    : counts;
 }
 
 function stepState(job: Job, index: number, finished: boolean): string {
