@@ -55,17 +55,15 @@
   text-decoration: none;
 }
 
-/* Hand-drawn mark, cropped from src/assets/logo.png. Inverted on dark backgrounds. */
+/* Hand-drawn mark, cropped from src/assets/logo.png. Inverted in the (off) dark theme. */
 .logo {
   display: block;
   width: 36px;
   height: 36px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert(1);
-  }
+:global(:root[data-theme="dark"]) .logo {
+  filter: invert(1);
 }
 
 .mode {

@@ -51,7 +51,7 @@ Click or tap any line to play from it. Scrolling the transcript pauses auto-foll
   and provenance) and export them as [Anki-compatible CSV](docs/ANKI_EXPORT.md).
 
 Learner data (corrections, learning items and listening positions) lives in this browser
-(IndexedDB). **Reset demo data** clears it; episode content is never modified. If storage is unavailable, Pebble keeps working for the session and says so.
+(IndexedDB); episode content is never modified. There's no in-app reset for now: clear it by deleting the site's data in your browser settings. If storage is unavailable, Pebble keeps working for the session and says so.
 
 Development-only switches (ignored in production builds): `?storage=session` simulates
 unavailable storage, `?translation=fail` makes translations fail. Put them before the `#`, e.g.

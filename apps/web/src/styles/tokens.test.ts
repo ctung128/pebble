@@ -14,8 +14,8 @@ function declarations(block: string): Map<string, string> {
   return new Map([...block.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]));
 }
 
-const lightBlock = /:root \{\s*color-scheme: light dark;([\s\S]*?)\n\}/.exec(css)?.[1];
-const darkBlock = /prefers-color-scheme: dark\) \{\s*:root \{([\s\S]*?)\}/.exec(css)?.[1];
+const lightBlock = /:root \{\s*color-scheme: light;([\s\S]*?)\n\}/.exec(css)?.[1];
+const darkBlock = /:root\[data-theme="dark"\] \{\s*color-scheme: dark;([\s\S]*?)\}/.exec(css)?.[1];
 if (!lightBlock || !darkBlock) throw new Error("tokens.css: light or dark block not found");
 
 const light = declarations(lightBlock);

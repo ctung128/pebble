@@ -12,8 +12,8 @@ import { foldForSearch, matchesQuery } from "../../lib/search.ts";
 import { useDebouncedAnnouncement } from "../../lib/useDebouncedAnnouncement.ts";
 import { itemSource } from "./ankiCsv.ts";
 import { AnkiExportPanel } from "./AnkiExportPanel.tsx";
+import { EmptyLearningItems } from "./EmptyLearningItems.tsx";
 import { useLearning } from "./LearningContext.tsx";
-import { ResetDemoData } from "./ResetDemoData.tsx";
 import styles from "./LearningItemsPage.module.css";
 
 interface EpisodeGroup {
@@ -87,11 +87,7 @@ export function LearningItemsPage() {
           {persistence.mode === "loading" ? (
             <StatusView kind="loading" title="Loading learning items…" />
           ) : items.length === 0 ? (
-            <StatusView
-              kind="empty"
-              title="No learning items yet"
-              message="Save a line from any transcript (the bookmark button, or S) and it will appear here."
-            />
+            <EmptyLearningItems />
           ) : (
             <>
               <SearchField
@@ -141,8 +137,6 @@ export function LearningItemsPage() {
 
         <aside className={styles.side} aria-label="Export and data">
           <AnkiExportPanel items={items} />
-          {/* Hidden in local mode for now: there it would remove the learner's real study data. */}
-          {!__PEBBLE_LOCAL__ && <ResetDemoData />}
         </aside>
       </div>
     </div>

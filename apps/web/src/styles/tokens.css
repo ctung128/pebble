@@ -7,7 +7,7 @@
  * -> sizes. Type is in rem so the browser's font-size setting scales text.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   /* --- Primitive colors --- */
   --white: #ffffff;
@@ -151,40 +151,39 @@
 }
 
 /*
- * INTERIM DARK THEME. The v2 design system has no dark palette yet. These are the app's
- * existing v1 dark values, mapped onto the v2 semantic names, so dark mode keeps working
- * (project rule) until a v2 dark theme is designed and replaces this block.
+ * INTERIM DARK THEME, currently OFF: the app always renders light, whatever the device's
+ * setting. These are the app's v1 dark values mapped onto the v2 semantic names; they apply
+ * only under data-theme="dark" (nothing sets it yet) and wait for a designed v2 dark theme.
  */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-page: #161513;
-    --bg-subtle: #1e1d1a;
-    --bg-muted: #2a2824;
-    --bg-hover: #2f2c27;
-    --bg-selected: #263127;
-    --bg-active: #263127;
-    --bg-inset: #1e1d1a;
-    --text-primary: #ece8df;
-    --text-secondary: #aca698;
-    --text-tertiary: #aca698;
-    --text-accent: #9cc29f;
-    --text-on-accent: #14201a;
-    --accent: #9cc29f;
-    --accent-hover: #b3d4b5;
-    --accent-pending: #6d8a70;
-    --border-subtle: #2f2c27;
-    --border-default: #423e37;
-    --border-control: #807b70;
-    --border-selected: #9cc29f;
-    --focus-ring: #9cc29f;
-    --error: #f0907e;
-    --error-hover: #f4a797;
-    --error-bg: #3a201b;
-    --error-border: #5c3128;
-    --warning: #ecd39a;
-    --warning-bg: #3a301c;
-    --warning-border: #5a4a2a;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-page: #161513;
+  --bg-subtle: #1e1d1a;
+  --bg-muted: #2a2824;
+  --bg-hover: #2f2c27;
+  --bg-selected: #263127;
+  --bg-active: #263127;
+  --bg-inset: #1e1d1a;
+  --text-primary: #ece8df;
+  --text-secondary: #aca698;
+  --text-tertiary: #aca698;
+  --text-accent: #9cc29f;
+  --text-on-accent: #14201a;
+  --accent: #9cc29f;
+  --accent-hover: #b3d4b5;
+  --accent-pending: #6d8a70;
+  --border-subtle: #2f2c27;
+  --border-default: #423e37;
+  --border-control: #807b70;
+  --border-selected: #9cc29f;
+  --focus-ring: #9cc29f;
+  --error: #f0907e;
+  --error-hover: #f4a797;
+  --error-bg: #3a201b;
+  --error-border: #5c3128;
+  --warning: #ecd39a;
+  --warning-bg: #3a301c;
+  --warning-border: #5a4a2a;
 }
 
 /*

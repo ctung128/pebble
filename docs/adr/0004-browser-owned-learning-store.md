@@ -15,7 +15,8 @@ will own.
 - The store interface stays small (list/put/delete/clear) so it can be replaced.
 - If storage is unavailable or a write fails, the app continues with session-only data and
   shows a non-blocking notice.
-- Demo visitors' data stays in their own browser; "Reset demo data" clears it.
+- Demo visitors' data stays in their own browser. The in-app "Reset demo data" control is
+  hidden for now; clearing the site's data in the browser removes it.
 - Moving or synchronizing learner data to worker-owned SQLite is a planned M0C+ decision. No
   sync, migration or second storage abstraction is built now.
 

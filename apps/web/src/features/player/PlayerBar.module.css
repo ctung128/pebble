@@ -251,3 +251,37 @@
     margin-right: var(--space-1);
   }
 }
+
+/* Narrow phones (iPhone SE/mini, small Android): smaller transport and speed targets so the
+   second row fits without the speed options touching or clipping. */
+@media (max-width: 400px) {
+  .bar {
+    padding-inline: var(--space-3);
+  }
+
+  .inner {
+    column-gap: var(--space-2);
+  }
+
+  .playButton {
+    width: 50px;
+    height: 44px;
+    margin-right: 0;
+  }
+
+  .iconButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .speed {
+    gap: 0;
+  }
+
+  .speedOption {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 var(--space-1);
+    font-size: var(--size-label);
+  }
+}

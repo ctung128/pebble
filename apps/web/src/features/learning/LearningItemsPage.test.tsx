@@ -36,37 +36,21 @@ describe("LearningItemsPage", () => {
     expect(screen.queryByText(/saved in this browser/)).not.toBeInTheDocument();
   });
 
-  it("resets demo data only after confirmation", async () => {
-    const store = new MemoryLearningStore();
-    await store.putCorrection({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      episodeId: "test-001",
-      segmentId: "seg-1",
-      originalText: "第一句。",
-      correctedText: "第一句话。",
-      updatedAt: "2026-10-03T00:00:00Z",
-    });
-    renderWithProviders(<LearningItemsPage />, { store });
-
-    await userEvent.click(await screen.findByRole("button", { name: "Reset demo data" }));
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(await store.listCorrections()).toHaveLength(1);
-
-    await userEvent.click(screen.getByRole("button", { name: "Reset demo data" }));
-    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-    await waitFor(async () => expect(await store.listCorrections()).toEqual([]));
-    expect(screen.getByText(/Demo data reset/)).toBeInTheDocument();
-  });
-
-  it("offers no reset control in local mode", async () => {
-    vi.stubGlobal("__PEBBLE_LOCAL__", true);
-    try {
-      renderWithProviders(<LearningItemsPage />, { store: await storeWithItem() });
-      expect(await screen.findByText("第二句。")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /Remove all edits/ })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /Reset/ })).not.toBeInTheDocument();
-    } finally {
-      vi.stubGlobal("__PEBBLE_LOCAL__", false);
+  it("offers no reset control in either mode", async () => {
+    for (const local of [false, true]) {
+      vi.stubGlobal("__PEBBLE_LOCAL__", local);
+      try {
+        const { unmount } = renderWithProviders(<LearningItemsPage />, {
+          store: await storeWithItem(),
+        });
+        expect(await screen.findByText("第二句。")).toBeInTheDocument();
+        expect(
+          screen.queryByRole("button", { name: /Reset|Remove all edits/ }),
+        ).not.toBeInTheDocument();
+        unmount();
+      } finally {
+        vi.stubGlobal("__PEBBLE_LOCAL__", false);
+      }
     }
   });
 
@@ -280,7 +264,9 @@ describe("LearningItemsPage", () => {
 
     it("isn't offered when there are no items", async () => {
       renderWithProviders(<LearningItemsPage />);
-      expect(await screen.findByText("No learning items yet")).toBeInTheDocument();
+      expect(
+        await screen.findByRole("heading", { name: "No learning items yet" }),
+      ).toBeInTheDocument();
       expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     });
   });

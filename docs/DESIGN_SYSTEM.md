@@ -10,9 +10,10 @@ Modules that use those names. There's no UI framework or component library.
   "direction D": white reading page, juniper accent, lichen selection).
 - `tokens.css` is generated from it, then hand-checked. **Change the design system first and
   regenerate**; don't tune values in the CSS.
-- The JSON defines the light theme. The **dark theme in `tokens.css` is interim**: the app's
-  earlier dark values mapped onto the v2 names, so dark mode keeps working until a v2 dark
-  palette is designed.
+- The JSON defines the light theme, and **the app always renders light**, whatever the
+  device's setting. `tokens.css` keeps an interim dark block (the app's earlier dark values
+  mapped onto the v2 names) behind `:root[data-theme="dark"]`, which nothing sets yet; it waits
+  for a designed v2 dark palette.
 
 ## Token tiers
 
@@ -70,8 +71,8 @@ and 24px). The v1 uses were migrated when v2 landed (`--space-5` → `--space-6`
 - **Reduced motion:** `global.css` turns off animation and smooth scrolling under
   `prefers-reduced-motion`; use the motion tokens rather than fixed durations.
 - **Forced colours:** focus falls back to the system `Highlight` colour.
-- **Dark mode:** every semantic colour has a dark value. Use semantic names, never primitives
-  or hex values, so components follow the theme.
+- **Dark mode (off for now):** every semantic colour still has a dark value. Use semantic names,
+  never primitives or hex values, so components follow the theme when it returns.
 
 ## Adding or changing a token
 
