@@ -7,7 +7,7 @@
       "titleZh": "我为什么做 Pebble",
       "description": "A friend asks why Pebble was built, in a short two-voice conversation written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 81163,
+      "durationMs": 82129,
       "audio": {
         "src": "demo-001/audio.m4a",
         "mimeType": "audio/mp4"

@@ -3,13 +3,13 @@
   "episodeId": "demo-001",
   "language": "zh-CN",
   "script": "simplified",
-  "durationMs": 81163,
+  "durationMs": 82129,
   "segments": [
     {
       "id": "seg-0001",
       "index": 0,
       "startMs": 300,
-      "endMs": 4287,
+      "endMs": 4671,
       "text": "哎，你最近是不是在搞个什么 app？朋友圈老看你发。",
       "speaker": "A",
       "confidence": null,
@@ -18,8 +18,8 @@
     {
       "id": "seg-0002",
       "index": 1,
-      "startMs": 4737,
-      "endMs": 11165,
+      "startMs": 5121,
+      "endMs": 11549,
       "text": "对！叫 Pebble，是一个中文学习工具，专门把播客转录并翻译成英文。",
       "speaker": "B",
       "confidence": null,
@@ -28,8 +28,8 @@
     {
       "id": "seg-0003",
       "index": 2,
-      "startMs": 11615,
-      "endMs": 14387,
+      "startMs": 11999,
+      "endMs": 14629,
       "text": "有点东西啊。你怎么突然想做这个？",
       "speaker": "A",
       "confidence": null,
@@ -38,8 +38,8 @@
     {
       "id": "seg-0004",
       "index": 3,
-      "startMs": 14837,
-      "endMs": 24461,
+      "startMs": 15079,
+      "endMs": 24704,
       "text": "其实就是解决我自己的痛点。我平时在小宇宙上听播客学中文，但 app 里根本没有翻译功能，根本学不了。",
       "speaker": "B",
       "confidence": null,
@@ -48,8 +48,8 @@
     {
       "id": "seg-0005",
       "index": 4,
-      "startMs": 24911,
-      "endMs": 29202,
+      "startMs": 25154,
+      "endMs": 29520,
       "text": "懂，那卡点确实挺窒息的。那你现在中文什么水平？",
       "speaker": "A",
       "confidence": null,
@@ -58,8 +58,8 @@
     {
       "id": "seg-0006",
       "index": 5,
-      "startMs": 29652,
-      "endMs": 39674,
+      "startMs": 29970,
+      "endMs": 39992,
       "text": "我目前在准备 HSK 5，想通过大量的输入来学，比如播客。但听不懂的地方，没法查，没法记，干着急。",
       "speaker": "B",
       "confidence": null,
@@ -68,8 +68,8 @@
     {
       "id": "seg-0007",
       "index": 6,
-      "startMs": 40124,
-      "endMs": 42211,
+      "startMs": 40442,
+      "endMs": 42627,
       "text": "所以你就干脆自己做了一个？",
       "speaker": "A",
       "confidence": null,
@@ -78,8 +78,8 @@
     {
       "id": "seg-0008",
       "index": 7,
-      "startMs": 42661,
-      "endMs": 50216,
+      "startMs": 43077,
+      "endMs": 50633,
       "text": "对，一开始就是自用。做设计的人嘛，遇到问题第一反应就是——那我来设计个解决方案。",
       "speaker": "B",
       "confidence": null,
@@ -88,8 +88,8 @@
     {
       "id": "seg-0009",
       "index": 8,
-      "startMs": 50666,
-      "endMs": 55133,
+      "startMs": 51083,
+      "endMs": 55833,
       "text": "绝了，这就是吃自己的狗粮啊。那 Pebble 具体能干啥？",
       "speaker": "A",
       "confidence": null,
@@ -98,8 +98,8 @@
     {
       "id": "seg-0010",
       "index": 9,
-      "startMs": 55583,
-      "endMs": 63405,
+      "startMs": 56283,
+      "endMs": 64105,
       "text": "它可以转录你自己的播客音频，逐句翻译成英文，还能对照着看。这样我就能一边听一边学。",
       "speaker": "B",
       "confidence": null,
@@ -108,8 +108,8 @@
     {
       "id": "seg-0011",
       "index": 10,
-      "startMs": 63855,
-      "endMs": 67104,
+      "startMs": 64555,
+      "endMs": 67925,
       "text": "听起来很实用。所以你的 mission 是啥？",
       "speaker": "A",
       "confidence": null,
@@ -118,8 +118,8 @@
     {
       "id": "seg-0012",
       "index": 11,
-      "startMs": 67554,
-      "endMs": 75001,
+      "startMs": 68375,
+      "endMs": 75822,
       "text": "就是让学中文的人，能直接从真实的播客内容里学。原汁原味的语料，比课本香多了。",
       "speaker": "B",
       "confidence": null,
@@ -128,8 +128,8 @@
     {
       "id": "seg-0013",
       "index": 12,
-      "startMs": 75451,
-      "endMs": 77780,
+      "startMs": 76272,
+      "endMs": 78745,
       "text": "可以可以，那这个必须给我安排一个。",
       "speaker": "A",
       "confidence": null,
@@ -138,8 +138,8 @@
     {
       "id": "seg-0014",
       "index": 13,
-      "startMs": 78230,
-      "endMs": 80563,
+      "startMs": 79195,
+      "endMs": 81529,
       "text": "哈哈，蹲着吧，等我上线。",
       "speaker": "B",
       "confidence": null,
@@ -150,7 +150,7 @@
     "kind": "fixture",
     "provider": "fixture",
     "model": null,
-    "createdAt": "2026-10-06T19:22:10.299Z",
+    "createdAt": "2026-10-06T19:56:33.208Z",
     "notes": "Authored script text, not ASR output. Timings measured from per-line neural TTS renders (LuvVoice)."
   }
 }
