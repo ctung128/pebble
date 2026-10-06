@@ -301,10 +301,14 @@
   }
 }
 
-/* The column's own padding is the page gutter here: pull out only that far, so nothing overflows. */
+/*
+ * Under 900px: pull out the same 16px on both sides, inside the page gutter. The highlight
+ * sits evenly inset from both screen edges, and the text still starts on the gutter line.
+ */
 @media (max-width: 899px) {
   .list {
-    --line-pad-start: var(--page-gutter);
+    --line-pad-start: var(--space-4);
+    --line-pad-end: var(--space-4);
   }
 }
 
