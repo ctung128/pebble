@@ -210,22 +210,10 @@
 
 /* --- Help lines above the transcript --- */
 
-/*
- * Starts where the transcript's Chinese text does: after the time column and the speaker slot
- * (TranscriptReader: --meta-width 60px, a 12px column gap, --speaker-slot 12px, --speaker-gap
- * 10px). On phones the time sits above the text, so only the speaker slot counts.
- */
 .help {
   margin: 0 0 var(--space-3);
-  padding-left: calc(60px + var(--space-3) + 12px + 10px);
   font-size: var(--size-body-sm);
   color: var(--text-secondary);
-}
-
-@media (max-width: 560px) {
-  .help {
-    padding-left: calc(12px + 10px);
-  }
 }
 
 .reviewSample {
