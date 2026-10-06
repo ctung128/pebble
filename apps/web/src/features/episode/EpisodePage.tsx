@@ -165,6 +165,10 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const learningLocked = !capabilities.learning;
   const translationAvailable = capabilities.translation === "available";
   const translationHidden = capabilities.translation === "hidden";
+  // The public demo is for visitors who may not read Chinese, so its header toggle shows
+  // English; the local app keeps the pinyin toggle.
+  const englishToggle = !__PEBBLE_LOCAL__ && translationAvailable;
+  const [englishShowAll, setEnglishShowAll] = useState(false);
 
   const lines = useMemo(() => {
     const map = new Map<string, LineView>();
@@ -210,6 +214,15 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     editingId,
     translationAvailable,
   ]);
+
+  const toggleAllEnglish = () => {
+    const next = !englishShowAll;
+    setEnglishShowAll(next);
+    translations.setAllOpen(
+      segments.map((segment) => ({ segment, text: lines.get(segment.id)?.text ?? segment.text })),
+      next,
+    );
+  };
 
   // Row actions read the latest state through a ref so their identities stay stable and
   // memoized rows don't re-render on every playback frame.
@@ -444,17 +457,28 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
                 )}
               </div>
             ) : null}
-            <button
-              type="button"
-              className={styles.toolButton}
-              aria-pressed={pinyin.showAll}
-              aria-busy={pinyin.status === "loading" || undefined}
-              aria-disabled={learningLocked || undefined}
-              aria-describedby={learningLocked ? LOCKED_HELP_ID : undefined}
-              onClick={learningLocked ? undefined : pinyin.toggleAll}
-            >
-              {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
-            </button>
+            {englishToggle ? (
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={englishShowAll}
+                onClick={toggleAllEnglish}
+              >
+                {englishShowAll ? "Hide English" : "Show English"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={pinyin.showAll}
+                aria-busy={pinyin.status === "loading" || undefined}
+                aria-disabled={learningLocked || undefined}
+                aria-describedby={learningLocked ? LOCKED_HELP_ID : undefined}
+                onClick={learningLocked ? undefined : pinyin.toggleAll}
+              >
+                {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
+              </button>
+            )}
             {capabilities.copy && segments.length > 0 ? (
               <button
                 ref={copyTranscriptButton}

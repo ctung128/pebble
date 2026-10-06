@@ -66,5 +66,22 @@ export function useLineTranslations(episodeId: string) {
     [request, update],
   );
 
-  return { lines, toggle, retry: request };
+  /** Opens or closes every given line, requesting translations a line doesn't have yet. */
+  const setAllOpen = useCallback(
+    (items: readonly { segment: Segment; text: string }[], open: boolean) => {
+      for (const { segment, text } of items) {
+        const current = lines.get(segment.id);
+        if (!open) {
+          if (current?.open) update(segment.id, { ...current, open: false });
+        } else if (current && current.forText === text && current.status !== "error") {
+          if (!current.open) update(segment.id, { ...current, open: true });
+        } else {
+          request(segment, text);
+        }
+      }
+    },
+    [lines, request, update],
+  );
+
+  return { lines, toggle, setAllOpen, retry: request };
 }

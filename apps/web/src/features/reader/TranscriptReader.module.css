@@ -93,7 +93,8 @@
 
 /*
  * Design system speaker label: the transcript's letter before the Chinese, in a fixed slot so
- * text lines up across lines; pinyin, English and edits indent by the same amount.
+ * text lines up across lines; pinyin and edits indent by the same amount. The English card
+ * starts at the speaker label instead, so its fill lines up with the letter.
  */
 .row {
   --speaker-slot: 12px;
@@ -112,6 +113,10 @@
 
 .row[data-speakers] .details {
   padding-left: calc(var(--speaker-slot) + var(--speaker-gap));
+}
+
+.row[data-speakers] .translation {
+  margin-left: calc(-1 * (var(--speaker-slot) + var(--speaker-gap)));
 }
 
 .text {

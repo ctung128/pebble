@@ -66,10 +66,10 @@ async function renderEpisode(options: Parameters<typeof renderWithProviders>[1] 
 const copyButton = () => screen.getByRole("button", { name: "Copy transcript" });
 
 describe("Copy transcript", () => {
-  it("sits beside Show pinyin, with help that says what it copies", async () => {
+  it("sits beside Show English, with help that says what it copies", async () => {
     await renderEpisode();
-    const pinyin = screen.getByRole("button", { name: "Show pinyin" });
-    expect(pinyin.nextElementSibling).toBe(copyButton());
+    const english = screen.getByRole("button", { name: "Show English" });
+    expect(english.nextElementSibling).toBe(copyButton());
     expect(copyButton()).toHaveAttribute("title", COPY_TRANSCRIPT_HELP);
   });
 
@@ -82,7 +82,7 @@ describe("Copy transcript", () => {
 
   it("copies the same text with pinyin shown (pinyin is never included)", async () => {
     await renderEpisode();
-    await userEvent.click(screen.getByRole("button", { name: "Show pinyin" }));
+    for (const row of screen.getAllByRole("button", { name: "Pinyin" })) await userEvent.click(row);
     expect(await screen.findAllByText(/dì yī jù/)).not.toHaveLength(0);
     await userEvent.click(copyButton());
     expect(writeText).toHaveBeenCalledWith(EXPECTED);

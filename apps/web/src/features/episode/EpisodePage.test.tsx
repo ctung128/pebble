@@ -144,16 +144,6 @@ describe("EpisodePage — pinyin", () => {
     expect(screen.queryByText(/dì èr jù/)).not.toBeInTheDocument();
   });
 
-  it("can be shown and hidden for all lines", async () => {
-    renderPage();
-    await playButtons();
-    await userEvent.click(screen.getByRole("button", { name: "Show pinyin" }));
-    expect(await screen.findByText("dì sān jù。")).toBeInTheDocument();
-    expect(screen.getByText("dì yī jù。")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Hide pinyin" }));
-    expect(screen.queryByText("dì sān jù。")).not.toBeInTheDocument();
-  });
-
   it("explains that pinyin is generated", async () => {
     renderPage();
     await playButtons();
@@ -203,6 +193,21 @@ describe("EpisodePage — translation", () => {
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(failing.translate).toHaveBeenCalledTimes(2));
+  });
+
+  it("can be shown and hidden for all lines from the header (demo build)", async () => {
+    const { provider, translate } = fakeTranslationProvider();
+    renderPage({ translation: provider });
+    await playButtons();
+    expect(screen.queryByRole("button", { name: "Show pinyin" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
+    expect(await screen.findByText("The first sentence.")).toBeInTheDocument();
+    expect(await screen.findByText("The second sentence.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Hide English" }));
+    expect(screen.queryByText("The first sentence.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
+    expect(screen.getByText("The first sentence.")).toBeInTheDocument();
+    expect(translate).toHaveBeenCalledTimes(3);
   });
 
   it("opens with T for the current line", async () => {
