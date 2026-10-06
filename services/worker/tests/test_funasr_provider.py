@@ -7,6 +7,7 @@ All sentences below are invented filler text, not output from any real recording
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import wave
 
@@ -22,11 +23,15 @@ from pebble_worker.providers.funasr import (
     AlignmentIssue,
     FunASRProvider,
     NormalizationError,
+    TextConsistency,
     alignment_issue,
     chunk_alignment,
+    comparable_text,
+    compare_texts,
     describe_output,
     normalize_output,
     read_chunk,
+    text_consistency,
     timestamps_align,
 )
 from pebble_worker.storage import Storage
@@ -277,6 +282,145 @@ def test_review_thresholds_are_configurable():
     assert review_flags([(500, 900, ())], ReviewConfig(speech_gap_ms=400)) == [
         ["short_fragment", "speech_gap"]
     ]
+
+
+# --- whole text versus sentence text (diagnostic only) -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "comparable"),
+    [
+        ("今天 天气\t很好\n", "今天天气很好"),  # whitespace
+        ("今天，天气很好。“对\uff01”", "今天天气很好对"),  # Chinese punctuation
+        ("Hello, world... (ok) - yes?", "helloworldokyes"),  # Latin punctuation and case
+        ("\uff21\uff22\uff23\uff11\uff12\uff13\u3000测试", "abc123测试"),  # NFKC width, then case
+        ("1+1=2，涨了5%，¥30", "1+1=2涨了5%¥30"),  # symbols and % are content
+        ("A&B，#1号，50/50，@某人", "a&b#1号50/50@某人"),  # punctuation that is kept
+        ("第1，第2。3、4", "第1第23、4"),  # sentence commas go; one between digits stays
+        ("温度3.5度，降了-5度\uff1b12:30见", "温度3.5度降了-5度12:30见"),
+        ("一共1,000元，或1.000元", "一共1,000元或1.000元"),
+        ("\uff11\uff12\uff1a\uff13\uff10", "12:30"),  # full-width digits and colon after NFKC
+        ("1 000", "1000"),  # whitespace is ignored, even between digits
+        ("用 GPT 写 email", "用gpt写email"),
+    ],
+)
+def test_comparable_text_ignores_only_the_documented_differences(text, comparable):
+    assert comparable_text(text) == comparable
+
+
+@pytest.mark.parametrize(
+    ("whole", "sentence"),
+    [
+        ("3.5", "35"),
+        ("1,000", "1000"),
+        ("1.000", "1000"),
+        ("1.000", "1,000"),  # no locale-specific equivalence
+        ("12:30", "1230"),
+        ("-5", "5"),
+        ("1/2", "12"),
+        ("5%", "5"),
+    ],
+)
+def test_numeric_punctuation_is_never_ignored(whole, sentence):
+    for a, b in ((whole, sentence), (sentence, whole)):
+        assert compare_texts(f"温度{a}度。", [f"温度{b}度。"]).category != "consistent"
+
+
+def test_sentence_punctuation_around_numbers_is_still_ignored():
+    assert compare_texts("我买了3个，花了5元。", ["我买了3个", "花了5元"]).category == "consistent"
+    assert compare_texts("第1，第2。", ["第1第2"]).category == "consistent"
+    # A sentence split inside a number keeps its punctuation on one side or the other.
+    assert compare_texts("温度3.5度。", ["温度3.", "5度。"]).category == "consistent"
+
+
+def test_comparable_text_only_folds_latin_case():
+    assert comparable_text("ÉΣ") == "ÉΣ"  # accented Latin and other scripts are left alone
+
+
+@pytest.mark.parametrize(
+    ("whole", "sentences", "expected"),
+    [
+        ("今天天气很好，我们去公园。", ["今天天气很好，", "我们去公园。"], ("consistent", None)),
+        ("今天 天气很好。我们去公园", ["今天天气很好，", "我们去公园。"], ("consistent", None)),
+        # A sentence the whole text has but the sentence list doesn't.
+        (
+            "今天天气很好，我们去公园。",
+            ["今天天气很好，"],
+            ("whole_text_has_unmatched_content", 6),
+        ),
+        ("今天天气很好，我们去公园。", ["我们去公园。"], ("whole_text_has_unmatched_content", 0)),
+        # The sentences have something the whole text doesn't.
+        (
+            "我们去公园。",
+            ["我们去公园。", "然后回家。"],
+            ("sentence_text_has_unmatched_content", 5),
+        ),
+        # Same length, different content: counts alone would not notice.
+        ("今天天气很好。", ["今天天气不好。"], ("content_differs", 4)),
+        # Same characters, different order.
+        ("我们去公园。今天天气很好。", ["今天天气很好。", "我们去公园。"], ("content_differs", 0)),
+        # English words and digits are content.
+        ("我用email发了3次", ["我用发了3次"], ("whole_text_has_unmatched_content", 2)),
+        ("一共是30块", ["一共是31块"], ("content_differs", 4)),
+        ("1+1=2", ["11=2"], ("whole_text_has_unmatched_content", 1)),
+        ("涨了5%", ["涨了5"], ("whole_text_has_unmatched_content", 3)),
+    ],
+)
+def test_compare_texts_in_order(whole, sentences, expected):
+    result = compare_texts(whole, sentences)
+    assert (result.category, result.first_mismatch) == expected
+    assert result.whole_length == len(comparable_text(whole))
+    assert result.sentence_length == len(comparable_text("".join(sentences)))
+
+
+def test_text_consistency_reads_provider_output_and_never_keeps_text():
+    result = text_consistency(output(sentence(0, 900, "你好，"), text="你好，世界。"))
+    assert result == TextConsistency("whole_text_has_unmatched_content", 4, 2, 2)
+    assert "你" not in str(result) and "你" not in repr(result)
+    assert text_consistency(NORMAL) == TextConsistency("consistent", 13, 13, None)
+    assert text_consistency([]) is None
+    assert text_consistency([{"key": "c", "text": "", "timestamp": []}]) is None
+
+
+def test_inconsistent_text_is_logged_as_numbers_and_never_changes_segments(storage, caplog):
+    install_models(storage)
+    mismatched = output(
+        sentence(600, 1900, "今天天气很好，", per_char(600, 1900, 6)),
+        text="今天天气很好，我们去公园散步。",
+    )
+    provider, _ = make_provider(storage, FakeAutoModel(mismatched))
+    with caplog.at_level(logging.INFO, logger="pebble.funasr"):
+        segments = provider.transcribe(CHUNK, NEVER)
+    assert segments == [RawSegment(600, 1900, "今天天气很好，")]  # nothing added or repaired
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(
+        "text_consistency=whole_text_has_unmatched_content whole_length=13 sentence_length=6 "
+        "first_mismatch=6" in m
+        for m in messages
+    )
+    assert not any(ch in m for m in messages for ch in "今天我们公园")  # no text in the log
+
+
+def test_consistency_is_per_chunk_with_no_stale_result(storage, caplog):
+    install_models(storage)
+    model = FakeAutoModel(NORMAL)
+    provider, _ = make_provider(storage, model)
+    with caplog.at_level(logging.INFO, logger="pebble.funasr"):
+        provider.transcribe(CHUNK, NEVER)
+        first = [r.getMessage() for r in caplog.records if "text_consistency" in r.getMessage()]
+        caplog.clear()
+        model.result = [{"key": "chunk", "text": "", "timestamp": []}]  # no speech
+        assert provider.transcribe(CHUNK, NEVER) == []
+        model.error = RuntimeError("boom")
+        with pytest.raises(PipelineError):
+            provider.transcribe(CHUNK, NEVER)
+        later = [r.getMessage() for r in caplog.records if "text_consistency" in r.getMessage()]
+    assert first == [
+        "chunk 0: text_consistency=consistent whole_length=13 sentence_length=13 "
+        "first_mismatch=None"
+    ]
+    assert later == []  # an empty chunk or a failure reports nothing, not the previous result
+    assert not hasattr(provider, "last_consistency")
 
 
 # --- provider (fake models, fake AutoModel) -------------------------------------------------------

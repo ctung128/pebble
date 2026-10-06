@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import wave
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -104,6 +105,28 @@ def plan_chunks(
         start = cut
     plans.append(ChunkPlan(len(plans), start, duration_ms, "end"))
     return plans
+
+
+def check_chunk_spans(spans: Sequence[tuple[int, int, int]], duration_ms: int) -> None:
+    """
+    `(index, start_ms, end_ms)` per chunk, in index order, must number 0…n-1 and tile the
+    audio exactly: the first starts at 0, each starts where the previous ended, each has a
+    positive length, and the last ends at `duration_ms`. Anything else is a bug in Pebble's
+    own bookkeeping (INTERNAL_ERROR), so nothing is transcribed or merged from it.
+
+    This proves the sections cover the audio, not that the provider transcribed every word.
+    """
+    expected_start = 0
+    for position, (index, start, end) in enumerate(spans):
+        if index != position or start != expected_start or end <= start:
+            raise PipelineError(
+                FailureCode.INTERNAL_ERROR, "Pebble's audio sections didn't line up."
+            )
+        expected_start = end
+    if not spans or expected_start != duration_ms:
+        raise PipelineError(
+            FailureCode.INTERNAL_ERROR, "Pebble's audio sections didn't cover the whole audio."
+        )
 
 
 def write_chunks(

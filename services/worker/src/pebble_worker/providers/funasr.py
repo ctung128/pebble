@@ -20,6 +20,7 @@ import math
 import os
 import re
 import threading
+import unicodedata
 import wave
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -307,6 +308,9 @@ class FunASRProvider:
                 retryable=False,
             ) from error
         self.last_alignment = chunk_alignment(result)
+        consistency = text_consistency(result)
+        if consistency is not None:
+            log.info("chunk %d: %s", chunk.index, consistency)
         return segments
 
     def load(self) -> None:
@@ -547,6 +551,127 @@ def chunk_alignment(result: Any) -> ChunkAlignment | None:
             )
             for n, s in enumerate(sentences, start=1)
         ),
+    )
+
+
+# --- whole text versus sentence text ------------------------------------------------------------
+
+ConsistencyCategory = Literal[
+    "consistent",
+    "whole_text_has_unmatched_content",
+    "sentence_text_has_unmatched_content",
+    "content_differs",
+]
+
+
+#: Characters Unicode classes as punctuation that still change meaning ("5%" is not "5").
+MEANINGFUL_PUNCTUATION = frozenset("%\u2030\u2031#&@/")
+
+
+#: Sentence-ending marks never belong to a number, even between two digits ("第2。3…").
+SENTENCE_END_MARKS = frozenset("\u3002?!")
+
+
+def _is_digit(char: str | None) -> bool:
+    return char is not None and unicodedata.category(char) == "Nd"
+
+
+def comparable_text(text: str) -> str:
+    """
+    Text reduced to what the whole-text/sentence comparison treats as content. Only these
+    differences are ignored, in this order:
+
+    1. Unicode NFKC: full-width and half-width forms become one form (full-width A and 1
+       become ASCII A and 1);
+    2. whitespace (any character for which `str.isspace()` is true);
+    3. sentence punctuation: Unicode categories Pc, Pd, Ps, Pe, Pi, Pf and Po, which include
+       the full-width Chinese marks — except punctuation that can change what a number or
+       word says, which is kept:
+       - MEANINGFUL_PUNCTUATION (% ‰ ‱ # & @ /) anywhere;
+       - any punctuation directly between two digits ("3.5", "1,000", "1.000", "12:30"),
+         except the sentence-ending marks in SENTENCE_END_MARKS (Chinese full stop, ? and !);
+       - a dash directly before a digit that doesn't follow a digit (the sign in "-5");
+    4. the case of the Latin letters A–Z.
+
+    Everything else is kept: Chinese characters, letters, digits and symbols such as + = ¥
+    (Unicode category S). Numbers are not parsed or interpreted: "1,000" and "1000" differ,
+    as do "1.000" and "1,000". Whitespace is always ignored, including between digits.
+    """
+    chars = unicodedata.normalize("NFKC", text)
+    kept = []
+    for i, char in enumerate(chars):
+        if char.isspace():
+            continue
+        category = unicodedata.category(char)
+        if category.startswith("P") and char not in MEANINGFUL_PUNCTUATION:
+            before = chars[i - 1] if i > 0 else None
+            after = chars[i + 1] if i + 1 < len(chars) else None
+            between_digits = (
+                _is_digit(before) and _is_digit(after) and char not in SENTENCE_END_MARKS
+            )
+            sign = category == "Pd" and _is_digit(after) and not _is_digit(before)
+            if not (between_digits or sign):
+                continue
+        kept.append(char.lower() if "A" <= char <= "Z" else char)
+    return "".join(kept)
+
+
+@dataclass(frozen=True)
+class TextConsistency:
+    """
+    How one chunk's whole recognized text compares, in order, with its sentences joined
+    together, after `comparable_text`. Lengths and an offset only; never text.
+
+    A mismatch means only that the provider's whole text and its sentence text differ after
+    this normalization. It does not show that spoken audio was left out, and Pebble never
+    repairs either side.
+    """
+
+    category: ConsistencyCategory
+    whole_length: int
+    sentence_length: int
+    #: The first position (in comparable characters) where the two differ; None if they match.
+    first_mismatch: int | None
+
+    def __str__(self) -> str:
+        return (
+            f"text_consistency={self.category} whole_length={self.whole_length} "
+            f"sentence_length={self.sentence_length} first_mismatch={self.first_mismatch}"
+        )
+
+
+def _is_subsequence(short: str, long: str) -> bool:
+    remaining = iter(long)
+    return all(char in remaining for char in short)
+
+
+def compare_texts(whole: str, sentences: Sequence[str]) -> TextConsistency:
+    a = comparable_text(whole)
+    b = comparable_text("".join(sentences))
+    if a == b:
+        return TextConsistency("consistent", len(a), len(b), None)
+    first = next(
+        (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))
+    )
+    if _is_subsequence(b, a):
+        category: ConsistencyCategory = "whole_text_has_unmatched_content"
+    elif _is_subsequence(a, b):
+        category = "sentence_text_has_unmatched_content"
+    else:
+        category = "content_differs"
+    return TextConsistency(category, len(a), len(b), first)
+
+
+def text_consistency(result: Any) -> TextConsistency | None:
+    """For output that `normalize_output` accepted; None when there were no sentences."""
+    item = result[0] if isinstance(result, list) and result else None
+    sentences = item.get("sentence_info") if isinstance(item, dict) else None
+    if not isinstance(sentences, list) or not sentences:
+        return None
+    whole = item.get("text")  # type: ignore[union-attr]
+    return compare_texts(
+        whole if isinstance(whole, str) else "",
+        [s["text"] for s in sentences if isinstance(s, dict) and isinstance(s.get("text"), str)],
     )
 
 

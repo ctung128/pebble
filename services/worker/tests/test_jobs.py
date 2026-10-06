@@ -9,6 +9,7 @@ import pytest
 from conftest import upload, wait_for_job
 
 from pebble_worker.contract import parse_transcript
+from pebble_worker.providers.base import RawSegment
 from pebble_worker.providers.mock import MockProvider
 
 
@@ -207,3 +208,115 @@ def test_queued_jobs_survive_a_restart_and_run(make_client, audio):
 def test_job_and_episode_lookups_reject_malformed_ids(client, bad):
     assert client.get(f"/jobs/{bad}").status_code == 404
     assert client.get(f"/episodes/{bad}").status_code == 404
+
+
+# --- transcript preservation --------------------------------------------------------------------
+#
+# Completed jobs can't be retried and no endpoint reprocesses an episode, so today a transcript
+# is never replaced. The tests marked SIMULATED force a completed job back to `failed` directly
+# in the database to prove what would happen to an existing transcript if a later attempt
+# failed. They are future-safety and transaction tests, not a supported reprocessing flow.
+
+
+class SwitchableProvider(MockProvider):
+    """The mock, or (when `out_of_range`) one line that ends far past its chunk."""
+
+    def __init__(self):
+        super().__init__(delay_ms=0)
+        self.out_of_range = False
+
+    def transcribe(self, chunk, cancel):
+        if self.out_of_range:
+            return [RawSegment(0, chunk.duration_ms + 5_000, "（模拟转写）越界")]
+        return super().transcribe(chunk, cancel)
+
+
+def _completed(client, audio):
+    job = upload(client, audio["tone_gaps"])["body"]["job"]
+    assert wait_for_job(client, job["id"])["status"] == "completed"
+    return job, dict(transcript_row(client, job["episodeId"]))
+
+
+def _simulate_retryable_failure(client, job_id):
+    """SIMULATED: no production path turns a completed job back into a failed one."""
+    failure = {
+        "stage": "transcribing",
+        "code": "PROVIDER_ERROR",
+        "message": "Simulated for a test.",
+        "retryable": True,
+        "hint": None,
+    }
+    with client.app.state.db.tx() as conn:
+        conn.execute(
+            "UPDATE jobs SET status = 'failed', failure = ? WHERE id = ?",
+            (json.dumps(failure), job_id),
+        )
+
+
+def _block_completion(client):
+    """A test-only trigger that makes the final `completed` update fail inside its transaction."""
+    with client.app.state.db.tx() as conn:
+        conn.execute(
+            """CREATE TRIGGER test_block_completion BEFORE UPDATE OF status ON jobs
+               WHEN NEW.status = 'completed'
+               BEGIN SELECT RAISE(ABORT, 'test: completion blocked'); END"""
+        )
+
+
+def test_completed_jobs_cannot_be_retried_and_keep_their_transcript(client, audio):
+    job, before = _completed(client, audio)
+    response = client.post(f"/jobs/{job['id']}/retry")
+    assert response.status_code == 409
+    assert client.get(f"/jobs/{job['id']}").json()["status"] == "completed"
+    assert dict(transcript_row(client, job["episodeId"])) == before
+
+
+def test_a_merge_failure_writes_no_transcript(make_client, audio):
+    provider = SwitchableProvider()
+    provider.out_of_range = True
+    client = make_client(provider=provider)
+    job = upload(client, audio["tone_gaps"])["body"]["job"]
+    failed = wait_for_job(client, job["id"])
+    assert (failed["status"], failed["stage"]) == ("failed", "merging")
+    assert failed["failure"]["code"] == "INTERNAL_ERROR"
+    assert "越界" not in json.dumps(failed)  # no text in the failure
+    assert transcript_row(client, job["episodeId"]) is None
+
+
+def test_simulated_failed_attempt_leaves_an_existing_transcript_untouched(make_client, audio):
+    provider = SwitchableProvider()
+    client = make_client(provider=provider)
+    job, before = _completed(client, audio)
+    _simulate_retryable_failure(client, job["id"])  # SIMULATED, see above
+    provider.out_of_range = True
+    assert client.post(f"/jobs/{job['id']}/retry").status_code == 200
+    failed = wait_for_job(client, job["id"])
+    assert (failed["status"], failed["attempt"]) == ("failed", 2)
+    assert failed["failure"]["code"] == "INTERNAL_ERROR"
+    assert dict(transcript_row(client, job["episodeId"])) == before
+
+
+def test_failure_inside_the_final_transaction_rolls_back_transcript_and_completion(
+    make_client, audio
+):
+    client = make_client(provider=SwitchableProvider())
+    job, before = _completed(client, audio)
+    _simulate_retryable_failure(client, job["id"])  # SIMULATED, see above
+    _block_completion(client)
+    assert client.post(f"/jobs/{job['id']}/retry").status_code == 200
+    failed = wait_for_job(client, job["id"])
+    # The transcript write and the completion update share one transaction: both rolled back,
+    # and the runner recorded a safe failure instead.
+    assert (failed["status"], failed["stage"], failed["attempt"]) == ("failed", "merging", 2)
+    assert failed["failure"]["code"] == "INTERNAL_ERROR"
+    assert failed["failure"]["retryable"] is True
+    row = dict(transcript_row(client, job["episodeId"]))
+    assert row == before and row["attempt"] == 1
+
+
+def test_failure_inside_the_final_transaction_leaves_no_transcript_for_a_new_episode(client, audio):
+    _block_completion(client)
+    job = upload(client, audio["tone_gaps"])["body"]["job"]
+    failed = wait_for_job(client, job["id"])
+    assert (failed["status"], failed["failure"]["code"]) == ("failed", "INTERNAL_ERROR")
+    assert transcript_row(client, job["episodeId"]) is None

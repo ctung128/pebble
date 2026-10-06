@@ -249,6 +249,26 @@ upload ─► queued ─► probing ─► normalizing ─► chunking ─► tr
 
 Only one job runs at a time; others wait in order.
 
+### Structural checks
+
+These catch mistakes in Pebble's own bookkeeping. They cannot tell whether every spoken word
+was transcribed: a transcript that passes them can still leave speech out.
+
+- **Sections tile the audio.** After planning, and again before merging the stored sections,
+  the sections must be numbered 0…n-1 in order, start at 0, each start where the previous one
+  ended, each be longer than zero, and the last end at the audio's duration.
+- **Lines stay inside their section.** Each line is checked in this order: a negative length
+  or negative start fails; empty text is dropped; exactly zero length is dropped; a kept line
+  must start inside its section and end at most 500 ms past it (the provider's documented
+  tolerance); finally its end is capped at the audio's duration. Section numbers must be
+  unique and complete.
+- **Accounting.** The worker log records, as numbers only, how many lines were kept, dropped
+  for empty text or zero length, capped at the duration, and how many adjacent lines overlap
+  (and by how much at most).
+- Any failed check fails the job with `INTERNAL_ERROR`; nothing is merged and no transcript is
+  written. The transcript write and the job's completion share one database transaction, so a
+  failure there leaves any earlier transcript as it was.
+
 ### Chunking
 
 | Setting                       | Default | Meaning                                                               |

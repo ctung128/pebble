@@ -208,6 +208,21 @@ the previous sentence by more than 100 ms. It also fails if FunASR returns text 
 sentence timing. It never rebuilds sentence timing from character timestamps, never merges or
 splits sentences, and never edits the text.
 
+**Whole text versus sentences (diagnostic only).** For each chunk, the worker compares
+FunASR's whole recognized `text` with its sentences joined in order. Both sides are reduced by
+exactly these rules first: Unicode NFKC (full-width and half-width forms become one form);
+whitespace removed, even between digits; sentence punctuation removed (Unicode categories
+P\*); and Latin A–Z lowercased. Punctuation that can change meaning is kept: `% ‰ ‱ # & @ /`
+anywhere, any punctuation directly between two digits (`3.5`, `1,000`, `1.000`, `12:30`)
+except the sentence-ending `。 ? !`, and a dash directly before a digit that doesn't follow one
+(`-5`). Chinese characters, letters, digits and symbols such as `+ = ¥` are always kept.
+Numbers are not parsed: `1,000`, `1.000` and `1000` all differ. The result is logged per chunk
+as `consistent`, `whole_text_has_unmatched_content`, `sentence_text_has_unmatched_content` or
+`content_differs`, with the two lengths and the first mismatch offset — never any text. A
+mismatch means only that FunASR's whole text and its sentence text differ after this
+normalization; it does not show that spoken audio was left out. It never fails the job or
+changes a segment.
+
 A chunk with no recognized speech yields no segments. If the whole audio yields none, the job
 fails with `NO_SPEECH_DETECTED` ("Pebble didn't find any speech in this audio…") instead of
 completing with an empty transcript.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import wave
 from itertools import pairwise
 from pathlib import Path
@@ -13,12 +14,13 @@ from pebble_worker.config import ChunkingConfig
 from pebble_worker.errors import Cancelled, FailureCode, PipelineError
 from pebble_worker.pipeline.chunk import (
     Silence,
+    check_chunk_spans,
     detect_silences,
     parse_silences,
     plan_chunks,
     write_chunks,
 )
-from pebble_worker.pipeline.merge import ChunkResult, merge
+from pebble_worker.pipeline.merge import ChunkResult, MergeReport, merge, merge_with_report
 from pebble_worker.pipeline.normalize import normalize, wav_duration_ms
 from pebble_worker.pipeline.probe import probe
 from pebble_worker.pipeline.tools import run_tool
@@ -190,21 +192,32 @@ def test_chunk_writing_stops_when_cancelled(normalized_gaps, tmp_path):
 
 
 def test_merge_offsets_renumbers_clamps_and_validates():
+    # The second chunk is 3000–7000 ms. "第四" ends 300 ms past it: within the 500 ms bound
+    # tolerance, so it is kept and its end is capped at the audio duration (and counted).
+    # (This test used to end that line 5 s past its chunk; that is now a structural failure,
+    # see test_merge_rejects_a_line_beyond_its_chunk.)
     provider = MockProvider()
-    transcript = merge(
+    transcript, report = merge_with_report(
         episode_id="ep-0123456789ab",
         duration_ms=7_000,
         language="zh-CN",
         chunks=[
-            ChunkResult(0, [RawSegment(0, 2000, "第一"), RawSegment(2000, 3000, "第二")]),
+            ChunkResult(
+                0,
+                [RawSegment(0, 2000, "第一"), RawSegment(2000, 3000, "第二")],
+                index=0,
+                end_ms=3000,
+            ),
             ChunkResult(
                 3000,
                 [
                     RawSegment(0, 2500, "第三"),
-                    RawSegment(2500, 9000, "第四"),
+                    RawSegment(2500, 4300, "第四"),
                     RawSegment(100, 100, "zero length"),
                     RawSegment(0, 500, "  "),
                 ],
+                index=1,
+                end_ms=7000,
             ),
         ],
         provider=provider,
@@ -216,9 +229,173 @@ def test_merge_offsets_renumbers_clamps_and_validates():
         ("seg-0003", 2, 3000, 5500, "第三"),
         ("seg-0004", 3, 5500, 7000, "第四"),  # clamped to the audio duration
     ]
+    assert report == MergeReport(
+        kept=4,
+        dropped_empty_text=1,
+        dropped_zero_length=1,
+        dropped_past_duration=0,
+        clamped_to_duration=1,
+        overlaps=0,
+        max_overlap_ms=0,
+    )
     assert transcript.provenance.kind == "mock"
     assert transcript.provenance.provider == "mock"
     assert all(s.confidence is None for s in transcript.segments)
+
+
+def _merge(chunks, duration_ms=10_000):
+    return merge_with_report(
+        episode_id="ep-0123456789ab",
+        duration_ms=duration_ms,
+        language="zh-CN",
+        chunks=chunks,
+        provider=MockProvider(),
+    )
+
+
+def _structural(chunks, duration_ms=10_000):
+    with pytest.raises(PipelineError) as error:
+        _merge(chunks, duration_ms)
+    assert error.value.code == FailureCode.INTERNAL_ERROR
+    assert "第" not in error.value.message  # never any text
+    return error.value
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        RawSegment(2500, 4501, "第五"),  # ends past the 500 ms tolerance
+        RawSegment(4000, 4200, "第五"),  # starts at the chunk's end
+        RawSegment(4100, 4200, "第五"),  # starts after it
+    ],
+)
+def test_merge_rejects_a_line_beyond_its_chunk(raw):
+    _structural([ChunkResult(0, [raw], index=0, end_ms=4000)], duration_ms=4000)
+
+
+def test_merge_keeps_a_line_ending_exactly_at_the_tolerance():
+    transcript, _ = _merge(
+        [ChunkResult(0, [RawSegment(2500, 4500, "第五")], index=0, end_ms=4000)],
+        duration_ms=6000,
+    )
+    assert [(s.start_ms, s.end_ms) for s in transcript.segments] == [(2500, 4500)]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        RawSegment(900, 800, "第六"),  # negative length
+        RawSegment(900, 800, "  "),  # negative length is checked before empty text
+        RawSegment(-10, 800, "第六"),  # negative start
+    ],
+)
+def test_merge_rejects_invalid_timing_before_dropping_anything(raw):
+    _structural([ChunkResult(0, [raw], index=0, end_ms=4000)])
+
+
+def test_merge_check_order_drops_empty_and_zero_length_lines_before_range_checks():
+    # Both would be out of range, but empty text and zero length are dropped first (counted).
+    transcript, report = _merge(
+        [
+            ChunkResult(
+                0,
+                [
+                    RawSegment(0, 900, "第一"),
+                    RawSegment(5000, 9000, " "),
+                    RawSegment(5000, 5000, "第二"),
+                ],
+                index=0,
+                end_ms=4000,
+            )
+        ]
+    )
+    assert len(transcript.segments) == 1
+    assert (report.dropped_empty_text, report.dropped_zero_length) == (1, 1)
+
+
+def test_merge_counts_lines_left_empty_by_the_duration_cap():
+    # Without a known chunk end (benchmark overlap runs), a line may start past the audio.
+    transcript, report = _merge(
+        [ChunkResult(0, [RawSegment(0, 900, "第一"), RawSegment(5000, 5200, "第二")])],
+        duration_ms=4000,
+    )
+    assert len(transcript.segments) == 1
+    assert (report.dropped_past_duration, report.clamped_to_duration) == (1, 1)
+
+
+def test_merge_rejects_duplicate_and_missing_chunk_indices():
+    one = [RawSegment(0, 900, "第一")]
+    _structural([ChunkResult(0, one, index=0), ChunkResult(1000, one, index=0)])
+    _structural([ChunkResult(0, one, index=0), ChunkResult(1000, one, index=2)])
+
+
+def test_merge_orders_chunks_given_out_of_order_and_counts_overlaps():
+    transcript, report = _merge(
+        [
+            ChunkResult(4000, [RawSegment(0, 1000, "第三")], index=1, end_ms=8000),
+            ChunkResult(
+                0,
+                [RawSegment(0, 2000, "第一"), RawSegment(1950, 4300, "第二")],
+                index=0,
+                end_ms=4000,
+            ),
+        ]
+    )
+    assert [(s.start_ms, s.end_ms, s.text) for s in transcript.segments] == [
+        (0, 2000, "第一"),
+        (1950, 4300, "第二"),
+        (4000, 5000, "第三"),
+    ]
+    assert (report.overlaps, report.max_overlap_ms) == (2, 300)
+    assert "第" not in str(report)  # numbers only
+
+
+def test_plain_merge_still_returns_just_the_transcript():
+    transcript = merge(
+        episode_id="ep-0123456789ab",
+        duration_ms=4000,
+        language="zh-CN",
+        chunks=[ChunkResult(0, [RawSegment(0, 900, "第一")], index=0, end_ms=4000)],
+        provider=MockProvider(),
+    )
+    assert [s.text for s in transcript.segments] == ["第一"]
+
+
+# --- chunk spans ---------------------------------------------------------------------------------
+
+
+def test_every_planned_chunk_set_tiles_the_audio():
+    rng = random.Random(7)
+    for _ in range(300):
+        duration = rng.randint(1, 3_000_000)
+        starts = sorted(rng.sample(range(duration), min(duration, rng.randint(0, 40))))
+        silences = [
+            Silence(start, min(duration, start + rng.randint(400, 3000))) for start in starts
+        ]
+        for config in (DEFAULTS, TEST_CHUNKING):
+            plans = plan_chunks(duration, silences, config)
+            check_chunk_spans([(p.index, p.start_ms, p.end_ms) for p in plans], duration)
+
+
+@pytest.mark.parametrize(
+    "spans",
+    [
+        [],  # nothing
+        [(0, 100, 5000), (1, 5000, 10_000)],  # doesn't start at 0
+        [(0, 0, 5000), (1, 5100, 10_000)],  # gap
+        [(0, 0, 5000), (1, 4900, 10_000)],  # overlap
+        [(0, 0, 5000), (0, 5000, 10_000)],  # duplicate index
+        [(1, 0, 5000), (0, 5000, 10_000)],  # out of order
+        [(0, 0, 5000), (2, 5000, 10_000)],  # missing index
+        [(0, 0, 5000), (1, 5000, 5000), (2, 5000, 10_000)],  # empty chunk
+        [(0, 0, 5000), (1, 5000, 9000)],  # stops short of the audio
+        [(0, 0, 5000), (1, 5000, 11_000)],  # runs past it
+    ],
+)
+def test_chunk_spans_that_dont_tile_the_audio_are_structural_failures(spans):
+    with pytest.raises(PipelineError) as error:
+        check_chunk_spans(spans, 10_000)
+    assert error.value.code == FailureCode.INTERNAL_ERROR
 
 
 # --- mock provider ---------------------------------------------------------------------------

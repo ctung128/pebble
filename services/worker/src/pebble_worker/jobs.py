@@ -33,8 +33,8 @@ from .config import Settings
 from .contract import CURRENT_SCHEMA_VERSION, Job, JobStage, parse_job, require_valid
 from .db import Database, now_iso
 from .errors import Cancelled, FailureCode, PipelineError
-from .pipeline.chunk import detect_silences, plan_chunks, write_chunks
-from .pipeline.merge import ChunkResult, merge
+from .pipeline.chunk import check_chunk_spans, detect_silences, plan_chunks, write_chunks
+from .pipeline.merge import ChunkResult, merge_with_report
 from .pipeline.normalize import normalize
 from .pipeline.probe import probe
 from .providers.base import AudioChunk, RawSegment, TranscriptionProvider
@@ -307,6 +307,7 @@ class Pipeline:
                 cancel=cancelled,
             )
             plans = plan_chunks(duration_ms, silences, self.settings.chunking)
+            check_chunk_spans([(p.index, p.start_ms, p.end_ms) for p in plans], duration_ms)
             paths = write_chunks(normalized, plans, work / "chunks", cancel=cancelled)
             chunks = [
                 AudioChunk(p.index, p.start_ms, p.end_ms, path)
@@ -357,14 +358,17 @@ class Pipeline:
                     )
 
             enter("merging")
-            transcript = merge(
+            transcript, report = merge_with_report(
                 episode_id=episode_id,
                 duration_ms=duration_ms,
                 language=row["language"],
-                chunks=self._completed_chunks(job_id, attempt, expected=len(chunks)),
+                chunks=self._completed_chunks(
+                    job_id, attempt, expected=len(chunks), duration_ms=duration_ms
+                ),
                 provider=self.service.provider,
                 review=self.settings.review,
             )
+            log.info("job %s attempt %d: merge %s", job_id, attempt, report)
             if not transcript.segments:
                 raise PipelineError(
                     FailureCode.NO_SPEECH_DETECTED,
@@ -428,11 +432,16 @@ class Pipeline:
                 ),
             )
 
-    def _completed_chunks(self, job_id: str, attempt: int, expected: int) -> list[ChunkResult]:
-        """Only a complete set of done chunks from *this* attempt may be merged."""
+    def _completed_chunks(
+        self, job_id: str, attempt: int, expected: int, duration_ms: int
+    ) -> list[ChunkResult]:
+        """
+        Only a complete set of done chunks from *this* attempt may be merged, and the stored
+        chunks must still tile the audio exactly (check_chunk_spans).
+        """
         with self.db.tx() as conn:
             rows = conn.execute(
-                """SELECT idx, start_ms, status, segments FROM chunks
+                """SELECT idx, start_ms, end_ms, status, segments FROM chunks
                    WHERE job_id = ? AND attempt = ? ORDER BY idx""",
                 (job_id, attempt),
             ).fetchall()
@@ -442,11 +451,13 @@ class Pipeline:
             raise PipelineError(
                 FailureCode.INTERNAL_ERROR, "Not every chunk finished; nothing was merged."
             )
+        check_chunk_spans([(r["idx"], r["start_ms"], r["end_ms"]) for r in rows], duration_ms)
         return [
             ChunkResult(
                 r["start_ms"],
                 [_raw_segment(s) for s in json.loads(r["segments"])],
                 index=r["idx"],
+                end_ms=r["end_ms"],
             )
             for r in rows
         ]
