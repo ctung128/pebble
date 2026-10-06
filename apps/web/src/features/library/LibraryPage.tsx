@@ -22,8 +22,12 @@ export function LibraryPage() {
         meta={count === null ? null : `${count} ${count === 1 ? "episode" : "episodes"}`}
       >
         <p className={styles.lede}>
-          Listen to Chinese podcasts with a timed transcript, pinyin, and English translation. This
-          demo uses sample episodes; the full version runs locally with your own audio.
+          Hi! This is a demo of Pebble, a language learning tool I built for Chinese podcasts. This
+          uses sample episodes, but the full version runs locally with uploaded audio.{" "}
+          <a className={styles.link} href="mailto:carolynatung@gmail.com">
+            Email me
+          </a>{" "}
+          if interested.
         </p>
       </PageHeader>
 

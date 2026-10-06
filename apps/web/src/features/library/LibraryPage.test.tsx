@@ -37,7 +37,11 @@ describe("LibraryPage", () => {
     renderWithProviders(<LibraryPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Library" })).toBeInTheDocument();
     expect(screen.queryByText(/01 — Library/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Listen to Chinese podcasts/)).toBeInTheDocument(); // demo intro stays
+    expect(screen.getByText(/This is a demo of Pebble/)).toBeInTheDocument(); // demo intro stays
+    expect(screen.getByRole("link", { name: "Email me" })).toHaveAttribute(
+      "href",
+      "mailto:carolynatung@gmail.com",
+    );
     expect(await screen.findByText("1 episode")).toBeInTheDocument();
 
     const [row] = within(screen.getByRole("list", { name: "Episodes" })).getAllByRole("listitem");
