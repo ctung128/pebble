@@ -1,0 +1,15 @@
+Huiwen Mincho (汇文明朝体), version GBK 1.001
+
+Bundled here as huiwen-mincho-subset.woff2, a subset built from the full font by
+scripts/build-display-font.mjs (npm run fonts:build).
+
+Licence note shipped with the font (字体授权说明.txt), as distributed by 猫啃网 (maoken.com),
+converted to UTF-8:
+
+  这款字体无论是个人还是企业都是可以免费商用的。
+  (This font is free for commercial use by both individuals and businesses.)
+
+  如需查询这款字体的授权及来源信息，请移步至猫啃网(https://www.maoken.com)，然后查找相对应的字体介绍文章即可找到该字体的来源及授权信息。
+  (For the font's licence and source information, see its introduction article on maoken.com.)
+
+Redistribution as a web font in Pebble was confirmed by the project owner on 2026-10-06.
