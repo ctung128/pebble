@@ -52,7 +52,9 @@
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
   margin-left: auto;
 }
@@ -151,11 +153,17 @@
 
 /* --- Listening progress: resume a saved position, or start over --- */
 
+/* Inside the toolbar: resume on the left, the display tools pushed to the right. */
+.toolbar:has(> .resumeBar) {
+  flex-basis: 100%;
+}
+
 .resumeBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-1) var(--space-2);
+  margin-right: auto;
   font-size: var(--size-body-sm);
   color: var(--text-secondary);
 }
@@ -318,8 +326,13 @@
 @media (max-width: 560px) {
   /* The toolbar always wraps under the Chinese title here: start it at the left edge. */
   .toolbar {
-    flex-wrap: wrap;
+    justify-content: flex-start;
     margin-left: 0;
+  }
+
+  /* No room for both sides: resume gets its own line, the tools start below it. */
+  .resumeBar {
+    flex-basis: 100%;
   }
 
   /* The player takes two rows on phones. */

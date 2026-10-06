@@ -413,6 +413,37 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             </p>
           ) : null}
           <div className={styles.toolbar}>
+            {/* Resume sits with the display tools, first: it's the likeliest next step. */}
+            {showResume && saved ? (
+              <div className={styles.resumeBar} role="group" aria-label="Listening progress">
+                {listening === "in-progress" ? (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.resumeButton}
+                      onClick={() => {
+                        resume();
+                        seek(saved.positionMs, { play: true });
+                      }}
+                    >
+                      <Icon name="play" size={16} />
+                      Resume {formatTime(saved.positionMs)}
+                    </button>
+                    <button type="button" className={styles.textButton} onClick={startOver}>
+                      Start over
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.finished}>Finished</span>
+                    <span aria-hidden="true">·</span>
+                    <button type="button" className={styles.textButton} onClick={startOver}>
+                      Listen again
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
             <button
               type="button"
               className={styles.toolButton}
@@ -460,37 +491,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           </div>
         </div>
       </header>
-
-      {showResume && saved ? (
-        <div className={styles.resumeBar} role="group" aria-label="Listening progress">
-          {listening === "in-progress" ? (
-            <>
-              <button
-                type="button"
-                className={styles.resumeButton}
-                onClick={() => {
-                  resume();
-                  seek(saved.positionMs, { play: true });
-                }}
-              >
-                <Icon name="play" size={16} />
-                Resume {formatTime(saved.positionMs)}
-              </button>
-              <button type="button" className={styles.textButton} onClick={startOver}>
-                Start over
-              </button>
-            </>
-          ) : (
-            <>
-              <span className={styles.finished}>Finished</span>
-              <span aria-hidden="true">·</span>
-              <button type="button" className={styles.textButton} onClick={startOver}>
-                Listen again
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
 
       <section aria-labelledby="transcript-heading">
         {/* The display toggles sit in the header row; the heading keeps the outline. */}
