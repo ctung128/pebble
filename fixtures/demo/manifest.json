@@ -7,7 +7,7 @@
       "titleZh": "我为什么做 Pebble",
       "description": "A friend asks why Pebble was built, in a short two-voice conversation written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 86177,
+      "durationMs": 81163,
       "audio": {
         "src": "demo-001/audio.m4a",
         "mimeType": "audio/mp4"
@@ -16,9 +16,9 @@
         "src": "demo-001/transcript.json"
       },
       "audioProvenance": {
-        "kind": "tts-placeholder",
-        "publishable": false,
-        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+        "kind": "licensed",
+        "publishable": true,
+        "notes": "AI-generated speech (LuvVoice neural text-to-speech, Microsoft Azure / Google Cloud voices) of an original script. LuvVoice Terms of Service (updated 2026-08-02, checked 2026-10-06) assign ownership of generated audio to the user; disclosed as synthetic."
       },
       "demo": {
         "translations": "demo-001/translations.en.json",
@@ -31,7 +31,7 @@
       "titleZh": "我的 Substack 博客随笔",
       "description": "Two friends over bubble tea talk about a new Substack, written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 79126,
+      "durationMs": 81296,
       "audio": {
         "src": "demo-002/audio.m4a",
         "mimeType": "audio/mp4"
@@ -40,9 +40,9 @@
         "src": "demo-002/transcript.json"
       },
       "audioProvenance": {
-        "kind": "tts-placeholder",
-        "publishable": false,
-        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+        "kind": "licensed",
+        "publishable": true,
+        "notes": "AI-generated speech (LuvVoice neural text-to-speech, Microsoft Azure / Google Cloud voices) of an original script. LuvVoice Terms of Service (updated 2026-08-02, checked 2026-10-06) assign ownership of generated audio to the user; disclosed as synthetic."
       },
       "demo": {
         "translations": "demo-002/translations.en.json"
@@ -54,7 +54,7 @@
       "titleZh": "去景德镇学陶艺",
       "description": "Two friends on a voice call about a pottery trip, written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 46034,
+      "durationMs": 40876,
       "audio": {
         "src": "demo-003/audio.m4a",
         "mimeType": "audio/mp4"
@@ -63,9 +63,9 @@
         "src": "demo-003/transcript.json"
       },
       "audioProvenance": {
-        "kind": "tts-placeholder",
-        "publishable": false,
-        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+        "kind": "licensed",
+        "publishable": true,
+        "notes": "AI-generated speech (LuvVoice neural text-to-speech, Microsoft Azure / Google Cloud voices) of an original script. LuvVoice Terms of Service (updated 2026-08-02, checked 2026-10-06) assign ownership of generated audio to the user; disclosed as synthetic."
       },
       "demo": {
         "translations": "demo-003/translations.en.json"

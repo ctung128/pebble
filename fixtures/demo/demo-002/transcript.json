@@ -3,13 +3,13 @@
   "episodeId": "demo-002",
   "language": "zh-CN",
   "script": "simplified",
-  "durationMs": 79126,
+  "durationMs": 81296,
   "segments": [
     {
       "id": "seg-0001",
       "index": 0,
       "startMs": 300,
-      "endMs": 5370,
+      "endMs": 4905,
       "text": "哎雪玲，你最近在忙啥？好久没见你发朋友圈了。",
       "speaker": "A",
       "confidence": null,
@@ -18,8 +18,8 @@
     {
       "id": "seg-0002",
       "index": 1,
-      "startMs": 5820,
-      "endMs": 10874,
+      "startMs": 5355,
+      "endMs": 10468,
       "text": "我开了个 Substack！专门写华语和台湾音乐的中文翻译。",
       "speaker": "B",
       "confidence": null,
@@ -28,8 +28,8 @@
     {
       "id": "seg-0003",
       "index": 2,
-      "startMs": 11324,
-      "endMs": 14810,
+      "startMs": 10918,
+      "endMs": 14415,
       "text": "哇，有点东西啊。怎么突然想搞这个？",
       "speaker": "A",
       "confidence": null,
@@ -38,8 +38,8 @@
     {
       "id": "seg-0004",
       "index": 3,
-      "startMs": 15260,
-      "endMs": 26692,
+      "startMs": 14865,
+      "endMs": 26330,
       "text": "就是想在下班之后，做点原创的、有意义的东西。我这个人吧，就是活到老学到老，特别喜欢学习新东西，也想认真写作和研究。",
       "speaker": "B",
       "confidence": null,
@@ -48,8 +48,8 @@
     {
       "id": "seg-0005",
       "index": 4,
-      "startMs": 27142,
-      "endMs": 29270,
+      "startMs": 26780,
+      "endMs": 29155,
       "text": "懂。那你平时都写啥？",
       "speaker": "A",
       "confidence": null,
@@ -58,8 +58,8 @@
     {
       "id": "seg-0006",
       "index": 5,
-      "startMs": 29720,
-      "endMs": 38539,
+      "startMs": 29605,
+      "endMs": 39084,
       "text": "主要是关于华语和台湾音乐的翻译，还有我个人的一些思考。我会聊中国和日本的哲学、灵性、美学之类的。",
       "speaker": "B",
       "confidence": null,
@@ -68,8 +68,8 @@
     {
       "id": "seg-0007",
       "index": 6,
-      "startMs": 38989,
-      "endMs": 42998,
+      "startMs": 39534,
+      "endMs": 43538,
       "text": "听起来很文艺啊。你之前不是学写小说的吗？",
       "speaker": "A",
       "confidence": null,
@@ -78,8 +78,8 @@
     {
       "id": "seg-0008",
       "index": 7,
-      "startMs": 43448,
-      "endMs": 51135,
+      "startMs": 43988,
+      "endMs": 51818,
       "text": "对啊，我更习惯当个 creative writer，写 essay 或者 journalism 还在摸索中。但我在努力！",
       "speaker": "B",
       "confidence": null,
@@ -88,8 +88,8 @@
     {
       "id": "seg-0009",
       "index": 8,
-      "startMs": 51585,
-      "endMs": 55074,
+      "startMs": 52268,
+      "endMs": 56132,
       "text": "那你这个 blog 有定位吗？比如走什么 niche？",
       "speaker": "A",
       "confidence": null,
@@ -98,8 +98,8 @@
     {
       "id": "seg-0010",
       "index": 9,
-      "startMs": 55524,
-      "endMs": 63603,
+      "startMs": 56582,
+      "endMs": 64612,
       "text": "说实话，我不太想刻意搞什么 niche。就顺其自然，围绕东亚研究这个主题。走着瞧呗！",
       "speaker": "B",
       "confidence": null,
@@ -108,8 +108,8 @@
     {
       "id": "seg-0011",
       "index": 10,
-      "startMs": 64053,
-      "endMs": 68054,
+      "startMs": 65062,
+      "endMs": 68888,
       "text": "哈哈，松弛感拉满。那你平时喜欢啥？",
       "speaker": "A",
       "confidence": null,
@@ -118,8 +118,8 @@
     {
       "id": "seg-0012",
       "index": 11,
-      "startMs": 68504,
-      "endMs": 74214,
+      "startMs": 69338,
+      "endMs": 76234,
       "text": "山、茶、独处。我跟道家隐士、和尚、古代诗人有种深深的共鸣。",
       "speaker": "B",
       "confidence": null,
@@ -128,8 +128,8 @@
     {
       "id": "seg-0013",
       "index": 12,
-      "startMs": 74664,
-      "endMs": 78526,
+      "startMs": 76684,
+      "endMs": 80696,
       "text": "绝了，听起来很适合你。那我蹲一个订阅！",
       "speaker": "A",
       "confidence": null,
@@ -140,7 +140,7 @@
     "kind": "fixture",
     "provider": "fixture",
     "model": null,
-    "createdAt": "2026-10-06T01:46:25.827Z",
-    "notes": "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio)."
+    "createdAt": "2026-10-06T19:45:34.356Z",
+    "notes": "Authored script text, not ASR output. Timings measured from per-line neural TTS renders (LuvVoice)."
   }
 }

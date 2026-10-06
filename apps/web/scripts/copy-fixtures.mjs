@@ -9,7 +9,8 @@ const target = fileURLToPath(new URL("../public/demo/", import.meta.url));
 rmSync(target, { recursive: true, force: true });
 cpSync(source, target, {
   recursive: true,
-  // Only ship what the app reads; scripts and provenance notes stay in the repo.
-  filter: (path) => !/\.(txt|md)$/.test(path),
+  // Only ship what the app reads; scripts, provenance notes and per-line source audio
+  // (<episode>/lines/) stay in the repo.
+  filter: (path) => !/\.(txt|md)$/.test(path) && !/[\\/]lines$/.test(path),
 });
 console.log("Copied fixtures/demo → apps/web/public/demo");

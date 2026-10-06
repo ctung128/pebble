@@ -1,30 +1,58 @@
 #!/usr/bin/env node
 /**
- * Builds the DEVELOPMENT PLACEHOLDER demo fixture: renders each script line with macOS
- * text-to-speech, trims edge silence, joins the lines with fixed gaps, and writes
- * audio.m4a plus a transcript.json whose timings are exact by construction.
+ * Builds a demo fixture from its script: gets audio for each script line, trims edge
+ * silence, joins the lines with fixed gaps, and writes audio.m4a plus a transcript.json whose
+ * timings are exact by construction.
  *
- * The output is synthetic speech and must be replaced with authorized audio before any
- * public deployment (see fixtures/demo/PROVENANCE.md). To replace it, skip this script:
- * drop in the real audio, write transcript.json by hand (or from the local worker later),
- * update durationMs in manifest.json, and run `npm test` to validate the fixture.
+ * Line audio comes from one of two sources:
+ * - default: macOS `say` (DEVELOPMENT PLACEHOLDER, not publishable; see PROVENANCE.md)
+ * - `--lines`: one prepared file per script line in `<episode>/lines/`, named by line
+ *   number (`01.mp3`, `02.mp3`, …; mp3, wav, m4a or aiff). Used for the LuvVoice neural TTS
+ *   renders. This marks the episode's audio as licensed and publishable in manifest.json.
  *
- * Requires macOS `say` and `ffmpeg` on PATH.
- * Usage: node scripts/build-demo-fixture.mjs [episode-id]   (default demo-001)
+ * Requires `ffmpeg` on PATH (and macOS `say` without `--lines`).
+ * Usage: node scripts/build-demo-fixture.mjs [episode-id] [--lines]   (default demo-001)
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const EPISODE_ID = process.argv[2] ?? "demo-001";
+const args = process.argv.slice(2);
+const FROM_LINES = args.includes("--lines");
+const EPISODE_ID = args.find((arg) => !arg.startsWith("--")) ?? "demo-001";
 if (!/^demo-\d{3}$/.test(EPISODE_ID)) {
   console.error(`build-demo-fixture: bad episode id "${EPISODE_ID}"`);
   process.exit(1);
 }
 const DEMO_DIR = fileURLToPath(new URL("../fixtures/demo/", import.meta.url));
 const EPISODE_DIR = join(DEMO_DIR, EPISODE_ID);
+const LINES_DIR = join(EPISODE_DIR, "lines");
+const LINE_FILE = /^(\d+)\.(mp3|wav|m4a|aiff)$/;
+
+const SOURCES = {
+  say: {
+    title: "Pebble development placeholder (synthetic TTS)",
+    comment: "Not for public distribution. See fixtures/demo/PROVENANCE.md.",
+    transcriptNotes:
+      "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio).",
+    audioProvenance: null, // left as is in manifest.json
+  },
+  lines: {
+    title: "Pebble demo (synthetic neural TTS)",
+    comment: "AI-generated voices (LuvVoice). See fixtures/demo/PROVENANCE.md.",
+    transcriptNotes:
+      "Authored script text, not ASR output. Timings measured from per-line neural TTS renders (LuvVoice).",
+    audioProvenance: {
+      kind: "licensed",
+      publishable: true,
+      notes:
+        "AI-generated speech (LuvVoice neural text-to-speech, Microsoft Azure / Google Cloud voices) of an original script. LuvVoice Terms of Service (updated 2026-08-02, checked 2026-10-06) assign ownership of generated audio to the user; disclosed as synthetic.",
+    },
+  },
+};
+const SOURCE = SOURCES[FROM_LINES ? "lines" : "say"];
 
 const VOICES = { A: "Tingting", B: "Eddy (Chinese (China mainland))" };
 const SPEECH_RATE = "165"; // words per minute; a little slower than the default for learners
@@ -76,16 +104,39 @@ function trimSilence(pcm) {
   return pcm.subarray(start * 2, end * 2);
 }
 
-function renderLine(workDir, i, { speaker, text }) {
-  const aiff = join(workDir, `${i}.aiff`);
+/** Maps line number (1-based) to its prepared file, checking it matches the script. */
+function findLineFiles(lineCount) {
+  if (!existsSync(LINES_DIR)) throw new Error(`No line audio folder at ${LINES_DIR}`);
+  const files = new Map();
+  for (const name of readdirSync(LINES_DIR)) {
+    const match = LINE_FILE.exec(name);
+    if (!match) continue;
+    const number = Number(match[1]);
+    if (files.has(number)) throw new Error(`Two files for line ${number} in ${LINES_DIR}`);
+    files.set(number, join(LINES_DIR, name));
+  }
+  const missing = [];
+  for (let n = 1; n <= lineCount; n++) if (!files.has(n)) missing.push(n);
+  const extra = [...files.keys()].filter((n) => n < 1 || n > lineCount);
+  if (missing.length) throw new Error(`Missing line audio for line(s) ${missing.join(", ")}`);
+  if (extra.length)
+    throw new Error(`Line audio for line(s) ${extra.join(", ")}, but the script has ${lineCount}`);
+  return files;
+}
+
+function renderLine(workDir, i, { speaker, text }, lineFiles) {
+  let input = lineFiles?.get(i + 1);
+  if (!input) {
+    input = join(workDir, `${i}.aiff`);
+    run("say", ["-v", VOICES[speaker], "-r", SPEECH_RATE, "-o", input, text]);
+  }
   const raw = join(workDir, `${i}.raw`);
-  run("say", ["-v", VOICES[speaker], "-r", SPEECH_RATE, "-o", aiff, text]);
   run("ffmpeg", [
     "-v",
     "error",
     "-y",
     "-i",
-    aiff,
+    input,
     "-ac",
     "1",
     "-ar",
@@ -98,8 +149,10 @@ function renderLine(workDir, i, { speaker, text }) {
 }
 
 function main() {
-  if (process.platform !== "darwin") throw new Error("This script uses macOS `say`.");
+  if (!FROM_LINES && process.platform !== "darwin")
+    throw new Error("This script uses macOS `say` (or pass --lines).");
   const lines = readScript();
+  const lineFiles = FROM_LINES ? findLineFiles(lines.length) : null;
   const workDir = mkdtempSync(join(tmpdir(), "pebble-fixture-"));
 
   try {
@@ -108,7 +161,7 @@ function main() {
     let cursor = samplesFor(LEAD_IN_MS);
 
     lines.forEach((line, i) => {
-      const pcm = renderLine(workDir, i, line);
+      const pcm = renderLine(workDir, i, line, lineFiles);
       const samples = pcm.length / 2;
       segments.push({
         id: `seg-${String(i + 1).padStart(4, "0")}`,
@@ -148,15 +201,15 @@ function main() {
       "-c:a",
       "aac",
       "-b:a",
-      "64k",
+      FROM_LINES ? "96k" : "64k",
       "-movflags",
       "+faststart",
       "-map_metadata",
       "-1",
       "-metadata",
-      "title=Pebble development placeholder (synthetic TTS)",
+      `title=${SOURCE.title}`,
       "-metadata",
-      "comment=Not for public distribution. See fixtures/demo/PROVENANCE.md.",
+      `comment=${SOURCE.comment}`,
       join(EPISODE_DIR, "audio.m4a"),
     ]);
 
@@ -172,8 +225,7 @@ function main() {
         provider: "fixture",
         model: null,
         createdAt: new Date().toISOString(),
-        notes:
-          "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio).",
+        notes: SOURCE.transcriptNotes,
       },
     };
     writeFileSync(join(EPISODE_DIR, "transcript.json"), `${JSON.stringify(transcript, null, 2)}\n`);
@@ -183,10 +235,11 @@ function main() {
     const entry = manifest.episodes.find((e) => e.id === EPISODE_ID);
     if (!entry) throw new Error(`manifest.json has no episode "${EPISODE_ID}"`);
     entry.durationMs = durationMs;
+    if (SOURCE.audioProvenance) entry.audioProvenance = SOURCE.audioProvenance;
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
     console.log(
-      `Wrote ${EPISODE_ID}: ${segments.length} segments, ${(durationMs / 1000).toFixed(1)}s`,
+      `Wrote ${EPISODE_ID} from ${FROM_LINES ? "lines/" : "macOS say"}: ${segments.length} segments, ${(durationMs / 1000).toFixed(1)}s`,
     );
   } finally {
     rmSync(workDir, { recursive: true, force: true });

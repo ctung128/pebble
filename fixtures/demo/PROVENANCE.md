@@ -5,42 +5,46 @@
 | Item         | Source                                                                                                                                                                |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Script       | Original text written for Pebble (`demo-001/script.zh.txt`). Not derived from any podcast.                                                                            |
-| Audio        | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs`.                                                      |
-| Transcript   | The script text, with timings measured from the per-line renders. **Not ASR output.**                                                                                 |
+| Audio        | **AI-generated speech** (LuvVoice neural TTS), split into per-line files in `lines/` and joined by `scripts/build-demo-fixture.mjs <id> --lines`.                     |
+| Transcript   | The script text, with timings measured from the per-line audio. **Not ASR output.**                                                                                   |
 | Confidence   | `null` for every segment — no recognizer was involved.                                                                                                                |
 | Translations | `demo-001/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.                                                   |
 | Review marks | `demo-001/illustrative-uncertainty.json`: **simulated** "May need review" flags on two lines, chosen arbitrarily to exercise the UI. Not derived from any recognizer. |
 
 ## demo-002 — "Notes on my Substack blog" (我的 Substack 博客随笔)
 
-| Item         | Source                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Script       | Original text written for Pebble (`demo-002/script.zh.txt`). Not derived from any podcast.                                |
-| Audio        | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs demo-002`. |
-| Transcript   | The script text, with timings measured from the per-line renders. **Not ASR output.**                                     |
-| Confidence   | `null` for every segment — no recognizer was involved.                                                                    |
-| Translations | `demo-002/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.       |
-| Review marks | None.                                                                                                                     |
+| Item         | Source                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script       | Original text written for Pebble (`demo-002/script.zh.txt`). Not derived from any podcast.                                                        |
+| Audio        | **AI-generated speech** (LuvVoice neural TTS), split into per-line files in `lines/` and joined by `scripts/build-demo-fixture.mjs <id> --lines`. |
+| Transcript   | The script text, with timings measured from the per-line audio. **Not ASR output.**                                                               |
+| Confidence   | `null` for every segment — no recognizer was involved.                                                                                            |
+| Translations | `demo-002/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.                               |
+| Review marks | None.                                                                                                                                             |
 
 ## demo-003 — "Learning Pottery in Jingdezhen" (去景德镇学陶艺)
 
-| Item         | Source                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Script       | Original text written for Pebble (`demo-003/script.zh.txt`). Not derived from any podcast.                                |
-| Audio        | **Synthetic macOS text-to-speech** (voices: Tingting, Eddy zh_CN), rendered by `scripts/build-demo-fixture.mjs demo-003`. |
-| Transcript   | The script text, with timings measured from the per-line renders. **Not ASR output.**                                     |
-| Confidence   | `null` for every segment — no recognizer was involved.                                                                    |
-| Translations | `demo-003/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.       |
-| Review marks | None.                                                                                                                     |
+| Item         | Source                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script       | Original text written for Pebble (`demo-003/script.zh.txt`). Not derived from any podcast.                                                        |
+| Audio        | **AI-generated speech** (LuvVoice neural TTS), split into per-line files in `lines/` and joined by `scripts/build-demo-fixture.mjs <id> --lines`. |
+| Transcript   | The script text, with timings measured from the per-line audio. **Not ASR output.**                                                               |
+| Confidence   | `null` for every segment — no recognizer was involved.                                                                                            |
+| Translations | `demo-003/translations.en.json`: English written for the demo (`kind: "prepared-sample"`). Not machine translation.                               |
+| Review marks | None.                                                                                                                                             |
 
-### ⚠️ Development placeholder — not for public deployment
+### Audio rights
 
-Every demo episode's audio is generated with operating-system voices whose terms for public redistribution
-have not been reviewed. It is marked `"kind": "tts-placeholder"`, `"publishable": false` in
-`manifest.json`, and the app labels it as a placeholder.
+All three episodes use audio generated with [LuvVoice](https://luvvoice.com) (free plan). LuvVoice
+voices are provided through Microsoft Azure AI Speech and Google Cloud Text-to-Speech. Its Terms of
+Service (last updated 2026-08-02, checked 2026-10-06) say the user owns the audio they generate and
+may make it available to others, provided synthetic audio is disclosed where expected. The demo is
+not monetized. Each episode is marked `"kind": "licensed"`, `"publishable": true` in
+`manifest.json`, and the audio is disclosed as AI-generated there, in the audio file metadata and on
+the portfolio page.
 
-**Before any public deployment, replace it** with audio that is self-recorded, licensed, or
-used with documented permission, and update this file.
+Each `lines/full-take.mp3` is the original single LuvVoice render of the script; the numbered
+`lines/NN.wav` files are that take split at the pauses between lines. `lines/` is not deployed.
 
 ## Replacing a fixture
 
@@ -54,4 +58,4 @@ used with documented permission, and update this file.
 4. Record the source and permission here.
 5. Run `npm test` — `packages/schema/test/fixtures.test.ts` validates every fixture.
 
-`npm run fixtures:build -- <episode-id>` only regenerates a TTS placeholder (default `demo-001`); it is not needed for real audio.
+`npm run fixtures:build -- <episode-id> --lines` rebuilds an episode from its per-line files in `lines/` (`01.mp3`, `02.wav`, …, one per script line). Without `--lines` it renders a macOS TTS development placeholder instead (not publishable).
