@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "demo-003",
+  "kind": "prepared-sample",
+  "language": "en",
+  "translations": {
+    "seg-0001": "Hey, guess what — next month I'm going to Jingdezhen to learn pottery!",
+    "seg-0002": "What? Seriously? What big move are you pulling now?",
+    "seg-0003": "I just want to find a master and really learn properly — a full-on immersive experience. I hear the handmade-craft vibe there is amazing.",
+    "seg-0004": "Nice! Then you should swing by Taoxichuan while you're there — the art market is top-notch, loads of hidden-gem little shops.",
+    "seg-0005": "Yes, exactly, I want to hunt for some good finds. I hear you can even haggle, so I'm going to score some serious bargains.",
+    "seg-0006": "Hahaha, don't go overboard — handmade stuff is expensive.",
+    "seg-0007": "Don't worry, I know what I'm doing. I'll bring you back a cup.",
+    "seg-0008": "Yay! Then I'm calling dibs on one. Remember to post a vlog!"
+  }
+}

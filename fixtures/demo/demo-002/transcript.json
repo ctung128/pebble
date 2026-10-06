@@ -3,14 +3,14 @@
   "episodeId": "demo-002",
   "language": "zh-CN",
   "script": "simplified",
-  "durationMs": 46034,
+  "durationMs": 79126,
   "segments": [
     {
       "id": "seg-0001",
       "index": 0,
       "startMs": 300,
-      "endMs": 4464,
-      "text": "哎我跟你说，我下个月要去景德镇学陶艺了！",
+      "endMs": 5370,
+      "text": "哎雪玲，你最近在忙啥？好久没见你发朋友圈了。",
       "speaker": "A",
       "confidence": null,
       "tokens": null
@@ -18,9 +18,9 @@
     {
       "id": "seg-0002",
       "index": 1,
-      "startMs": 4914,
-      "endMs": 8758,
-      "text": "啊？真的假的？你这是要搞什么大动作？",
+      "startMs": 5820,
+      "endMs": 10874,
+      "text": "我开了个 Substack！专门写华语和台湾音乐的中文翻译。",
       "speaker": "B",
       "confidence": null,
       "tokens": null
@@ -28,9 +28,9 @@
     {
       "id": "seg-0003",
       "index": 2,
-      "startMs": 9208,
-      "endMs": 17038,
-      "text": "就是想找个师傅好好学一下，纯纯的沉浸式体验。听说那边的手作氛围绝绝子。",
+      "startMs": 11324,
+      "endMs": 14810,
+      "text": "哇，有点东西啊。怎么突然想搞这个？",
       "speaker": "A",
       "confidence": null,
       "tokens": null
@@ -38,9 +38,9 @@
     {
       "id": "seg-0004",
       "index": 3,
-      "startMs": 17488,
-      "endMs": 24796,
-      "text": "可以啊！那你顺便去陶溪川逛一下呗，那边的艺术市集很顶，好多宝藏小店。",
+      "startMs": 15260,
+      "endMs": 26692,
+      "text": "就是想在下班之后，做点原创的、有意义的东西。我这个人吧，就是活到老学到老，特别喜欢学习新东西，也想认真写作和研究。",
       "speaker": "B",
       "confidence": null,
       "tokens": null
@@ -48,9 +48,9 @@
     {
       "id": "seg-0005",
       "index": 4,
-      "startMs": 25246,
-      "endMs": 31996,
-      "text": "对对对，我就是想去淘点好物。听说还能砍价，我要狠狠地捡漏。",
+      "startMs": 27142,
+      "endMs": 29270,
+      "text": "懂。那你平时都写啥？",
       "speaker": "A",
       "confidence": null,
       "tokens": null
@@ -58,9 +58,9 @@
     {
       "id": "seg-0006",
       "index": 5,
-      "startMs": 32446,
-      "endMs": 36078,
-      "text": "哈哈哈，你别太离谱，人家手作很贵的。",
+      "startMs": 29720,
+      "endMs": 38539,
+      "text": "主要是关于华语和台湾音乐的翻译，还有我个人的一些思考。我会聊中国和日本的哲学、灵性、美学之类的。",
       "speaker": "B",
       "confidence": null,
       "tokens": null
@@ -68,9 +68,9 @@
     {
       "id": "seg-0007",
       "index": 6,
-      "startMs": 36528,
-      "endMs": 41161,
-      "text": "放心，我心里有数。到时候给你带个杯子回来。",
+      "startMs": 38989,
+      "endMs": 42998,
+      "text": "听起来很文艺啊。你之前不是学写小说的吗？",
       "speaker": "A",
       "confidence": null,
       "tokens": null
@@ -78,10 +78,60 @@
     {
       "id": "seg-0008",
       "index": 7,
-      "startMs": 41611,
-      "endMs": 45434,
-      "text": "好耶！那我先蹲一个。记得发vlog啊！",
+      "startMs": 43448,
+      "endMs": 51135,
+      "text": "对啊，我更习惯当个 creative writer，写 essay 或者 journalism 还在摸索中。但我在努力！",
       "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0009",
+      "index": 8,
+      "startMs": 51585,
+      "endMs": 55074,
+      "text": "那你这个 blog 有定位吗？比如走什么 niche？",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0010",
+      "index": 9,
+      "startMs": 55524,
+      "endMs": 63603,
+      "text": "说实话，我不太想刻意搞什么 niche。就顺其自然，围绕东亚研究这个主题。走着瞧呗！",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0011",
+      "index": 10,
+      "startMs": 64053,
+      "endMs": 68054,
+      "text": "哈哈，松弛感拉满。那你平时喜欢啥？",
+      "speaker": "A",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0012",
+      "index": 11,
+      "startMs": 68504,
+      "endMs": 74214,
+      "text": "山、茶、独处。我跟道家隐士、和尚、古代诗人有种深深的共鸣。",
+      "speaker": "B",
+      "confidence": null,
+      "tokens": null
+    },
+    {
+      "id": "seg-0013",
+      "index": 12,
+      "startMs": 74664,
+      "endMs": 78526,
+      "text": "绝了，听起来很适合你。那我蹲一个订阅！",
+      "speaker": "A",
       "confidence": null,
       "tokens": null
     }
@@ -90,7 +140,7 @@
     "kind": "fixture",
     "provider": "fixture",
     "model": null,
-    "createdAt": "2026-10-05T22:19:41.211Z",
+    "createdAt": "2026-10-06T01:46:25.827Z",
     "notes": "Authored script text, not ASR output. Timings measured from per-line macOS TTS renders (development placeholder audio)."
   }
 }

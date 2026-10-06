@@ -4,15 +4,19 @@
   "kind": "prepared-sample",
   "language": "en",
   "translations": {
-    "seg-0001": "Hi, welcome to today's show.",
-    "seg-0002": "Hi! So what are we talking about today?",
-    "seg-0003": "I want to talk about a little pebble I picked up on my way home from work.",
-    "seg-0004": "A pebble? That sounds kind of interesting.",
-    "seg-0005": "It's really round and smooth, and it feels cool in your hand.",
-    "seg-0006": "How did you end up noticing it?",
-    "seg-0007": "Because that day I was walking slowly and wasn't looking at my phone.",
-    "seg-0008": "When you slow down, it seems like you notice more things.",
-    "seg-0009": "Right, so I put it on my desk.",
-    "seg-0010": "OK, that's all for today. See you next time!"
+    "seg-0001": "Hey, have you been working on some app lately? I keep seeing you post about it.",
+    "seg-0002": "Yeah! It's called Pebble — a Chinese learning tool that transcribes podcasts and translates them into English.",
+    "seg-0003": "That's pretty cool. What made you suddenly want to build this?",
+    "seg-0004": "It's really just solving my own pain point. I usually listen to podcasts on Xiaoyuzhou to learn Chinese, but there's no translation feature in the app at all — I literally can't learn from it.",
+    "seg-0005": "I get it — that blocker is genuinely suffocating. So what's your Chinese level now?",
+    "seg-0006": "I'm currently preparing for HSK 5, and I want to learn through lots of input, like podcasts. But when there's something I can't understand, I can't look it up or note it down — I'm just stuck.",
+    "seg-0007": "So you just went ahead and built one yourself?",
+    "seg-0008": "Yeah, at first it was just for personal use. When you're a designer, your first reaction to a problem is — well, let me design a solution.",
+    "seg-0009": "That's amazing — that's literally eating your own dog food. So what exactly can Pebble do?",
+    "seg-0010": "It can transcribe your own podcast audio, translate it line by line into English, and show both side by side. That way I can listen and learn at the same time.",
+    "seg-0011": "Sounds really practical. So what's your mission?",
+    "seg-0012": "It's to let Chinese learners learn directly from real podcast content. Authentic, unfiltered material — way better than textbooks.",
+    "seg-0013": "Nice nice, then you have to hook me up with one.",
+    "seg-0014": "Haha, just wait for it — until I launch."
   }
 }

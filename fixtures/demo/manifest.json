@@ -3,11 +3,11 @@
   "episodes": [
     {
       "id": "demo-001",
-      "title": "A Pebble on the Way Home",
-      "titleZh": "回家路上的一颗石子",
-      "description": "A short two-voice conversation written for the Pebble demo.",
+      "title": "Why I built Pebble",
+      "titleZh": "我为什么做 Pebble",
+      "description": "A friend asks why Pebble was built, in a short two-voice conversation written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 34358,
+      "durationMs": 86177,
       "audio": {
         "src": "demo-001/audio.m4a",
         "mimeType": "audio/mp4"
@@ -27,11 +27,11 @@
     },
     {
       "id": "demo-002",
-      "title": "Learning Pottery in Jingdezhen",
-      "titleZh": "去景德镇学陶艺",
-      "description": "Two friends on a voice call about a pottery trip, written for the Pebble demo.",
+      "title": "Notes on my Substack blog",
+      "titleZh": "我的 Substack 博客随笔",
+      "description": "Two friends over bubble tea talk about a new Substack, written for the Pebble demo.",
       "language": "zh-CN",
-      "durationMs": 46034,
+      "durationMs": 79126,
       "audio": {
         "src": "demo-002/audio.m4a",
         "mimeType": "audio/mp4"
@@ -46,6 +46,29 @@
       },
       "demo": {
         "translations": "demo-002/translations.en.json"
+      }
+    },
+    {
+      "id": "demo-003",
+      "title": "Learning Pottery in Jingdezhen",
+      "titleZh": "去景德镇学陶艺",
+      "description": "Two friends on a voice call about a pottery trip, written for the Pebble demo.",
+      "language": "zh-CN",
+      "durationMs": 46034,
+      "audio": {
+        "src": "demo-003/audio.m4a",
+        "mimeType": "audio/mp4"
+      },
+      "transcript": {
+        "src": "demo-003/transcript.json"
+      },
+      "audioProvenance": {
+        "kind": "tts-placeholder",
+        "publishable": false,
+        "notes": "Synthetic macOS text-to-speech of an original script. Development placeholder only; replace before any public deployment."
+      },
+      "demo": {
+        "translations": "demo-003/translations.en.json"
       }
     }
   ]

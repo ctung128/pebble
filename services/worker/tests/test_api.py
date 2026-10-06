@@ -213,12 +213,16 @@ def test_demo_fixture_end_to_end_with_default_chunking(make_client, settings):
     from pebble_worker.config import ChunkingConfig
 
     client = make_client(settings=replace(settings, chunking=ChunkingConfig()))
-    job = upload(client, DEMO_AUDIO, title="A Pebble on the Way Home")["body"]["job"]
+    manifest = json.loads((DEMO_AUDIO.parents[1] / "manifest.json").read_text(encoding="utf-8"))
+    expected_ms = next(e for e in manifest["episodes"] if e["id"] == "demo-001")["durationMs"]
+    assert expected_ms < 240_000  # fits in one chunk at the default maximum
+
+    job = upload(client, DEMO_AUDIO, title="Demo episode")["body"]["job"]
     done = wait_for_job(client, job["id"])
     assert done["status"] == "completed"
-    assert done["progress"] == {"completedChunks": 1, "totalChunks": 1}  # 34 s < 240 s max
+    assert done["progress"] == {"completedChunks": 1, "totalChunks": 1}
     transcript = client.get(f"/episodes/{job['episodeId']}/transcript").json()
-    assert abs(transcript["durationMs"] - 34_358) < 100
+    assert abs(transcript["durationMs"] - expected_ms) < 100
     assert transcript["provenance"]["kind"] == "mock"
     assert transcript["segments"][0]["text"].startswith("（模拟转写）")
 

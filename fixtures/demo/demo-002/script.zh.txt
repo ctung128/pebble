@@ -1,12 +1,17 @@
 # Original script written for the Pebble demo. One line per transcript segment.
-# Scene: two friends on a WeChat voice call about learning pottery in Jingdezhen.
-# A = 小林, B = 阿豪.
+# Scene: two friends over bubble tea; Carolyn talks about her new Substack.
+# A = 阿哲, B = Carolyn (雪玲).
 # Format: SPEAKER: text   (speakers map to voices in scripts/build-demo-fixture.mjs)
-A: 哎我跟你说，我下个月要去景德镇学陶艺了！
-B: 啊？真的假的？你这是要搞什么大动作？
-A: 就是想找个师傅好好学一下，纯纯的沉浸式体验。听说那边的手作氛围绝绝子。
-B: 可以啊！那你顺便去陶溪川逛一下呗，那边的艺术市集很顶，好多宝藏小店。
-A: 对对对，我就是想去淘点好物。听说还能砍价，我要狠狠地捡漏。
-B: 哈哈哈，你别太离谱，人家手作很贵的。
-A: 放心，我心里有数。到时候给你带个杯子回来。
-B: 好耶！那我先蹲一个。记得发vlog啊！
+A: 哎雪玲，你最近在忙啥？好久没见你发朋友圈了。
+B: 我开了个 Substack！专门写华语和台湾音乐的中文翻译。
+A: 哇，有点东西啊。怎么突然想搞这个？
+B: 就是想在下班之后，做点原创的、有意义的东西。我这个人吧，就是活到老学到老，特别喜欢学习新东西，也想认真写作和研究。
+A: 懂。那你平时都写啥？
+B: 主要是关于华语和台湾音乐的翻译，还有我个人的一些思考。我会聊中国和日本的哲学、灵性、美学之类的。
+A: 听起来很文艺啊。你之前不是学写小说的吗？
+B: 对啊，我更习惯当个 creative writer，写 essay 或者 journalism 还在摸索中。但我在努力！
+A: 那你这个 blog 有定位吗？比如走什么 niche？
+B: 说实话，我不太想刻意搞什么 niche。就顺其自然，围绕东亚研究这个主题。走着瞧呗！
+A: 哈哈，松弛感拉满。那你平时喜欢啥？
+B: 山、茶、独处。我跟道家隐士、和尚、古代诗人有种深深的共鸣。
+A: 绝了，听起来很适合你。那我蹲一个订阅！
