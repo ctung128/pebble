@@ -8,6 +8,21 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/*
+ * Side margin of the page under 900px, shared by the top bar, the content column, transcript
+ * lines and the player. Phones: 30px on a 390px iPhone, scaling down on narrower screens so
+ * the player still fits; tablets and small windows: 32px. (Desktop has its own layout.)
+ */
+:root {
+  --page-gutter: var(--space-8);
+}
+
+@media (max-width: 560px) {
+  :root {
+    --page-gutter: clamp(var(--space-4), 7.7vw, 30px);
+  }
+}
+
 body {
   margin: 0;
   background: var(--bg-page);

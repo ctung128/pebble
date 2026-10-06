@@ -24,6 +24,13 @@
   line-height: 1.15;
 }
 
+/* Phones: smaller display type, so titles fit the narrower column in one or two lines. */
+@media (max-width: 560px) {
+  .title {
+    font-size: 2rem;
+  }
+}
+
 .meta {
   margin: 0;
   font-size: var(--size-body-sm);

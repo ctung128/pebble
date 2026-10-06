@@ -225,7 +225,7 @@
 @media (max-width: 899px) {
   .bar {
     left: 0;
-    padding-inline: var(--space-4);
+    padding-inline: var(--page-gutter);
   }
 }
 
@@ -255,10 +255,6 @@
 /* Narrow phones (iPhone SE/mini, small Android): smaller transport and speed targets so the
    second row fits without the speed options touching or clipping. */
 @media (max-width: 400px) {
-  .bar {
-    padding-inline: var(--space-3);
-  }
-
   .inner {
     column-gap: var(--space-2);
   }
@@ -283,5 +279,22 @@
     height: 38px;
     padding: 0 var(--space-1);
     font-size: var(--size-label);
+  }
+}
+
+/* The smallest phones (320px): the bar keeps 16px sides so both rows still fit. */
+@media (max-width: 359px) {
+  .bar {
+    padding-inline: var(--space-4);
+  }
+
+  .playButton {
+    width: 46px;
+    height: 40px;
+  }
+
+  .iconButton {
+    width: 34px;
+    height: 34px;
   }
 }

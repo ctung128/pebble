@@ -301,10 +301,10 @@
   }
 }
 
-/* The column's own padding is 16px here: pull out only that far, so nothing overflows. */
+/* The column's own padding is the page gutter here: pull out only that far, so nothing overflows. */
 @media (max-width: 899px) {
   .list {
-    --line-pad-start: var(--space-4);
+    --line-pad-start: var(--page-gutter);
   }
 }
 

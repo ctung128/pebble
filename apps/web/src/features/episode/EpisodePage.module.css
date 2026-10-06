@@ -330,9 +330,23 @@
     margin-left: 0;
   }
 
-  /* No room for both sides: resume gets its own line, the tools start below it. */
+  .title {
+    font-size: 2rem;
+  }
+
+  /* Phones: no resume controls (play starts from the beginning, or tap a line), and the
+     display tools stay on one line, down to 320px wide. */
   .resumeBar {
-    flex-basis: 100%;
+    display: none;
+  }
+
+  .toolbar {
+    flex-wrap: nowrap;
+  }
+
+  .toolButton {
+    padding: 0 var(--space-3);
+    white-space: nowrap;
   }
 
   /* The player takes two rows on phones. */
@@ -342,5 +356,12 @@
 
   .resume {
     bottom: calc(var(--player-height) + var(--space-10) + var(--space-4));
+  }
+}
+
+@media (max-width: 359px) {
+  .toolButton {
+    padding: 0 var(--space-2);
+    font-size: var(--size-caption);
   }
 }
