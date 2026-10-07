@@ -71,12 +71,13 @@ function copyItem() {
 }
 
 describe("Copy transcript", () => {
-  it("sits in the transcript menu after Show English, with help that says what it copies", async () => {
+  it("sits in the transcript menu after Show pinyin, with help that says what it copies", async () => {
     await renderEpisode();
+    expect(screen.getByRole("button", { name: "Show English" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Copy transcript" })).toBeNull();
     const copy = copyItem();
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(items).toEqual(["Show English", "Copy transcript"]);
+    expect(items).toEqual(["Show pinyin", "Copy transcript"]);
     expect(copy).toHaveAttribute("title", COPY_TRANSCRIPT_HELP);
   });
 
@@ -133,7 +134,7 @@ describe("Copy transcript", () => {
     await renderEpisode();
     menuButton().focus();
     await userEvent.keyboard("{Enter}");
-    expect(screen.getByRole("menuitem", { name: "Show English" })).toHaveFocus();
+    expect(screen.getByRole("menuitem", { name: "Show pinyin" })).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     expect(screen.getByRole("menuitem", { name: "Copy transcript" })).toHaveFocus();
     await userEvent.keyboard("{Enter}");

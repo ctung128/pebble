@@ -6,6 +6,7 @@ import {
   type CachedEnglish,
   type ConsentOutcome,
   type TranslationReadiness,
+  type TranslationUsage,
   type WorkerTranslation,
 } from "../features/translation/workerTranslation.ts";
 import { TranslationConsentDialog } from "./TranslationConsentDialog.tsx";
@@ -61,6 +62,36 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
   const [dialog, setDialog] = useState<{ busy: boolean; problem: string | null } | null>(null);
   const pending = useRef<PendingConsent | null>(null);
 
+  // Usage only (never readiness): re-read from health after each request, since a request is
+  // counted even when the provider fails, and when the tab becomes visible again.
+  const [latestLimits, setLatestLimits] = useState<{
+    base: object;
+    limits: TranslationUsage;
+  } | null>(null);
+  const usage = useMemo<TranslationUsage | null>(() => {
+    if (!health?.configured) return null;
+    return latestLimits && latestLimits.base === base ? latestLimits.limits : health.limits;
+  }, [base, health, latestLimits]);
+  const refreshUsage = useCallback(async () => {
+    if (!base) return;
+    let result;
+    try {
+      result = await client.health();
+    } catch {
+      return; // the last known usage stays on screen
+    }
+    const limits = result.ok ? result.data.translation?.limits : undefined;
+    if (limits) setLatestLimits({ base, limits });
+  }, [base, client]);
+  useEffect(() => {
+    if (!base) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshUsage();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [base, refreshUsage]);
+
   // Leaving local mode (or unmounting) never leaves a dialog promise hanging.
   useEffect(
     () => () => {
@@ -107,6 +138,7 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
     if (!readiness) return null;
     return {
       readiness,
+      usage,
       attribution: ATTRIBUTION,
       labels: LABELS,
       message: translationMessage,
@@ -134,6 +166,8 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
             learn({ limitReached: true });
           }
           throw failure;
+        } finally {
+          void refreshUsage();
         }
       },
       async withdrawConsent() {
@@ -159,6 +193,7 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
         const translation = result.ok ? result.data.translation : undefined;
         if (!translation || !base) return false;
         setRefreshed({ base, health: translation });
+        setLatestLimits({ base, limits: translation.limits });
         return true;
       },
       requestConsent() {
@@ -172,7 +207,7 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
         return promise;
       },
     };
-  }, [client, readiness, learn, base]);
+  }, [client, readiness, usage, learn, base, refreshUsage]);
 
   return (
     <WorkerTranslationContext.Provider value={value}>

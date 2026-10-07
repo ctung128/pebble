@@ -1,0 +1,90 @@
+/*
+ * Sidebar usage meter. Same frame as the shortcuts block above it (hairline rule, overline
+ * title); one prominent number, a thin bar, then quiet captions. Colour carries state only:
+ * accent while there's room, warning when low, error when none are left.
+ */
+.meter {
+  --meter-colour: var(--accent);
+
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2) 0;
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+}
+
+.meter[data-state="low"] {
+  --meter-colour: var(--warning);
+}
+
+.meter[data-state="none"] {
+  --meter-colour: var(--error);
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-overline);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.left {
+  font-size: var(--size-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.meter[data-state="none"] .left {
+  color: var(--meter-colour);
+}
+
+.of {
+  font-size: var(--size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-muted);
+}
+
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--meter-colour);
+  transition: width var(--duration-base) var(--easing-standard);
+}
+
+.note,
+.footer {
+  margin: 0;
+  font-size: var(--size-label);
+  color: var(--text-secondary);
+}
+
+.meter[data-state="low"] .note,
+.meter[data-state="none"] .note {
+  font-weight: 600;
+  color: var(--meter-colour);
+}
+
+/* Under 900px the sidebar is a top bar: the meter spans it as one compact block. */
+@media (max-width: 899px) {
+  .meter {
+    grid-column: 1 / -1;
+    padding: var(--space-3) 0 0;
+  }
+}

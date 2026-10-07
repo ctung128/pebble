@@ -17,6 +17,9 @@ export interface TranslationReadiness {
   newRequests: NewRequests;
 }
 
+/** Pebble's own monthly limits as the worker last reported them (a UTC calendar month). */
+export type TranslationUsage = TranslationHealth["limits"];
+
 export interface CachedEnglish {
   segmentId: string;
   fingerprint: string;
@@ -39,6 +42,8 @@ export type ConsentOutcome = "granted" | "cancelled";
 
 export interface WorkerTranslation {
   readiness: TranslationReadiness;
+  /** This month's usage, refreshed from worker health after each request; null when off. */
+  usage: TranslationUsage | null;
   /** The episode's cached English. Read-only: never sends anything to the provider. */
   loadCached(episodeId: string): Promise<CachedEnglish[]>;
   /** One line, on an explicit request. Rejects with WorkerTranslationError. */
@@ -72,7 +77,6 @@ export interface WorkerTranslation {
     translateAgain: string;
     showSaved: string;
     hideSaved: string;
-    settings: string;
   };
 }
 

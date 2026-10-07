@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import type { Transcript } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
 import { MoreMenu, type MoreMenuItem } from "../../components/MoreMenu.tsx";
@@ -148,7 +148,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const transcriptCopy = useCopyText();
   const [copiedTranscript, setCopiedTranscript] = useState("");
   const moreButton = useRef<HTMLButtonElement>(null);
-  const navigate = useNavigate();
 
   const {
     showAll: pinyinShowAll,
@@ -251,21 +250,16 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     );
   };
 
-  // The transcript's display and copy actions live behind one "⋯" button in the header.
+  // The transcript's display and copy actions live behind one "⋯" button in the header
+  // (the demo's Show English stays a button of its own beside it).
   const menuItems: MoreMenuItem[] = [
-    englishToggle
-      ? {
-          key: "english",
-          label: englishShowAll ? "Hide English" : "Show English",
-          onSelect: toggleAllEnglish,
-        }
-      : {
-          key: "pinyin",
-          label: pinyin.showAll ? "Hide pinyin" : "Show pinyin",
-          onSelect: pinyin.toggleAll,
-          disabled: learningLocked,
-          describedBy: learningLocked ? LOCKED_HELP_ID : undefined,
-        },
+    {
+      key: "pinyin",
+      label: pinyin.showAll ? "Hide pinyin" : "Show pinyin",
+      onSelect: pinyin.toggleAll,
+      disabled: learningLocked,
+      describedBy: learningLocked ? LOCKED_HELP_ID : undefined,
+    },
   ];
   if (workerApi) {
     // Reveals saved English for the lines' current text only; never sends anything.
@@ -285,14 +279,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         setCopiedTranscript(text);
         transcriptCopy.copy(text); // inside the click: the browser sees the gesture
       },
-    });
-  }
-  if (workerTranslation) {
-    // Local only: the sidebar no longer links here, so Withdraw stays one tap away.
-    menuItems.push({
-      key: "translation-settings",
-      label: workerTranslation.labels.settings,
-      onSelect: () => void navigate("/translation"),
     });
   }
 
@@ -536,6 +522,16 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
                   </>
                 )}
               </div>
+            ) : null}
+            {englishToggle ? (
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={englishShowAll}
+                onClick={toggleAllEnglish}
+              >
+                {englishShowAll ? "Hide English" : "Show English"}
+              </button>
             ) : null}
             <span className={styles.copyStatus} role="status">
               {transcriptCopy.status === "copied" ? COPY_TRANSCRIPT_DONE : ""}

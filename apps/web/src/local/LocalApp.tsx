@@ -7,11 +7,12 @@ import { LocalLibraryPage } from "./LocalLibraryPage.tsx";
 import { LocalRenameProvider } from "./LocalRenameProvider.tsx";
 import { LocalTranslationProvider } from "./LocalTranslationProvider.tsx";
 import { TranslationSettingsPage } from "./TranslationSettingsPage.tsx";
+import { TranslationUsageMeter } from "./TranslationUsageMeter.tsx";
 
 export const localRoutes: RouteObject[] = [
   {
     path: "/",
-    element: <Layout mode="local" />,
+    element: <Layout mode="local" footer={<TranslationUsageMeter />} />,
     children: [
       { index: true, element: <LocalLibraryPage /> },
       { path: "process", element: <AddAudioPage /> },

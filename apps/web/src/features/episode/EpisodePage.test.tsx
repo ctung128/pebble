@@ -203,14 +203,16 @@ describe("EpisodePage — translation", () => {
     const { provider, translate } = fakeTranslationProvider();
     renderPage({ translation: provider });
     await playButtons();
-    await menuItem("Show English");
-    expect(screen.queryByRole("menuitem", { name: "Show pinyin" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("menuitem", { name: "Show English" }));
+    // Its own button beside the ⋯ menu, which keeps Show pinyin.
+    expect(await menuItem("Show pinyin")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Show English" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
     expect(await screen.findByText("The first sentence.")).toBeInTheDocument();
     expect(await screen.findByText("The second sentence.")).toBeInTheDocument();
-    await userEvent.click(await menuItem("Hide English"));
+    await userEvent.click(screen.getByRole("button", { name: "Hide English" }));
     expect(screen.queryByText("The first sentence.")).not.toBeInTheDocument();
-    await userEvent.click(await menuItem("Show English"));
+    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
     expect(screen.getByText("The first sentence.")).toBeInTheDocument();
     expect(translate).toHaveBeenCalledTimes(3);
   });

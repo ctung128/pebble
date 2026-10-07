@@ -8,7 +8,7 @@ import {
   useParams,
   type RouteObject,
 } from "react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { PlusIcon } from "./components/Icon.tsx";
 import { ShortcutSlotProvider } from "./components/ShellSlot.tsx";
 import { StatusView } from "./components/StatusView.tsx";
@@ -36,7 +36,7 @@ const MODE_CHIP: Record<AppMode, { label: string; title: string }> = {
 /** Episode and job pages belong to the Library: its tab stays highlighted there. */
 const LIBRARY_SECTION = /^\/(?:$|episodes\/|jobs\/)/;
 
-export function Layout({ mode }: { mode: AppMode }) {
+export function Layout({ mode, footer }: { mode: AppMode; footer?: ReactNode }) {
   const { items } = useLearning();
   const { pathname } = useLocation();
   const [shortcutSlot, setShortcutSlot] = useState<HTMLElement | null>(null);
@@ -76,8 +76,12 @@ export function Layout({ mode }: { mode: AppMode }) {
             {items.length > 0 ? <span className={styles.count}>{items.length}</span> : null}
           </NavLink>
         </nav>
-        {/* The episode page renders its keyboard shortcuts here (ShortcutSlot). */}
-        <div ref={setShortcutSlot} className={styles.shortcuts} />
+        <div className={styles.bottom}>
+          {/* The episode page renders its keyboard shortcuts here (ShortcutSlot). */}
+          <div ref={setShortcutSlot} className={styles.shortcuts} />
+          {/* Local mode's translation usage meter; the demo passes nothing. */}
+          {footer}
+        </div>
       </header>
       <div className={styles.column}>
         <StorageNotice />

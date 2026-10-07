@@ -271,7 +271,6 @@ describe("local English — capability", () => {
     expect(screen.queryByRole("button", { name: "English" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Transcript actions" }));
     expect(screen.queryByRole("menuitem", { name: "Show saved English" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: LABELS.settings })).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -1222,34 +1221,6 @@ describe("local English — settings link", () => {
     await act(async () => {}); // let health resolve
     expect(screen.queryByRole("link", { name: /translation/i })).toBeNull();
   });
-
-  it("opens from the episode's ⋯ menu", async () => {
-    const client = healthClient(translationHealth());
-    render(
-      <WorkerProvider client={client}>
-        <LocalTranslationProvider>
-          <SourceProvider source={source()}>
-            <TranslationProviderContext
-              provider={new SessionCachedTranslationProvider(fakeTranslationProvider().provider)}
-            >
-              <LearningProvider openStore={() => Promise.resolve(new MemoryLearningStore())}>
-                <SettingsRouter>
-                  <Routes>
-                    <Route path="/" element={<EpisodePage episodeId={EP_A} />} />
-                    <Route path="/translation" element={<p>Settings page</p>} />
-                  </Routes>
-                </SettingsRouter>
-              </LearningProvider>
-            </TranslationProviderContext>
-          </SourceProvider>
-        </LocalTranslationProvider>
-      </WorkerProvider>,
-    );
-    await settle();
-    await userEvent.click(await screen.findByRole("button", { name: "Transcript actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: LABELS.settings }));
-    expect(await screen.findByText("Settings page")).toBeInTheDocument();
-  });
 });
 
 describe("local English — withdrawal uncertainty", () => {
@@ -1263,11 +1234,7 @@ describe("local English — withdrawal uncertainty", () => {
     expect(SETTINGS.notAllowed).toBe(
       "English translation with DeepL isn't allowed on this computer yet. Pebble asks the first time you tap English on a line.",
     );
-    expect([SETTINGS.title, LABELS.settings, SETTINGS.checkAgain]).toEqual([
-      "English translation",
-      "Translation settings",
-      "Check again",
-    ]);
+    expect([SETTINGS.title, SETTINGS.checkAgain]).toEqual(["English translation", "Check again"]);
   });
 
   it("a lost withdrawal response that did take effect is handled safely later", async () => {

@@ -153,9 +153,12 @@
   background: var(--bg-page);
 }
 
-/* --- Shortcuts (filled by the episode page), pinned to the bottom above a rule --- */
+/* --- Shortcuts (filled by the episode page) and local usage, pinned to the bottom --- */
 
-.shortcuts {
+.bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
   margin-top: auto;
 }
 
@@ -215,6 +218,11 @@
 
   .navLink {
     justify-content: flex-start;
+  }
+
+  /* The bottom group's children join the top bar's grid directly. */
+  .bottom {
+    display: contents;
   }
 
   /* No keyboard to speak of on phones and tablets: the list goes. */

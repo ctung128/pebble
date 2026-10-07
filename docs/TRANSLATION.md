@@ -151,8 +151,8 @@ Consent carries a version; changing the dialog's wording or what is sent asks ag
 
 ## Translation settings
 
-Local mode only: the page "English translation", linked from the episode page's ⋯ menu
-("Translation settings") when the worker reports translation; it isn't in the sidebar. Status by readiness:
+Local mode only: the page "English translation" at `#/translation`. It isn't linked from the
+sidebar, the episode menu or the usage meter; open it by its address. Status by readiness:
 
 | Readiness              | Shown                                                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |

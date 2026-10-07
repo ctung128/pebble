@@ -52,6 +52,30 @@
   margin-left: auto;
 }
 
+/* The demo's Show English: a muted button beside the ⋯ menu. */
+.toolButton {
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.toolButton:hover {
+  background: var(--bg-hover);
+}
+
+.toolButton[aria-pressed="true"] {
+  background: var(--bg-active);
+  box-shadow: var(--ring-selected);
+}
+
 /* "Transcript copied", beside the ⋯ menu once the menu has closed. */
 .copyStatus {
   font-size: var(--size-body-sm);

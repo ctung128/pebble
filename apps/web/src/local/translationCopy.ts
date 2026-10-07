@@ -43,8 +43,6 @@ export const LABELS = {
   translateAgain: "Translate again",
   showSaved: "Show saved English",
   hideSaved: "Hide saved English",
-  /** The episode menu's link to translation settings. */
-  settings: "Translation settings",
 };
 
 /** Translation settings (docs/TRANSLATION.md#translation-settings). All approved copy. */
@@ -76,6 +74,17 @@ export const SETTINGS = {
     { text: "DeepL Terms", href: "https://www.deepl.com/en/pro-license" },
     { text: "DeepL Privacy Policy", href: "https://www.deepl.com/en/privacy" },
   ],
+};
+
+/** The sidebar's monthly usage meter (Pebble's own limit, not the provider's allowance). */
+export const USAGE = {
+  title: "Translations",
+  left: (left: number) => `${left} left`,
+  of: (limit: number) => `of ${limit} this month`,
+  meter: (left: number, limit: number) => `${left} of ${limit} translations left this month`,
+  low: "Running low",
+  none: "None left this month. Saved English still shows.",
+  resets: (date: string) => `Resets ${date}`,
 };
 
 export const ATTRIBUTION = {
