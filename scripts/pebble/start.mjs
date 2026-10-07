@@ -21,6 +21,16 @@ const POLL_MS = 250;
 /** Longer than the worker's own bounded shutdown (it waits up to 10 s for a running job step). */
 const STOP_TIMEOUT_MS = 20_000;
 
+/** Credentials only the worker may hold (ADR 0008); never passed to the web server. */
+export const WORKER_ONLY_ENV = ["DEEPL_AUTH_KEY"];
+
+/** A copy of `env` for the web server, without worker-only credentials. */
+export function webEnv(env) {
+  const copy = { ...env };
+  for (const name of WORKER_ONLY_ENV) delete copy[name];
+  return copy;
+}
+
 export async function start(sys, { readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
   const { checks, info } = await collectChecks(sys);
   const blocker = checks.find((c) => SETUP_CHECKS.includes(c.id) && !c.ok);
@@ -77,7 +87,7 @@ export async function start(sys, { readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
   const web = sys.spawn(VITE_BIN, ["--port", String(WEB_PORT), "--strictPort"], {
     cwd: WEB_DIR,
     env: {
-      ...env,
+      ...webEnv(env),
       VITE_PEBBLE_MODE: "local",
       VITE_PEBBLE_WORKER_URL: `http://127.0.0.1:${port}`,
     },

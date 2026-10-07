@@ -89,6 +89,12 @@ def run_server(settings: Settings) -> int:
     storage = Storage(settings.data_dir)
     storage.ensure()
     _configure_logging(storage)
+    if settings.translation.key_missing:
+        print(
+            "pebble-worker: PEBBLE_TRANSLATION_PROVIDER=deepl is set but DEEPL_AUTH_KEY isn't, "
+            "so English translation is off. Transcription works as usual.",
+            file=sys.stderr,
+        )
     app = create_app(settings)
     print(f"Pebble worker {__version__} on http://{settings.host}:{settings.port}")
     print(f"Data directory: {storage.root}")

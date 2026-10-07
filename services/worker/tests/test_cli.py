@@ -19,7 +19,7 @@ def test_doctor_passes_and_creates_a_private_data_directory(env, capsys):
     assert main(["doctor"]) == 0
     out = capsys.readouterr().out
     assert "ffmpeg" in out and "ffprobe" in out and "All checks passed." in out
-    assert "schema v1 of 1" in out
+    assert "schema v2 of 2" in out  # 2: translation tables (ADR 0008)
     assert "loopback only" in out
     assert env.stat().st_mode & 0o777 == 0o700
 

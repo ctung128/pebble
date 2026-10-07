@@ -1,9 +1,12 @@
 # English line translation (DeepL)
 
 > **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); not
-> implemented or available yet.** English stays hidden for local real-ASR transcripts until it
-> ships. Live DeepL calls, including a smoke test, still require separate approval. This page
-> is the specification the implementation and its tests follow.
+> available yet.** English stays hidden for local real-ASR transcripts until it ships. Live
+> DeepL calls, including a smoke test, still require separate approval. This page is the
+> specification the implementation and its tests follow.
+>
+> **Built so far:** the settings below, the worker's translation tables (database migration 2) and the consent routes. Translation requests aren't implemented, so `/health` doesn't
+> report translation yet and nothing can be translated.
 
 Optional, off by default, for the local app only. A learner taps **English** on one line;
 the worker sends that line's Chinese to DeepL and keeps the result on this computer. The
@@ -22,6 +25,14 @@ Set both in the worker's environment, then start Pebble:
 | `DEEPL_AUTH_KEY`                             | unset   | Your DeepL API key; used only to authenticate     |
 | `PEBBLE_TRANSLATION_MONTHLY_REQUEST_LIMIT`   | `300`   | Pebble's own limit, per UTC calendar month        |
 | `PEBBLE_TRANSLATION_MONTHLY_CHARACTER_LIMIT` | `30000` | Pebble's own limit, per UTC calendar month        |
+
+The worker refuses to start if `PEBBLE_TRANSLATION_PROVIDER` is anything but unset or
+`deepl`, if a set key isn't one line without spaces (at most 512 characters), or if a limit
+isn't a whole number from 1 to 1,000,000,000. Its messages never repeat these variables'
+values. `deepl` with `DEEPL_AUTH_KEY` missing or empty doesn't block Pebble: transcription
+works as usual, translation is off (as if not set up), and the worker says so once at
+startup. `DEEPL_AUTH_KEY` without the provider setting is ignored. `pebble:start` passes the
+key to the worker only, never to the web server.
 
 **Two separate allowances.** The DeepL API Developer plan (as shown in the DeepL account) is a
 one-time credit of 1 million characters. Pebble's monthly limits are separate: they cap what
@@ -77,6 +88,21 @@ records consent and sends that one line, **Cancel** sends nothing.
 
 Consent carries a version; changing the dialog's wording or what is sent asks again.
 
+**Routes** (local only; no provider call):
+
+- `PUT /translation/consent` with a consent request (`provider: "deepl"`, the current
+  `consentVersion`) records consent and returns the consent status. Another version is refused
+  with `TRANSLATION_CONSENT_REQUIRED` (409); a worker without translation set up refuses with
+  `TRANSLATION_OFF` (409).
+- `DELETE /translation/consent` withdraws consent and returns the status. It is idempotent and
+  works whether or not translation is set up.
+- Both keep the Host and Origin checks. `PUT` needs `application/json` (otherwise 415
+  `UNSUPPORTED_CONTENT_TYPE`) and one plain `Content-Length` (none: 411 `LENGTH_REQUIRED`;
+  repeated, malformed or with `Transfer-Encoding`: 400 `INVALID_LENGTH`) of at most 1 KiB. The
+  worker counts the bytes it actually receives: more than 1 KiB is 413 `REQUEST_TOO_LARGE`,
+  and a body that doesn't match the declared size is 400 `INVALID_LENGTH`. Malformed bodies
+  are 422 `INVALID_REQUEST`.
+
 **Attribution** under every English line: "Translated by DeepL (deepl.com)", a link to
 `https://www.deepl.com`.
 
@@ -123,6 +149,10 @@ submitted characters (code points). A request:
 6. Makes one HTTPS call, without retries.
 7. On success stores the result only if the episode and segment still exist; a translation
    for a deleted episode is discarded, never restored.
+
+Each reservation is also recorded as an attempt (period, character count, consent version,
+status, failure code, HTTP status, times): never the text, the translation, or episode or
+segment ids, so attempts aren't tied to any episode and stay when one is deleted.
 
 Reservations are never refunded. A reservation left behind by a crash may never have been
 sent, so the counters are an upper bound on outbound attempts.

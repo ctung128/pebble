@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .errors import ConfigError
 from .pipeline.review import ReviewConfig
+from .translation.config import TranslationSettings
 
 LOOPBACK_HOST = "127.0.0.1"
 # Not 8765: that's AnkiConnect's default, and Pebble users often run Anki.
@@ -61,6 +62,8 @@ class Settings:
     mock_fail_at_chunk: int | None = None
     #: Local run nonce from `pebble:start` (PEBBLE_INSTANCE_ID), reported only by /health.
     instance_id: str | None = None
+    #: Optional DeepL line translation (ADR 0008); off unless configured.
+    translation: TranslationSettings = field(default_factory=TranslationSettings)
 
     def __post_init__(self) -> None:
         if self.instance_id is not None and not INSTANCE_ID.match(self.instance_id):
@@ -129,6 +132,7 @@ class Settings:
             "mock_delay_ms": int(num("PEBBLE_MOCK_DELAY_MS", 300)),
             "mock_fail_at_chunk": int(fail_at) if fail_at else None,
             "instance_id": env.get("PEBBLE_INSTANCE_ID") or None,
+            "translation": TranslationSettings.from_env(env),
         }
         values.update(overrides)
         return cls(**values)  # type: ignore[arg-type]

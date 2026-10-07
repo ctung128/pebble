@@ -10,15 +10,19 @@ from pathlib import Path
 
 from . import __version__
 from .config import Settings
-from .contract import CURRENT_SCHEMA_VERSION, WorkerHealth
+from .contract import CURRENT_SCHEMA_VERSION, TranslationHealth, WorkerHealth
 from .pipeline.tools import tool_version
 from .providers.base import TranscriptionProvider
 from .storage import Storage
 
 
 def check_health(
-    settings: Settings, storage: Storage, providers: list[TranscriptionProvider]
+    settings: Settings,
+    storage: Storage,
+    providers: list[TranscriptionProvider],
+    translation: TranslationHealth | None = None,
 ) -> WorkerHealth:
+    """`translation` is reported only when given (ADR 0008: once requests are implemented)."""
     ffmpeg = tool_version(settings.ffmpeg_path)
     ffprobe = tool_version(settings.ffprobe_path)
     writable = storage.root.is_dir() and os.access(storage.root, os.W_OK)
@@ -49,6 +53,7 @@ def check_health(
             },
             "providers": provider_status,
             **({"instanceId": settings.instance_id} if settings.instance_id else {}),
+            **({"translation": translation.dump()} if translation else {}),
         }
     )
 

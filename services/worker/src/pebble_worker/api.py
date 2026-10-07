@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import tempfile
 import unicodedata
@@ -17,11 +19,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import security
 from .config import Settings
-from .contract import CURRENT_SCHEMA_VERSION, Episode, Manifest
+from .contract import (
+    CURRENT_SCHEMA_VERSION,
+    Episode,
+    Manifest,
+    parse_translation_consent_request,
+)
 from .db import Database, now_iso
 from .errors import StorageAccessError
 from .health import check_health
@@ -29,6 +36,13 @@ from .jobs import ACTIVE_STATUSES, JobConflict, JobRunner, JobService, Pipeline
 from .providers.base import TranscriptionProvider
 from .providers.factory import build_provider
 from .storage import EPISODE_ID, PRIVATE_DIR, PRIVATE_FILE, Storage
+from .translation import REQUESTS_IMPLEMENTED
+from .translation.store import (
+    CONSENT_VERSION,
+    grant_consent,
+    translation_health,
+    withdraw_consent,
+)
 
 #: Accepted upload extensions → MIME type served back to the browser.
 AUDIO_EXTENSIONS: dict[str, str] = {
@@ -102,6 +116,85 @@ class UploadLimit:
         await self.app(scope, receive, send)
 
 
+#: Small JSON bodies only, by route (ADR 0008): checked before the body is read.
+JSON_BODY_LIMITS: dict[tuple[str, str], int] = {("PUT", "/translation/consent"): 1024}
+
+
+class JsonBodyLimit:
+    """
+    Translation routes accept only `application/json` bodies of a small size. The declared
+    Content-Length must be a single plain number, with no Transfer-Encoding; the body is then
+    read here, counting the bytes actually received, and refused if it exceeds the limit or
+    doesn't match the declared length. Only a body that passes reaches the route.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        limit = (
+            JSON_BODY_LIMITS.get((scope["method"], scope["path"]))
+            if scope["type"] == "http"
+            else None
+        )
+        if limit is None:
+            await self.app(scope, receive, send)
+            return
+        problem = _json_headers_problem(scope["headers"], limit)
+        if problem:
+            await _error(*problem)(scope, receive, send)
+            return
+        declared = int(dict(scope["headers"])[b"content-length"])
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            body += message.get("body", b"")
+            if len(body) > limit:
+                await _error(413, "REQUEST_TOO_LARGE", "The request is too large.")(
+                    scope, receive, send
+                )
+                return
+            if not message.get("more_body", False):
+                break
+        if len(body) != declared:
+            await _error(400, "INVALID_LENGTH", "The request's size doesn't match its body.")(
+                scope, receive, send
+            )
+            return
+        replayed = False
+
+        async def replay() -> Message:
+            nonlocal replayed
+            if replayed:
+                return await receive()
+            replayed = True
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, replay, send)
+
+
+def _json_headers_problem(
+    raw_headers: list[tuple[bytes, bytes]], limit: int
+) -> tuple[int, str, str] | None:
+    names = [name.lower() for name, _ in raw_headers]
+    headers = dict((name.lower(), value) for name, value in raw_headers)
+    media_type = headers.get(b"content-type", b"").split(b";")[0].strip().lower()
+    if media_type != b"application/json":
+        return (415, "UNSUPPORTED_CONTENT_TYPE", "Send this request as application/json.")
+    if b"transfer-encoding" in names:
+        return (400, "INVALID_LENGTH", "Send this request with a plain Content-Length.")
+    lengths = [value for name, value in raw_headers if name.lower() == b"content-length"]
+    if not lengths:
+        return (411, "LENGTH_REQUIRED", "Requests must declare their size.")
+    if len(lengths) > 1 or not re.fullmatch(rb"[0-9]{1,9}", lengths[0]):
+        return (400, "INVALID_LENGTH", "The request's declared size isn't valid.")
+    if int(lengths[0]) > limit:
+        return (413, "REQUEST_TOO_LARGE", "The request is too large.")
+    return None
+
+
 def create_app(
     settings: Settings,
     *,
@@ -137,6 +230,7 @@ def create_app(
         runner,
     )
     app.add_middleware(UploadLimit, max_bytes=settings.max_upload_bytes)
+    app.add_middleware(JsonBodyLimit)
     security.install(app, settings)
 
     @app.exception_handler(ApiError)
@@ -212,7 +306,8 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return check_health(settings, storage, [provider]).dump()
+        translation = translation_health(settings.translation, db) if REQUESTS_IMPLEMENTED else None
+        return check_health(settings, storage, [provider], translation).dump()
 
     @app.get("/episodes")
     def list_episodes() -> dict[str, Any]:
@@ -359,6 +454,38 @@ def create_app(
                 "SELECT id FROM jobs WHERE episode_id = ?", (episode_id,)
             ).fetchone()["id"]
         return job_or_404(job_id).dump()
+
+    # --- Translation consent (ADR 0008). Local only: no provider call happens here. ------
+
+    @app.put("/translation/consent")
+    async def grant_translation_consent(request: Request) -> dict[str, Any]:
+        """Accepts the current consent version, for every browser using this worker."""
+        if not settings.translation.configured:
+            raise ApiError(
+                409, "TRANSLATION_OFF", "English isn't set up for Pebble on this computer."
+            )
+        body = await request.body()
+        if len(body) > JSON_BODY_LIMITS[("PUT", "/translation/consent")]:
+            raise ApiError(413, "REQUEST_TOO_LARGE", "The request is too large.")
+        try:
+            payload = json.loads(body)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise ApiError(422, "INVALID_REQUEST", "The request isn't valid JSON.") from error
+        parsed = parse_translation_consent_request(payload)
+        if not parsed.ok or parsed.data is None:
+            raise ApiError(422, "INVALID_REQUEST", "The request is missing or has invalid fields.")
+        if parsed.data.consent_version != CONSENT_VERSION:
+            raise ApiError(
+                409,
+                "TRANSLATION_CONSENT_REQUIRED",
+                "That consent is out of date. Reload Pebble and review it again.",
+            )
+        return grant_consent(db).dump()
+
+    @app.delete("/translation/consent")
+    def withdraw_translation_consent() -> dict[str, Any]:
+        """Stops future submissions. Idempotent; saved English stays readable."""
+        return withdraw_consent(db).dump()
 
     @app.get("/jobs")
     def list_jobs() -> dict[str, Any]:

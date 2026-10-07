@@ -68,6 +68,53 @@ MIGRATIONS: list[str] = [
       created_at TEXT NOT NULL
     );
     """,
+    # 2 — optional DeepL line translation (ADR 0008). Never stores the API key, and never the
+    # Chinese source text: the cache keys on its fingerprint.
+    """
+    -- Cached English, owned by its episode (deleted with it). Older fingerprints are kept so
+    -- reverting an edit reuses its translation.
+    CREATE TABLE translations (
+      episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+      segment_id TEXT NOT NULL,
+      source_fingerprint TEXT NOT NULL CHECK (length(source_fingerprint) = 64),
+      provider TEXT NOT NULL,
+      target_lang TEXT NOT NULL,
+      cache_version INTEGER NOT NULL,
+      source_chars INTEGER NOT NULL CHECK (source_chars BETWEEN 1 AND 300),
+      text TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE (episode_id, segment_id, source_fingerprint, provider, target_lang, cache_version)
+    );
+
+    -- Pebble's own monthly limits, per UTC calendar month ("YYYY-MM"), shared by all episodes.
+    -- Counts reserved requests and submitted code points; never refunded.
+    CREATE TABLE translation_usage (
+      period TEXT PRIMARY KEY,
+      requests INTEGER NOT NULL DEFAULT 0 CHECK (requests >= 0),
+      characters INTEGER NOT NULL DEFAULT 0 CHECK (characters >= 0)
+    );
+
+    -- One row per reserved request, for honest accounting: no text, episode or segment ids.
+    -- "unknown": reserved before a crash; it may or may not have been sent.
+    CREATE TABLE translation_attempts (
+      id TEXT PRIMARY KEY,
+      period TEXT NOT NULL,
+      characters INTEGER NOT NULL CHECK (characters >= 1),
+      consent_version TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('reserved', 'succeeded', 'failed', 'unknown')),
+      failure_code TEXT,
+      http_status INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Consent shared by every browser using this worker: at most one row per provider.
+    CREATE TABLE translation_consent (
+      provider TEXT PRIMARY KEY,
+      consent_version TEXT NOT NULL,
+      granted_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { VITE_BIN, WORKER_BIN } from "./paths.mjs";
+import { VITE_BIN, WORKER_BIN, runStatePath } from "./paths.mjs";
 import { readRunState } from "./runstate.mjs";
-import { start } from "./start.mjs";
+import { start, webEnv } from "./start.mjs";
 import { INSTANCE, fakeChild, fakeSystem, health, tempDataDir, workerReport } from "./testkit.mjs";
 
 function launchable(dir, options = {}) {
@@ -166,4 +167,54 @@ test("Ctrl+C while waiting for startup stops what was started", async () => {
   } finally {
     cleanup();
   }
+});
+
+test("the translation key reaches only the worker, never the web server, run state or output", async () => {
+  const { dir, cleanup } = tempDataDir();
+  const sentinel = "pebble-test-key-SENTINEL-7d1c9e:fx"; // invented; not a real key
+  try {
+    const fake = launchable(dir, {
+      env: { PEBBLE_TRANSLATION_PROVIDER: "deepl", DEEPL_AUTH_KEY: sentinel },
+    });
+    fake.sys.httpGet = async (_port, path) =>
+      path === "/health"
+        ? { status: 200, body: JSON.stringify(health({ instanceId: INSTANCE })) }
+        : { status: 200, body: "<title>Pebble</title>" };
+    const running = start(fake.sys);
+    while (!fake.text().includes("Press Ctrl+C")) await new Promise((r) => setTimeout(r, 5));
+
+    // Worker-only credential: the worker child keeps it, the web child never gets it, and the
+    // launcher's own environment is left as it was.
+    const [worker, web] = fake.spawned;
+    assert.equal(worker.opts.env.DEEPL_AUTH_KEY, sentinel);
+    assert.equal(worker.opts.env.PEBBLE_TRANSLATION_PROVIDER, "deepl");
+    assert.ok(!("DEEPL_AUTH_KEY" in web.opts.env));
+    assert.ok(!Object.values(web.opts.env).includes(sentinel));
+    assert.equal(web.opts.env.VITE_PEBBLE_MODE, "local");
+    assert.equal(web.opts.env.VITE_PEBBLE_WORKER_URL, "http://127.0.0.1:8790");
+    assert.equal(web.opts.env.PEBBLE_DATA_DIR, dir);
+    assert.equal(fake.sys.env.DEEPL_AUTH_KEY, sentinel);
+
+    const raw = readFileSync(runStatePath(fake.sys.env), "utf8");
+    assert.ok(!raw.includes(sentinel));
+    assert.deepEqual(Object.keys(JSON.parse(raw)).sort(), [
+      "instanceId",
+      "launcherPid",
+      "startedAt",
+      "web",
+      "worker",
+    ]);
+    assert.ok(!fake.text().includes(sentinel));
+
+    fake.stop();
+    assert.equal(await running, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("webEnv drops worker-only credentials without changing its input", () => {
+  const env = { DEEPL_AUTH_KEY: "invented-sentinel", PATH: "/usr/bin", PEBBLE_PORT: "8791" };
+  assert.deepEqual(webEnv(env), { PATH: "/usr/bin", PEBBLE_PORT: "8791" });
+  assert.equal(env.DEEPL_AUTH_KEY, "invented-sentinel");
 });

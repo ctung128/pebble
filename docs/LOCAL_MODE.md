@@ -335,6 +335,7 @@ a sentence without an end time): that `PROVIDER_ERROR` is not retryable. See
 | `DELETE /episodes/{id}`            | Remove an episode and all its files                                  |
 | `GET /jobs`, `GET /jobs/{id}`      | Job status (poll while processing)                                   |
 | `POST /jobs/{id}/cancel`, `/retry` | Cancel or retry                                                      |
+| `PUT`, `DELETE` `/translation/...` | DeepL translation consent (see TRANSLATION.md); no translations yet  |
 
 Errors use `{ "error": { "code", "message", "hint"? } }`. Uploads must confirm ownership
 (`OWNERSHIP_NOT_CONFIRMED` otherwise), use a supported extension (`.m4a .mp4 .aac .mp3 .wav
