@@ -41,8 +41,9 @@ Approved models — exactly these, pinned in `services/worker/src/pebble_worker/
 - `iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch` @ `v2.0.4`
 
 Not approved: the larger Chinese-English punctuation model, any other FunASR model, speaker
-diarization, MPS support/configuration, cloud or API transcription, a translation provider,
-and model weights in Git, the public demo, or any deployment artifact.
+diarization, MPS support/configuration, cloud or API transcription, any translation provider
+other than DeepL as specified in ADR 0008, and model weights in Git, the public demo, or any
+deployment artifact.
 
 ## Hard boundaries
 
@@ -66,7 +67,12 @@ and model weights in Git, the public demo, or any deployment artifact.
   raw units, their timestamp pairs and its punctuated output (ADR 0007); fail rather than
   guess. Review flags are not
   confidence and never rewrite text. English translation stays hidden in local real-ASR mode
-  until a real provider exists (M1-C).
+  until the DeepL translation of ADR 0008 / `docs/TRANSLATION.md` ships.
+- DeepL translation (ADR 0008): design approved, not implemented yet. Off by default, worker
+  only. The worker reads `DEEPL_AUTH_KEY` from its environment only to authenticate requests;
+  it never returns, prints, logs, or persists the key. One displayed line per explicit tap,
+  never batch, background or on export; worker-enforced consent and limits. No live DeepL
+  call without separate approval.
 - Model weights live only in `~/.pebble/models` (downloaded by `models pull`); never commit,
   bundle or serve them. Smoke-test audio and outputs stay out of the repository.
 - Mock transcripts (`provenance.kind === "mock"`) are learning-locked: no pinyin, translation,

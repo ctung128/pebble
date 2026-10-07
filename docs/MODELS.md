@@ -38,7 +38,8 @@ Not approved:
 - speaker diarization
 - MPS support or configuration (the worker is CPU-only)
 - cloud or API transcription
-- a translation provider
+- a translation provider (other than DeepL line translation,
+  [ADR 0008](adr/0008-optional-deepl-line-translation.md))
 - model weights in Git, the public demo, or any deployment artifact
 
 ## Selected models

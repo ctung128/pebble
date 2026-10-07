@@ -15,8 +15,8 @@ over `127.0.0.1` only. Nothing is uploaded to the internet.
 > - With the default `npm run worker`, transcripts are **mock placeholder text** (such as
 >   `（模拟转写）第 1-1 段`), not recognized speech. The mock never listens to the audio.
 > - With `npm run worker:funasr`, the local app creates real transcripts. Pinyin, editing,
->   saving and Anki export work; English stays hidden until a local translation provider
->   exists.
+>   saving and Anki export work; English stays hidden until the optional DeepL line
+>   translation ([TRANSLATION.md](TRANSLATION.md); designed, not implemented yet) ships.
 
 Pebble starts at a local audio file you choose. It does not fetch, download or scrape audio
 from URLs or apps, and it does not work around any platform's content protections.

@@ -98,3 +98,5 @@ processing, URL ingestion, platform integrations.
 - [ADR 0004 — Learner data is browser-owned for now](adr/0004-browser-owned-learning-store.md)
 - [ADR 0005 — Job pipeline and failure model](adr/0005-job-pipeline-and-failure-model.md)
 - [ADR 0006 — FunASR provider and sentence-level normalization](adr/0006-funasr-provider-and-sentence-normalization.md)
+- [ADR 0007 — Lines from FunASR recognition units](adr/0007-lines-from-funasr-recognition-units.md)
+- [ADR 0008 — Optional English line translation with DeepL](adr/0008-optional-deepl-line-translation.md)
