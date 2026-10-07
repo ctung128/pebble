@@ -1,4 +1,7 @@
-/** Listening position: saved conservatively, offered back only on request. Invented content. */
+/**
+ * Listening position: saved conservatively; offered back on request in local mode, restored
+ * (paused) on arrival in the demo. Invented content.
+ */
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../../test/fixtures.tsx";
@@ -141,7 +144,10 @@ describe("saving the listening position", () => {
   });
 });
 
-describe("resume controls", () => {
+describe("resume controls (local mode)", () => {
+  beforeEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", true));
+  afterEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", false));
+
   it("offers Resume and Start over for a saved position, without playing on load", async () => {
     const play = vi.mocked(HTMLMediaElement.prototype.play);
     play.mockClear();
@@ -207,5 +213,36 @@ describe("resume controls", () => {
   it("stays out of the way when arriving to a specific line", async () => {
     await renderEpisode(await storeWith(record()), "/?segment=seg-2");
     expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
+  });
+});
+
+describe("restoring the position (demo)", () => {
+  const seekbar = () => screen.getByRole("slider", { name: "Seek" });
+
+  it("opens paused where the visitor left off, with no resume controls", async () => {
+    const play = vi.mocked(HTMLMediaElement.prototype.play);
+    play.mockClear();
+    await renderEpisode(await storeWith(record()));
+    expect(seekbar()).toHaveAttribute("aria-valuetext", "0:06 of 0:09");
+    // The transcript follows the restored line.
+    const scrolled = vi.mocked(Element.prototype.scrollIntoView).mock.contexts.at(-1);
+    expect(scrolled).toHaveAttribute("data-segment-index", "2");
+    expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resume|Start over/ })).not.toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["nothing saved", undefined],
+    ["a position under 5 s", record({ positionMs: 4_000 })],
+    ["a finished episode", record({ positionMs: 9_000, finishedAt: "2026-10-05T12:05:00.000Z" })],
+  ])("starts from the beginning for %s", async (_, saved) => {
+    await renderEpisode(saved ? await storeWith(saved) : undefined);
+    expect(seekbar()).toHaveAttribute("aria-valuetext", "0:00 of 0:09");
+  });
+
+  it("leaves a cued line alone", async () => {
+    await renderEpisode(await storeWith(record()), "/?segment=seg-2");
+    expect(seekbar()).toHaveAttribute("aria-valuetext", "0:03 of 0:09");
   });
 });

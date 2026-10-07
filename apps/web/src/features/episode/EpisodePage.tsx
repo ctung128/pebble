@@ -460,12 +460,13 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   // Arriving from a learning item (#/episodes/:id?segment=…) cues up that line.
   const [searchParams] = useSearchParams();
   const cueSegmentId = searchParams.get("segment");
-  // Resume controls: only for a saved position worth resuming (or a real finish), never when
-  // the learner arrived to cue a specific line, and gone once playback starts. Nothing here
-  // plays on its own; each control acts only when pressed.
+  // Resume controls (local mode): only for a saved position worth resuming (or a real
+  // finish), never when the learner arrived to cue a specific line, and gone once playback
+  // starts. Nothing here plays on its own; each control acts only when pressed.
   const saved = learning.playbackFor(episode.id);
   const listening = listeningState(saved, episode.durationMs);
-  const showResume = !startedHere && !cueSegmentId && listening !== "not-started";
+  const showResume =
+    __PEBBLE_LOCAL__ && !startedHere && !cueSegmentId && listening !== "not-started";
   const startOver = () => {
     learning.clearPlayback(episode.id);
     resume();
@@ -475,6 +476,17 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     const segment = segments.find((s) => s.id === cueSegmentId);
     if (segment) seek(segment.startMs);
   }, [cueSegmentId, segments, seek]);
+  // The demo has no resume controls: the player just opens, paused, where the visitor left
+  // off, with the transcript following that line. Once per visit (the saved position may load
+  // a moment after the page), and never over a cued line or playback that has already started.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (__PEBBLE_LOCAL__ || restored.current || cueSegmentId || startedHere || !saved) return;
+    restored.current = true;
+    if (listening !== "in-progress") return;
+    resume();
+    seek(saved.positionMs);
+  }, [saved, listening, cueSegmentId, startedHere, resume, seek]);
 
   return (
     <article className={styles.page}>
@@ -493,40 +505,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       <BackLink />
 
       <header className={styles.header}>
-        <EpisodeTitle title={title} className={styles.title} onRename={onRename} />
         <div className={styles.titleRow}>
+          <EpisodeTitle title={title} className={styles.title} onRename={onRename} />
           <div className={styles.toolbar}>
-            {/* Resume sits with the display tools, first: it's the likeliest next step. */}
-            {showResume && saved ? (
-              <div className={styles.resumeBar} role="group" aria-label="Listening progress">
-                {listening === "in-progress" ? (
-                  <>
-                    <button
-                      type="button"
-                      className={styles.resumeButton}
-                      onClick={() => {
-                        resume();
-                        seek(saved.positionMs, { play: true });
-                      }}
-                    >
-                      <Icon name="play" size={16} />
-                      Resume {formatTime(saved.positionMs)}
-                    </button>
-                    <button type="button" className={styles.textButton} onClick={startOver}>
-                      Start over
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className={styles.finished}>Finished</span>
-                    <span aria-hidden="true">·</span>
-                    <button type="button" className={styles.textButton} onClick={startOver}>
-                      Listen again
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : null}
             {englishToggle ? (
               <button
                 type="button"
@@ -543,6 +524,36 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             <MoreMenu label="Transcript actions" items={menuItems} triggerRef={moreButton} />
           </div>
         </div>
+        {showResume && saved ? (
+          <div className={styles.resumeBar} role="group" aria-label="Listening progress">
+            {listening === "in-progress" ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.resumeButton}
+                  onClick={() => {
+                    resume();
+                    seek(saved.positionMs, { play: true });
+                  }}
+                >
+                  <Icon name="play" size={16} />
+                  Resume {formatTime(saved.positionMs)}
+                </button>
+                <button type="button" className={styles.textButton} onClick={startOver}>
+                  Start over
+                </button>
+              </>
+            ) : (
+              <>
+                <span className={styles.finished}>Finished</span>
+                <span aria-hidden="true">·</span>
+                <button type="button" className={styles.textButton} onClick={startOver}>
+                  Listen again
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
       </header>
 
       <section aria-labelledby="transcript-heading">

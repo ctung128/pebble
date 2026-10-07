@@ -21,7 +21,7 @@
   text-underline-offset: 2px;
 }
 
-/* --- Header: title, then the Chinese title with the display toggles on the same row --- */
+/* --- Header: the title with the display tools on the same row, then resume (local) --- */
 
 .header {
   display: grid;
@@ -34,21 +34,27 @@
   line-height: 1.15;
 }
 
-/* Breathing room under the title. */
 .titleRow {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-4) var(--space-3);
-  margin-top: var(--space-3);
+  align-items: flex-start;
+  gap: var(--space-3) var(--space-4);
 }
 
+/* The title (or its rename form) takes the room; a long one wraps beside the tools. */
+.titleRow > :first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Right-aligned, centred on the title's first line (40px controls on a ~48px line). */
 .toolbar {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
+  margin-top: var(--space-1);
   margin-left: auto;
 }
 
@@ -118,17 +124,12 @@
 
 /* --- Listening progress: resume a saved position, or start over --- */
 
-/* Inside the toolbar: resume on the left, the display tools pushed to the right. */
-.toolbar:has(> .resumeBar) {
-  flex-basis: 100%;
-}
-
 .resumeBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
-  margin-right: auto;
+  margin-top: var(--space-2);
   font-size: var(--size-body-sm);
   color: var(--text-secondary);
 }
@@ -302,6 +303,14 @@
 
 @media (max-width: 560px) {
   /* Start the toolbar at the left edge, under the title. */
+  .titleRow {
+    flex-wrap: wrap;
+  }
+
+  .titleRow > :first-child {
+    flex-basis: 100%;
+  }
+
   .toolbar {
     justify-content: flex-start;
     margin-left: 0;
