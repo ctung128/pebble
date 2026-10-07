@@ -420,11 +420,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       <header className={styles.header}>
         <EpisodeTitle title={title} className={styles.title} onRename={onRename} />
         <div className={styles.titleRow}>
-          {episode.titleZh ? (
-            <p className={styles.titleZh} lang={transcript.language}>
-              {episode.titleZh}
-            </p>
-          ) : null}
           <div className={styles.toolbar}>
             {/* Resume sits with the display tools, first: it's the likeliest next step. */}
             {showResume && saved ? (
@@ -535,7 +530,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           </p>
         ) : null}
         {flagged.size > 0 ? (
-          <p id={REVIEW_HELP_ID} className={styles.help}>
+          <p id={REVIEW_HELP_ID} className={`${styles.help} ${styles.reviewHelp}`}>
             <span className={styles.reviewSample}>May need review</span> Speech transcripts can
             occasionally mishear accents, names, or fast conversation. Listen again or edit this
             line if it looks wrong.

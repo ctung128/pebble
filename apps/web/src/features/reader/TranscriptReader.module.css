@@ -327,6 +327,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The "May need review" tag is hidden on phones to keep lines uncluttered. */
+  .reviewTag {
+    display: none;
+  }
+
   .play {
     grid-column: 1;
     grid-template-columns: 1fr;

@@ -34,20 +34,13 @@
   line-height: 1.15;
 }
 
-/* Breathing room under the title, and between the Chinese title and the toolbar when they wrap. */
+/* Breathing room under the title. */
 .titleRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4) var(--space-3);
   margin-top: var(--space-3);
-}
-
-.titleZh {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--size-display-sm);
-  color: var(--text-secondary);
 }
 
 .toolbar {
@@ -324,7 +317,7 @@
 }
 
 @media (max-width: 560px) {
-  /* The toolbar always wraps under the Chinese title here: start it at the left edge. */
+  /* Start the toolbar at the left edge, under the title. */
   .toolbar {
     justify-content: flex-start;
     margin-left: 0;
@@ -337,6 +330,11 @@
   /* Phones: no resume controls (play starts from the beginning, or tap a line), and the
      display tools stay on one line, down to 320px wide. */
   .resumeBar {
+    display: none;
+  }
+
+  /* No "May need review" tags on phones (TranscriptReader), so no explanation of them either. */
+  .reviewHelp {
     display: none;
   }
 
