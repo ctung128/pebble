@@ -4,6 +4,18 @@ import { WorkerHealthSchema, type WorkerHealth } from "./health.ts";
 import { IllustrativeUncertaintySchema, type IllustrativeUncertainty } from "./illustrative.ts";
 import { JobSchema, type Job } from "./job.ts";
 import { LearningItemSchema, type LearningItem } from "./learningItem.ts";
+import {
+  EpisodeTranslationsSchema,
+  TranslationConsentRequestSchema,
+  TranslationConsentSchema,
+  TranslationRequestSchema,
+  TranslationResultSchema,
+  type EpisodeTranslations,
+  type TranslationConsent,
+  type TranslationConsentRequest,
+  type TranslationRequest,
+  type TranslationResult,
+} from "./lineTranslation.ts";
 import { ManifestSchema, type Manifest } from "./manifest.ts";
 import { DemoTranslationsSchema, type DemoTranslations } from "./translations.ts";
 import { TranscriptSchema, type Transcript } from "./transcript.ts";
@@ -75,3 +87,20 @@ export const parseJob = (payload: unknown): ParseResult<Job> =>
 
 export const parseWorkerHealth = (payload: unknown): ParseResult<WorkerHealth> =>
   parseWith(WorkerHealthSchema, payload, "Worker health");
+
+export const parseTranslationRequest = (payload: unknown): ParseResult<TranslationRequest> =>
+  parseWith(TranslationRequestSchema, payload, "Translation request");
+
+export const parseTranslationResult = (payload: unknown): ParseResult<TranslationResult> =>
+  parseWith(TranslationResultSchema, payload, "Translation");
+
+export const parseEpisodeTranslations = (payload: unknown): ParseResult<EpisodeTranslations> =>
+  parseWith(EpisodeTranslationsSchema, payload, "Episode translations");
+
+export const parseTranslationConsentRequest = (
+  payload: unknown,
+): ParseResult<TranslationConsentRequest> =>
+  parseWith(TranslationConsentRequestSchema, payload, "Translation consent request");
+
+export const parseTranslationConsent = (payload: unknown): ParseResult<TranslationConsent> =>
+  parseWith(TranslationConsentSchema, payload, "Translation consent");

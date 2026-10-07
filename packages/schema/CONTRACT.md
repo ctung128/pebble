@@ -7,6 +7,9 @@ worker. Both are tested against `examples/`.
 ## Versioning
 
 - Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.7`.
+  The 1.8 translation shapes below are defined and validated, but workers keep advertising
+  `1.7` until the translation endpoints exist; the app gates translation on health's
+  `translation` field, never on the minor version alone.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -15,6 +18,11 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.8 (defined, not yet advertised)** — Optional DeepL line translation
+  ([docs/TRANSLATION.md](../../docs/TRANSLATION.md), ADR 0008). Worker health may include
+  `translation` (see [Translation](#translation-18)); absent means translation is off. New
+  payloads: translation request, translation result, episode translations (cached English),
+  consent request and consent. None carries the API key or a provider's own error text.
 - **1.7** — Jobs may include `durationMs` (the audio's measured length, once known) and
   `lineCount` (transcript lines, completed jobs only). Both are omitted while unknown, never
   `0`. The local worker adds `PATCH /episodes/{id}` with `{ "title" }` to rename an episode's
@@ -187,10 +195,56 @@ The worker lists exactly the provider it is configured with. `state` and `hint` 
 `instanceId?` is 1.6 (present only when started by `pebble:start`). Never contains filesystem
 paths, except the optional `dataDir.path` (1.3).
 
+## Translation (1.8)
+
+Shared rules for the local worker and app. Text is never trimmed or rewritten.
+
+Requests carry `schemaVersion` like every other payload: any `1.x` is accepted, a missing or
+malformed value is `INVALID_PAYLOAD`, another major is `UNSUPPORTED_VERSION`. The existing
+rename body (`PATCH /episodes/{id}`) is unchanged and carries none.
+
+**Chinese line** (`text` in a request): checked in this order, first failure reported —
+no unpaired surrogates; no control characters (Unicode `Cc`); 1–300 Unicode **code points**;
+already NFC-normalized; contains at least one Han ideograph (U+3400–4DBF, U+4E00–9FFF,
+U+F900–FAFF, U+20000–2FA1F, U+30000–323AF). Shared cases: `examples/translation-text.json`.
+
+**English** (`text` in a result or cache row): not empty after trimming, at most 2,000 code
+points, no unpaired surrogates, no control characters except tab, line feed and carriage return.
+
+**Fingerprint:** SHA-256 of the exact submitted text's UTF-8 bytes, 64 lowercase hex characters.
+
+| Payload              | Fields                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Health `translation` | `provider: "deepl"`, `configured`, `consent`, `consentVersion`, `newRequests`, `limits`                                                                                              |
+| `limits`             | `period` (`YYYY-MM`, UTC), `requestsUsed`, `requestLimit` (> 0), `charactersUsed`, `characterLimit` (> 0)                                                                            |
+| Translation request  | `schemaVersion`, `episodeId`, `segmentId`, `text`                                                                                                                                    |
+| Translation result   | `schemaVersion`, `episodeId`, `segmentId`, `fingerprint`, `provider`, `targetLanguage: "EN-US"`, `text`, `source: "cache" \| "provider"`, `createdAt`                                |
+| Episode translations | `schemaVersion`, `episodeId`, `provider`, `targetLanguage`, `cacheVersion: 1`, `translations[]` of `{ segmentId, fingerprint, text, createdAt }`, unique per segment and fingerprint |
+| Consent request      | `schemaVersion`, `provider`, `consentVersion`                                                                                                                                        |
+| Consent              | `schemaVersion`, `provider`, `status: "current" \| "required"`, `consentVersion`, `grantedAt` (set exactly when current)                                                             |
+
+**Health readiness** — separate facts, which must agree:
+
+| `configured` | `consent`        | `newRequests`                                                            |
+| ------------ | ---------------- | ------------------------------------------------------------------------ |
+| `false`      | `not_configured` | `off`                                                                    |
+| `true`       | `required`       | `consent_required`                                                       |
+| `true`       | `current`        | `local_limit_reached` if either used count ≥ its limit, else `available` |
+
+Reading cached English depends on none of them.
+
+**Error codes** for translation routes: `TRANSLATION_OFF`, `TRANSLATION_CONSENT_REQUIRED`,
+`TRANSLATION_LOCAL_LIMIT`, `TRANSLATION_RATE_LIMITED`, `TRANSLATION_PROVIDER_QUOTA`,
+`TRANSLATION_KEY_REJECTED`, `TRANSLATION_REQUEST_REJECTED`, `TRANSLATION_UNAVAILABLE`,
+`TRANSLATION_INVALID_TEXT`, `TRANSLATION_NOT_ALLOWED`, `EPISODE_NOT_FOUND`,
+`SEGMENT_NOT_FOUND`, in the usual `{ "error": { "code", "message", "hint"? } }` shape with fixed
+messages ([docs/TRANSLATION.md](../../docs/TRANSLATION.md#errors)).
+
 ## Validation in two languages
 
 The worker validates with Pydantic (`services/worker/src/pebble_worker/contract.py`) for the
-payloads it produces or reads: manifest/episode, transcript, job and worker health. Both
+payloads it produces or reads: manifest/episode, transcript, job, worker health and the 1.8
+translation payloads. Both
 validators run against every file in `examples/`, and the expected code, path and message for
 each invalid example live in `examples/expectations.json`. Browser-only payloads
 (translations, illustrative uncertainty, corrections, learning items) are validated by Zod

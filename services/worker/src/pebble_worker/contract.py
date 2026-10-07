@@ -9,6 +9,7 @@ messages, so both sides are tested against the shared examples in packages/schem
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -315,8 +316,182 @@ class DataDir(Model):
     hint: NonEmptyStr | None
 
 
+# --- Optional DeepL line translation (1.8; docs/TRANSLATION.md) ----------------------------
+#
+# None of these shapes carries the API key or a provider's own error text.
+
+TRANSLATION_PROVIDER = "deepl"
+TRANSLATION_TARGET_LANGUAGE = "EN-US"
+TRANSLATION_CACHE_VERSION = 1
+MAX_TRANSLATION_SOURCE_CODE_POINTS = 300
+MAX_TRANSLATION_RESULT_CODE_POINTS = 2000
+
+#: Han ideographs that count as "Chinese" (same ranges as lineTranslation.ts).
+_HAN_RANGES = (
+    (0x3400, 0x4DBF),
+    (0x4E00, 0x9FFF),
+    (0xF900, 0xFAFF),
+    (0x20000, 0x2FA1F),
+    (0x30000, 0x323AF),
+)
+
+TRANSLATION_TEXT_MESSAGES = {
+    "surrogate": "text must not contain unpaired surrogates",
+    "control": "text must not contain control characters",
+    "length": f"text must be 1 to {MAX_TRANSLATION_SOURCE_CODE_POINTS} Unicode code points",
+    "nfc": "text must be NFC-normalized",
+    "chinese": "text must contain a Chinese character",
+}
+
+
+def _is_han(cp: int) -> bool:
+    return any(low <= cp <= high for low, high in _HAN_RANGES)
+
+
+def _is_surrogate(cp: int) -> bool:
+    return 0xD800 <= cp <= 0xDFFF
+
+
+def _is_control(cp: int) -> bool:
+    """Unicode general category Cc: C0, DEL and C1."""
+    return cp <= 0x1F or 0x7F <= cp <= 0x9F
+
+
+def translation_text_problem(text: str) -> str | None:
+    """
+    The first rule a Chinese line breaks, in this order: surrogate, control, length, nfc,
+    chinese. None means it may be sent exactly as given (no trimming or other changes).
+    """
+    cps = [ord(char) for char in text]
+    if any(_is_surrogate(cp) for cp in cps):
+        return "surrogate"
+    if any(_is_control(cp) for cp in cps):
+        return "control"
+    if not 1 <= len(cps) <= MAX_TRANSLATION_SOURCE_CODE_POINTS:
+        return "length"
+    if unicodedata.normalize("NFC", text) != text:
+        return "nfc"
+    if not any(_is_han(cp) for cp in cps):
+        return "chinese"
+    return None
+
+
+def _translation_source(value: str) -> str:
+    problem = translation_text_problem(value)
+    if problem:
+        raise ValueError(TRANSLATION_TEXT_MESSAGES[problem])
+    return value
+
+
+def _translated_text(value: str) -> str:
+    cps = [ord(char) for char in value]
+    if not value.strip():
+        raise ValueError("text must not be empty")
+    if len(cps) > MAX_TRANSLATION_RESULT_CODE_POINTS:
+        raise ValueError(
+            f"text must be at most {MAX_TRANSLATION_RESULT_CODE_POINTS} Unicode code points"
+        )
+    if any(_is_surrogate(cp) for cp in cps):
+        raise ValueError("text must not contain unpaired surrogates")
+    if any(_is_control(cp) and cp not in (0x09, 0x0A, 0x0D) for cp in cps):
+        raise ValueError("text must not contain control characters")
+    return value
+
+
+TranslationSourceText = Annotated[str, AfterValidator(_translation_source)]
+TranslatedText = Annotated[str, AfterValidator(_translated_text)]
+SourceFingerprint = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+ConsentVersion = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9.-]{0,63}$")]
+TranslationProvider = Literal["deepl"]
+TargetLanguage = Literal["EN-US"]
+
+#: Fixed error codes for translation routes; messages are fixed copy (TRANSLATION.md).
+TranslationErrorCode = Literal[
+    "TRANSLATION_OFF",
+    "TRANSLATION_CONSENT_REQUIRED",
+    "TRANSLATION_LOCAL_LIMIT",
+    "TRANSLATION_RATE_LIMITED",
+    "TRANSLATION_PROVIDER_QUOTA",
+    "TRANSLATION_KEY_REJECTED",
+    "TRANSLATION_REQUEST_REJECTED",
+    "TRANSLATION_UNAVAILABLE",
+    "TRANSLATION_INVALID_TEXT",
+    "TRANSLATION_NOT_ALLOWED",
+    "EPISODE_NOT_FOUND",
+    "SEGMENT_NOT_FOUND",
+]
+
+
+class TranslationLimits(Model):
+    period: Annotated[str, Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
+    requests_used: Annotated[int, Field(ge=0)]
+    request_limit: Annotated[int, Field(gt=0)]
+    characters_used: Annotated[int, Field(ge=0)]
+    character_limit: Annotated[int, Field(gt=0)]
+
+
+class TranslationHealth(Model):
+    """Separate facts: configured, consent, new-request availability. Cache reads need none."""
+
+    provider: TranslationProvider
+    configured: bool
+    consent: Literal["current", "required", "not_configured"]
+    consent_version: ConsentVersion
+    new_requests: Literal["available", "consent_required", "local_limit_reached", "off"]
+    limits: TranslationLimits
+
+
+class TranslationRequest(Model):
+    schema_version: SchemaVersion
+    episode_id: Id
+    segment_id: NonEmptyStr
+    text: TranslationSourceText
+
+
+class TranslationResult(Model):
+    schema_version: SchemaVersion
+    episode_id: Id
+    segment_id: NonEmptyStr
+    fingerprint: SourceFingerprint
+    provider: TranslationProvider
+    target_language: TargetLanguage
+    text: TranslatedText
+    source: Literal["cache", "provider"]
+    created_at: IsoDateTime
+
+
+class CachedTranslation(Model):
+    segment_id: NonEmptyStr
+    fingerprint: SourceFingerprint
+    text: TranslatedText
+    created_at: IsoDateTime
+
+
+class EpisodeTranslations(Model):
+    schema_version: SchemaVersion
+    episode_id: Id
+    provider: TranslationProvider
+    target_language: TargetLanguage
+    cache_version: Literal[1]
+    translations: list[CachedTranslation]
+
+
+class TranslationConsentRequest(Model):
+    schema_version: SchemaVersion
+    provider: TranslationProvider
+    consent_version: ConsentVersion
+
+
+class TranslationConsent(Model):
+    schema_version: SchemaVersion
+    provider: TranslationProvider
+    status: Literal["current", "required"]
+    consent_version: ConsentVersion
+    granted_at: IsoDateTime | None
+
+
 class WorkerHealth(Model):
-    _omit_when_none = frozenset({"data_dir", "instance_id"})
+    _omit_when_none = frozenset({"data_dir", "instance_id", "translation"})
     schema_version: SchemaVersion
     worker_version: NonEmptyStr
     status: Literal["ok", "degraded"]
@@ -326,6 +501,8 @@ class WorkerHealth(Model):
     providers: list[ProviderStatus]
     #: 1.6: the run nonce of a worker started by `npm run pebble:start` (local lifecycle only).
     instance_id: Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")] | None = None
+    #: 1.8: optional DeepL line translation; absent (older workers) means translation is off.
+    translation: TranslationHealth | None = None
 
 
 # --- Cross-field rules (same paths and messages as the Zod refinements) --------------------
@@ -382,6 +559,68 @@ def _job_issues(job: Job) -> list[Issue]:
             Issue("failure", "failure must be set exactly when the job failed or was cancelled")
         )
     return issues
+
+
+def _health_issues(health: WorkerHealth) -> list[Issue]:
+    t = health.translation
+    if t is None:
+        return []
+    at_limit = (
+        t.limits.requests_used >= t.limits.request_limit
+        or t.limits.characters_used >= t.limits.character_limit
+    )
+    if not t.configured:
+        issues = []
+        if t.consent != "not_configured":
+            issues.append(
+                Issue("translation.consent", "consent must be not_configured when not configured")
+            )
+        if t.new_requests != "off":
+            issues.append(
+                Issue("translation.newRequests", "newRequests must be off when not configured")
+            )
+        return issues
+    if t.consent == "not_configured":
+        return [Issue("translation.consent", "consent must be current or required when configured")]
+    expected = (
+        "consent_required"
+        if t.consent == "required"
+        else "local_limit_reached"
+        if at_limit
+        else "available"
+    )
+    if t.new_requests != expected:
+        return [Issue("translation.newRequests", f"newRequests must be {expected} here")]
+    return []
+
+
+def _episode_translations_issues(payload: EpisodeTranslations) -> list[Issue]:
+    issues: list[Issue] = []
+    seen: set[tuple[str, str]] = set()
+    for i, row in enumerate(payload.translations):
+        key = (row.segment_id, row.fingerprint)
+        if key in seen:
+            issues.append(
+                Issue(
+                    f"translations.{i}.fingerprint",
+                    "duplicate translation for this segment and fingerprint",
+                )
+            )
+        seen.add(key)
+    return issues
+
+
+def _consent_issues(consent: TranslationConsent) -> list[Issue]:
+    if (consent.status == "current") != (consent.granted_at is not None):
+        return [Issue("grantedAt", "grantedAt must be set exactly when consent is current")]
+    return []
+
+
+def translation_availability(translation: TranslationHealth | None) -> tuple[bool, str]:
+    """(configured, newRequests); an older worker without the field means off."""
+    if translation is None:
+        return False, "off"
+    return translation.configured, translation.new_requests
 
 
 # --- Parsing ------------------------------------------------------------------------------
@@ -448,7 +687,29 @@ def parse_job(payload: Any) -> ParseResult[Job]:
 
 
 def parse_worker_health(payload: Any) -> ParseResult[WorkerHealth]:
-    return _parse(WorkerHealth, payload, "Worker health")
+    return _parse(WorkerHealth, payload, "Worker health", _health_issues)
+
+
+def parse_translation_request(payload: Any) -> ParseResult[TranslationRequest]:
+    return _parse(TranslationRequest, payload, "Translation request")
+
+
+def parse_translation_result(payload: Any) -> ParseResult[TranslationResult]:
+    return _parse(TranslationResult, payload, "Translation")
+
+
+def parse_episode_translations(payload: Any) -> ParseResult[EpisodeTranslations]:
+    return _parse(
+        EpisodeTranslations, payload, "Episode translations", _episode_translations_issues
+    )
+
+
+def parse_translation_consent_request(payload: Any) -> ParseResult[TranslationConsentRequest]:
+    return _parse(TranslationConsentRequest, payload, "Translation consent request")
+
+
+def parse_translation_consent(payload: Any) -> ParseResult[TranslationConsent]:
+    return _parse(TranslationConsent, payload, "Translation consent", _consent_issues)
 
 
 def require_valid[T](result: ParseResult[T]) -> T:

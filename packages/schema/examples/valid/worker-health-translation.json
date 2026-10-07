@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "1.8",
+  "workerVersion": "0.1.0",
+  "status": "ok",
+  "dataDirWritable": true,
+  "dataDir": {
+    "path": "~/.pebble",
+    "writable": true,
+    "hint": null
+  },
+  "tools": {
+    "ffmpeg": {
+      "available": true,
+      "version": "8.0"
+    },
+    "ffprobe": {
+      "available": true,
+      "version": "8.0"
+    }
+  },
+  "providers": [
+    {
+      "id": "funasr",
+      "kind": "asr",
+      "available": true,
+      "detail": "Ready.",
+      "state": "ready"
+    }
+  ],
+  "translation": {
+    "provider": "deepl",
+    "configured": true,
+    "consent": "current",
+    "consentVersion": "deepl-2026-10",
+    "newRequests": "available",
+    "limits": {
+      "period": "2026-10",
+      "requestsUsed": 12,
+      "requestLimit": 300,
+      "charactersUsed": 240,
+      "characterLimit": 30000
+    }
+  }
+}

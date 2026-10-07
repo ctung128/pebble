@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.8",
+  "episodeId": "example-001",
+  "segmentId": "seg-0001",
+  "fingerprint": "665d86b5fa8e1514d583dee4c57f269301aa26370de440255e4c00f15c848895",
+  "provider": "deepl",
+  "targetLanguage": "EN-US",
+  "text": "The weather is nice today,",
+  "source": "provider",
+  "createdAt": "2026-10-06T12:00:00Z"
+}

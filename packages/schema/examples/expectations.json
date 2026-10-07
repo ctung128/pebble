@@ -90,6 +90,41 @@
       "code": "INVALID_PAYLOAD",
       "path": "providers.0.state",
       "message": "."
+    },
+    "worker-health-translation-contradictory.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "translation.newRequests",
+      "message": "must be off when not configured"
+    },
+    "translation-request-too-long.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "text",
+      "message": "1 to 300 Unicode code points"
+    },
+    "translation-request-not-nfc.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "text",
+      "message": "NFC-normalized"
+    },
+    "translation-result-empty-text.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "text",
+      "message": "must not be empty"
+    },
+    "episode-translations-duplicate.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "translations.1.fingerprint",
+      "message": "duplicate translation"
+    },
+    "translation-consent-request-unknown-provider.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "provider",
+      "message": "."
+    },
+    "translation-consent-current-without-granted-at.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "grantedAt",
+      "message": "exactly when consent is current"
     }
   }
 }

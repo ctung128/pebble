@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   parseCorrection,
   parseDemoTranslations,
+  parseEpisodeTranslations,
   parseIllustrativeUncertainty,
   parseJob,
   parseLearningItem,
   parseManifest,
   parseTranscript,
+  parseTranslationConsent,
+  parseTranslationConsentRequest,
+  parseTranslationRequest,
+  parseTranslationResult,
   parseWorkerHealth,
   type ContractErrorCode,
   type ParseResult,
@@ -25,6 +30,12 @@ const PARSERS: [prefix: string, parse: (payload: unknown) => ParseResult<unknown
   ["learning-item", parseLearningItem],
   ["job", parseJob],
   ["worker-health", parseWorkerHealth],
+  // More specific prefixes first: "translation-consent-request" before "translation-consent".
+  ["translation-consent-request", parseTranslationConsentRequest],
+  ["translation-consent", parseTranslationConsent],
+  ["translation-request", parseTranslationRequest],
+  ["translation-result", parseTranslationResult],
+  ["episode-translations", parseEpisodeTranslations],
 ];
 const parserFor = (file: string) => {
   const entry = PARSERS.find(([prefix]) => file.startsWith(prefix));
