@@ -151,8 +151,8 @@ Consent carries a version; changing the dialog's wording or what is sent asks ag
 
 ## Translation settings
 
-Local mode only: the page "English translation", linked from the sidebar ("Translation") when the
-worker reports translation. Status by readiness:
+Local mode only: the page "English translation", linked from the episode page's ⋯ menu
+("Translation settings") when the worker reports translation; it isn't in the sidebar. Status by readiness:
 
 | Readiness              | Shown                                                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -186,7 +186,7 @@ worker reports translation. Status by readiness:
   If none matches, the newest row for that line (latest `created_at`, then highest row id) is
   shown as "English for an earlier version of this line" with **Translate again**, which is
   an explicit request. Reverting an edit makes its earlier translation current again.
-- **Show saved English** (beside the pinyin toggle) reveals current cached English only; it
+- **Show saved English** (in the episode's ⋯ menu, after the pinyin toggle) reveals current cached English only; it
   never requests anything.
 - Cached English stays readable when translation is off, consent is withdrawn or a limit is
   reached.

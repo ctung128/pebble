@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Transcript } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
+import { MoreMenu, type MoreMenuItem } from "../../components/MoreMenu.tsx";
 import { ShortcutSlot } from "../../components/ShellSlot.tsx";
 import { StatusView } from "../../components/StatusView.tsx";
 import {
@@ -41,11 +42,7 @@ import { useWorkerLineTranslations } from "../translation/useWorkerLineTranslati
 import { useWorkerTranslation } from "../translation/workerTranslation.ts";
 import { deriveReviewHints } from "../uncertainty/reviewHints.ts";
 import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
-import {
-  ABOUT_MACHINE_TRANSCRIPT,
-  ABOUT_PINYIN,
-  transcriptCapabilities,
-} from "./transcriptCapabilities.ts";
+import { transcriptCapabilities } from "./transcriptCapabilities.ts";
 import styles from "./EpisodePage.module.css";
 
 const REVIEW_HELP_ID = "review-help";
@@ -140,7 +137,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [originalShown, setOriginalShown] = useState<ReadonlySet<string>>(new Set());
   const [confirmUnsaveId, setConfirmUnsaveId] = useState<string | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
   // The title can change here (rename, local mode); everything else about the episode can't.
   const [title, setTitle] = useState(episode.title);
   const renamer = useEpisodeRename();
@@ -151,7 +147,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   // "Copy transcript": built only on click, kept only for the manual-copy fallback.
   const transcriptCopy = useCopyText();
   const [copiedTranscript, setCopiedTranscript] = useState("");
-  const copyTranscriptButton = useRef<HTMLButtonElement>(null);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
 
   const {
     showAll: pinyinShowAll,
@@ -253,6 +250,51 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       next,
     );
   };
+
+  // The transcript's display and copy actions live behind one "⋯" button in the header.
+  const menuItems: MoreMenuItem[] = [
+    englishToggle
+      ? {
+          key: "english",
+          label: englishShowAll ? "Hide English" : "Show English",
+          onSelect: toggleAllEnglish,
+        }
+      : {
+          key: "pinyin",
+          label: pinyin.showAll ? "Hide pinyin" : "Show pinyin",
+          onSelect: pinyin.toggleAll,
+          disabled: learningLocked,
+          describedBy: learningLocked ? LOCKED_HELP_ID : undefined,
+        },
+  ];
+  if (workerApi) {
+    // Reveals saved English for the lines' current text only; never sends anything.
+    menuItems.push({
+      key: "saved-english",
+      label: worker.showSaved ? workerApi.labels.hideSaved : workerApi.labels.showSaved,
+      onSelect: () => worker.setShowSaved(!worker.showSaved),
+    });
+  }
+  if (capabilities.copy && segments.length > 0) {
+    menuItems.push({
+      key: "copy",
+      label: COPY_TRANSCRIPT_LABEL,
+      title: COPY_TRANSCRIPT_HELP,
+      onSelect: () => {
+        const text = transcriptPlainText(segments, (id) => lines.get(id)?.text);
+        setCopiedTranscript(text);
+        transcriptCopy.copy(text); // inside the click: the browser sees the gesture
+      },
+    });
+  }
+  if (workerTranslation) {
+    // Local only: the sidebar no longer links here, so Withdraw stays one tap away.
+    menuItems.push({
+      key: "translation-settings",
+      label: workerTranslation.labels.settings,
+      onSelect: () => void navigate("/translation"),
+    });
+  }
 
   // Row actions read the latest state through a ref so their identities stay stable and
   // memoized rows don't re-render on every playback frame.
@@ -495,72 +537,10 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
                 )}
               </div>
             ) : null}
-            {englishToggle ? (
-              <button
-                type="button"
-                className={styles.toolButton}
-                aria-pressed={englishShowAll}
-                onClick={toggleAllEnglish}
-              >
-                {englishShowAll ? "Hide English" : "Show English"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={styles.toolButton}
-                aria-pressed={pinyin.showAll}
-                aria-busy={pinyin.status === "loading" || undefined}
-                aria-disabled={learningLocked || undefined}
-                aria-describedby={learningLocked ? LOCKED_HELP_ID : undefined}
-                onClick={learningLocked ? undefined : pinyin.toggleAll}
-              >
-                {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
-              </button>
-            )}
-            {workerApi ? (
-              // Reveals saved English for the lines' current text only; never sends anything.
-              <button
-                type="button"
-                className={styles.toolButton}
-                aria-pressed={worker.showSaved}
-                onClick={() => worker.setShowSaved(!worker.showSaved)}
-              >
-                {worker.showSaved ? workerApi.labels.hideSaved : workerApi.labels.showSaved}
-              </button>
-            ) : null}
-            {capabilities.copy && segments.length > 0 ? (
-              <button
-                ref={copyTranscriptButton}
-                type="button"
-                className={styles.toolButton}
-                title={COPY_TRANSCRIPT_HELP}
-                onClick={() => {
-                  const text = transcriptPlainText(segments, (id) => lines.get(id)?.text);
-                  setCopiedTranscript(text);
-                  transcriptCopy.copy(text); // inside the click: the browser sees the gesture
-                }}
-              >
-                {/* Both labels share one cell, so the button never changes width. */}
-                <span className={styles.labelStack}>
-                  <span>
-                    {transcriptCopy.status === "copied"
-                      ? COPY_TRANSCRIPT_DONE
-                      : COPY_TRANSCRIPT_LABEL}
-                  </span>
-                  <span aria-hidden="true">{COPY_TRANSCRIPT_DONE}</span>
-                </span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={styles.infoButton}
-              aria-expanded={aboutOpen}
-              aria-controls="transcript-about"
-              aria-label="About this transcript"
-              onClick={() => setAboutOpen((open) => !open)}
-            >
-              i
-            </button>
+            <span className={styles.copyStatus} role="status">
+              {transcriptCopy.status === "copied" ? COPY_TRANSCRIPT_DONE : ""}
+            </span>
+            <MoreMenu label="Transcript actions" items={menuItems} triggerRef={moreButton} />
           </div>
         </div>
       </header>
@@ -575,14 +555,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             {LEARNING_LOCKED_MESSAGE}
           </p>
         ) : null}
-        {aboutOpen ? (
-          <p id="transcript-about" className={styles.help}>
-            {/* Local-only: ASR transcripts exist only in local mode. */}
-            {__PEBBLE_LOCAL__ && transcript.provenance.kind === "asr"
-              ? ABOUT_MACHINE_TRANSCRIPT
-              : ABOUT_PINYIN}
-          </p>
-        ) : null}
         {flagged.size > 0 ? (
           <p id={REVIEW_HELP_ID} className={`${styles.help} ${styles.reviewHelp}`}>
             <span className={styles.reviewSample}>May need review</span> Speech transcripts can
@@ -590,9 +562,6 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             line if it looks wrong.
           </p>
         ) : null}
-        <span className={styles.visuallyHidden} role="status">
-          {transcriptCopy.status === "copied" ? COPY_TRANSCRIPT_DONE : ""}
-        </span>
         {transcriptCopy.status === "failed" ? (
           <CopyFallback
             multiline
@@ -601,7 +570,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             language={transcript.language}
             onClose={() => {
               transcriptCopy.dismiss();
-              copyTranscriptButton.current?.focus();
+              moreButton.current?.focus();
             }}
           />
         ) : null}

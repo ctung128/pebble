@@ -63,19 +63,26 @@ async function renderEpisode(options: Parameters<typeof renderWithProviders>[1] 
   await screen.findByRole("list", { name: "Transcript" });
 }
 
-const copyButton = () => screen.getByRole("button", { name: "Copy transcript" });
+const menuButton = () => screen.getByRole("button", { name: "Transcript actions" });
+/** Opens the transcript's ⋯ menu and returns its Copy transcript item. */
+function copyItem() {
+  if (menuButton().getAttribute("aria-expanded") !== "true") fireEvent.click(menuButton());
+  return screen.getByRole("menuitem", { name: "Copy transcript" });
+}
 
 describe("Copy transcript", () => {
-  it("sits beside Show English, with help that says what it copies", async () => {
+  it("sits in the transcript menu after Show English, with help that says what it copies", async () => {
     await renderEpisode();
-    const english = screen.getByRole("button", { name: "Show English" });
-    expect(english.nextElementSibling).toBe(copyButton());
-    expect(copyButton()).toHaveAttribute("title", COPY_TRANSCRIPT_HELP);
+    expect(screen.queryByRole("menuitem", { name: "Copy transcript" })).toBeNull();
+    const copy = copyItem();
+    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    expect(items).toEqual(["Show English", "Copy transcript"]);
+    expect(copy).toHaveAttribute("title", COPY_TRANSCRIPT_HELP);
   });
 
   it("copies every line's Chinese, in order, one per line, and nothing else", async () => {
     await renderEpisode();
-    await userEvent.click(copyButton());
+    await userEvent.click(copyItem());
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText).toHaveBeenCalledWith(EXPECTED);
   });
@@ -84,7 +91,7 @@ describe("Copy transcript", () => {
     await renderEpisode();
     for (const row of screen.getAllByRole("button", { name: "Pinyin" })) await userEvent.click(row);
     expect(await screen.findAllByText(/dì yī jù/)).not.toHaveLength(0);
-    await userEvent.click(copyButton());
+    await userEvent.click(copyItem());
     expect(writeText).toHaveBeenCalledWith(EXPECTED);
   });
 
@@ -100,7 +107,7 @@ describe("Copy transcript", () => {
     });
     await renderEpisode({ store });
     await screen.findByText("第二句话。");
-    await userEvent.click(copyButton());
+    await userEvent.click(copyItem());
     expect(writeText).toHaveBeenCalledWith(
       "Speaker A: 第一句。\nSpeaker B: 第二句话。\nSpeaker A: 第三句。",
     );
@@ -109,21 +116,26 @@ describe("Copy transcript", () => {
   it("confirms with 'Transcript copied', then returns to normal", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderEpisode();
-    fireEvent.click(copyButton());
-    expect(await screen.findByRole("button", { name: "Transcript copied" })).toBeInTheDocument();
+    fireEvent.click(copyItem());
+    // The menu closes; the confirmation shows beside its button.
     expect(
-      screen.getByText("Transcript copied", { selector: "[role=status]" }),
-    ).toBeInTheDocument();
+      await screen.findByText("Transcript copied", { selector: "[role=status]" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(menuButton()).toHaveFocus();
     await act(async () => {
       vi.advanceTimersByTime(COPY_RESET_MS + 10);
     });
-    expect(copyButton()).toBeInTheDocument();
     expect(screen.queryByText("Transcript copied", { selector: "[role=status]" })).toBeNull();
   });
 
   it("works from the keyboard", async () => {
     await renderEpisode();
-    copyButton().focus();
+    menuButton().focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("menuitem", { name: "Show English" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Copy transcript" })).toHaveFocus();
     await userEvent.keyboard("{Enter}");
     expect(writeText).toHaveBeenCalledWith(EXPECTED);
   });
@@ -131,7 +143,7 @@ describe("Copy transcript", () => {
   it("explains a refused clipboard and offers the transcript, selected, to copy by hand", async () => {
     writeText.mockRejectedValueOnce(new Error("denied"));
     await renderEpisode();
-    await userEvent.click(copyButton());
+    await userEvent.click(copyItem());
     expect(await screen.findByText(COPY_FAILED)).toBeInTheDocument();
     const field = screen.getByRole("textbox", { name: "Transcript text" });
     expect(field.tagName).toBe("TEXTAREA");
@@ -141,7 +153,7 @@ describe("Copy transcript", () => {
 
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByText(COPY_FAILED)).not.toBeInTheDocument();
-    expect(copyButton()).toHaveFocus();
+    expect(menuButton()).toHaveFocus();
   });
 
   it("copies Chinese only when the transcript has no speaker labels", async () => {
@@ -152,7 +164,7 @@ describe("Copy transcript", () => {
       }),
     });
     await renderEpisode({ source });
-    await userEvent.click(copyButton());
+    await userEvent.click(copyItem());
     expect(writeText).toHaveBeenCalledWith("第一句。\n第二句。\n第三句。");
   });
 
@@ -164,7 +176,8 @@ describe("Copy transcript", () => {
       }),
     });
     await renderEpisode({ source });
-    expect(screen.queryByRole("button", { name: "Copy transcript" })).not.toBeInTheDocument();
+    fireEvent.click(menuButton());
+    expect(screen.queryByRole("menuitem", { name: "Copy transcript" })).not.toBeInTheDocument();
   });
 
   it("isn't offered when the transcript has no lines", async () => {
@@ -175,7 +188,7 @@ describe("Copy transcript", () => {
       source: fakeSource({ getTranscript: async () => ({ ...testTranscript, segments: [] }) }),
     });
     expect(await screen.findByText("No transcript lines")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy transcript" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Copy transcript" })).not.toBeInTheDocument();
   });
 });
 

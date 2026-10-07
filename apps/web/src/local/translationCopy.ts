@@ -43,8 +43,8 @@ export const LABELS = {
   translateAgain: "Translate again",
   showSaved: "Show saved English",
   hideSaved: "Hide saved English",
-  /** The sidebar link to translation settings. */
-  settingsNav: "Translation",
+  /** The episode menu's link to translation settings. */
+  settings: "Translation settings",
 };
 
 /** Translation settings (docs/TRANSLATION.md#translation-settings). All approved copy. */

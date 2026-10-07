@@ -45,6 +45,14 @@ async function lineActions(n: number) {
   return within(screen.getByRole("group", { name: `Line at 0:0${n * 3}` }));
 }
 
+/** Opens the transcript's ⋯ menu (if closed) and returns the named item. */
+async function menuItem(name: string) {
+  await playButtons();
+  const trigger = screen.getByRole("button", { name: "Transcript actions" });
+  if (trigger.getAttribute("aria-expanded") !== "true") await userEvent.click(trigger);
+  return screen.getByRole("menuitem", { name });
+}
+
 const activeText = () =>
   screen.getAllByRole("button").find((b) => b.getAttribute("aria-current") === "true")
     ?.textContent ?? null;
@@ -144,15 +152,11 @@ describe("EpisodePage — pinyin", () => {
     expect(screen.queryByText(/dì èr jù/)).not.toBeInTheDocument();
   });
 
-  it("explains that pinyin is generated", async () => {
+  it("has no About this transcript button", async () => {
     renderPage();
     await playButtons();
-    const about = screen.getByRole("button", { name: "About this transcript" });
-    expect(about).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "About this transcript" })).not.toBeInTheDocument();
     expect(screen.queryByText(/generated automatically/)).not.toBeInTheDocument();
-    await userEvent.click(about);
-    expect(about).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(/generated automatically and may be imperfect/)).toBeInTheDocument();
   });
 });
 
@@ -199,13 +203,14 @@ describe("EpisodePage — translation", () => {
     const { provider, translate } = fakeTranslationProvider();
     renderPage({ translation: provider });
     await playButtons();
-    expect(screen.queryByRole("button", { name: "Show pinyin" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
+    await menuItem("Show English");
+    expect(screen.queryByRole("menuitem", { name: "Show pinyin" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Show English" }));
     expect(await screen.findByText("The first sentence.")).toBeInTheDocument();
     expect(await screen.findByText("The second sentence.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Hide English" }));
+    await userEvent.click(await menuItem("Hide English"));
     expect(screen.queryByText("The first sentence.")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Show English" }));
+    await userEvent.click(await menuItem("Show English"));
     expect(screen.getByText("The first sentence.")).toBeInTheDocument();
     expect(translate).toHaveBeenCalledTimes(3);
   });
@@ -408,9 +413,11 @@ describe("EpisodePage — mock (preview) transcripts", () => {
       expect(button).toHaveAttribute("aria-describedby", explanation.id);
       await userEvent.click(button);
     }
-    const toolbar = screen.getByRole("button", { name: "Show pinyin" });
+    const toolbar = await menuItem("Show pinyin");
     expect(toolbar).toHaveAttribute("aria-disabled", "true");
+    expect(toolbar).toHaveAttribute("aria-describedby", explanation.id);
     await userEvent.click(toolbar);
+    await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("pts");
 
     expect(screen.queryByText(/dì yī jù/)).not.toBeInTheDocument(); // no pinyin generated
@@ -468,18 +475,11 @@ describe("EpisodePage — local speech-recognition (ASR) transcripts", () => {
       }),
     });
 
-  it("explains the machine transcript once, behind About this transcript", async () => {
+  it("shows no About this transcript button or model details for a machine transcript", async () => {
     renderPage({ source: asrSource() });
     await playButtons();
-    const note = "This transcript and its pinyin were generated automatically and may need review.";
-    // Collapsed by default: nothing about it on the page until asked.
-    expect(screen.queryByText(note)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "About this transcript" })).not.toBeInTheDocument();
     expect(screen.queryByText(/generated automatically/)).not.toBeInTheDocument();
-    const about = screen.getByRole("button", { name: "About this transcript" });
-    await userEvent.click(about);
-    expect(screen.getByText(note)).toHaveAttribute("id", about.getAttribute("aria-controls"));
-    // Said once: the separate pinyin sentence doesn't repeat it.
-    expect(screen.getAllByText(/generated automatically/)).toHaveLength(1);
     // The old card, its heading and its "Transcript details" are gone.
     expect(
       screen.queryByRole("complementary", { name: "Local transcript" }),

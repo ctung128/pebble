@@ -72,7 +72,7 @@ export interface WorkerTranslation {
     translateAgain: string;
     showSaved: string;
     hideSaved: string;
-    settingsNav: string;
+    settings: string;
   };
 }
 

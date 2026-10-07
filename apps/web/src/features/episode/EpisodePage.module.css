@@ -52,67 +52,15 @@
   margin-left: auto;
 }
 
-.toolButton,
-.infoButton {
-  min-height: var(--control-md);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--bg-muted);
-  color: var(--text-primary);
+/* "Transcript copied", beside the ⋯ menu once the menu has closed. */
+.copyStatus {
   font-size: var(--size-body-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color var(--duration-fast) var(--easing-standard);
+  font-weight: 600;
+  color: var(--text-accent);
 }
 
-.toolButton {
-  padding: 0 var(--space-4);
-}
-
-.toolButton:hover,
-.infoButton:hover {
-  background: var(--bg-hover);
-}
-
-.toolButton[aria-pressed="true"],
-.infoButton[aria-expanded="true"] {
-  background: var(--bg-active);
-  box-shadow: var(--ring-selected);
-}
-
-/* Two labels in one grid cell: the button is as wide as the longer one, always. */
-.labelStack {
-  display: inline-grid;
-}
-
-.labelStack > * {
-  grid-area: 1 / 1;
-}
-
-.labelStack > [aria-hidden="true"] {
-  visibility: hidden;
-}
-
-.toolButton[aria-busy="true"] {
-  cursor: progress;
-}
-
-.toolButton[aria-disabled="true"] {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
-}
-
-.toolButton[aria-disabled="true"]:hover {
-  background: var(--bg-muted);
-}
-
-.infoButton {
-  display: grid;
-  place-items: center;
-  width: var(--control-md);
-  font:
-    italic 600 0.875rem / 1 Georgia,
-    serif;
+.copyStatus:empty {
+  display: none;
 }
 
 /* --- Preview transcript banner (warning). Persistent: mock text must never pass for real. --- */
@@ -342,11 +290,6 @@
     flex-wrap: nowrap;
   }
 
-  .toolButton {
-    padding: 0 var(--space-3);
-    white-space: nowrap;
-  }
-
   /* The player takes two rows on phones. */
   .page {
     padding-bottom: calc(var(--player-height) + var(--space-10) + var(--space-10));
@@ -354,12 +297,5 @@
 
   .resume {
     bottom: calc(var(--player-height) + var(--space-10) + var(--space-4));
-  }
-}
-
-@media (max-width: 359px) {
-  .toolButton {
-    padding: 0 var(--space-2);
-    font-size: var(--size-caption);
   }
 }

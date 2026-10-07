@@ -269,7 +269,9 @@ describe("local English — capability", () => {
     });
     await screen.findByRole("list", { name: "Transcript" });
     expect(screen.queryByRole("button", { name: "English" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Show saved English" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Transcript actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Show saved English" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: LABELS.settings })).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -279,7 +281,8 @@ describe("local English — capability", () => {
     await settle();
     await line(0);
     expect(client.getEpisodeTranslations).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Show saved English" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Transcript actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Show saved English" })).toBeNull();
   });
 
   it("shows cached English when new requests are off, and only for lines that have it", async () => {
@@ -310,15 +313,13 @@ describe("local English — capability", () => {
     });
     renderLocalEpisode(client);
     await settle();
-    const toggle = await screen.findByRole("button", { name: "Show saved English" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
-    await userEvent.click(toggle);
+    const menu = await screen.findByRole("button", { name: "Transcript actions" });
+    await userEvent.click(menu);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Show saved English" }));
     expect(await screen.findByText(ENGLISH[0]!)).toBeInTheDocument();
     expect(screen.queryByText("An old version.")).toBeNull(); // not current for its line
-    expect(screen.getByRole("button", { name: "Hide saved English" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await userEvent.click(menu);
+    expect(screen.getByRole("menuitem", { name: "Hide saved English" })).toBeInTheDocument();
     expect(client.translateLine).not.toHaveBeenCalled();
   });
 });
@@ -1215,18 +1216,39 @@ describe("local English — settings link", () => {
     );
   }
 
-  it("appears only when the local app provides translation", async () => {
+  it("isn't in the sidebar, even when the local app provides translation", async () => {
     renderShell(healthClient(translationHealth()));
-    expect(await screen.findByRole("link", { name: LABELS.settingsNav })).toHaveAttribute(
-      "href",
-      "/translation",
-    );
+    await screen.findByRole("navigation", { name: "Main" });
+    await act(async () => {}); // let health resolve
+    expect(screen.queryByRole("link", { name: /translation/i })).toBeNull();
   });
 
-  it("is absent without it (the demo, or an older worker)", async () => {
-    renderShell(null);
-    await screen.findByRole("navigation", { name: "Main" });
-    expect(screen.queryByRole("link", { name: LABELS.settingsNav })).toBeNull();
+  it("opens from the episode's ⋯ menu", async () => {
+    const client = healthClient(translationHealth());
+    render(
+      <WorkerProvider client={client}>
+        <LocalTranslationProvider>
+          <SourceProvider source={source()}>
+            <TranslationProviderContext
+              provider={new SessionCachedTranslationProvider(fakeTranslationProvider().provider)}
+            >
+              <LearningProvider openStore={() => Promise.resolve(new MemoryLearningStore())}>
+                <SettingsRouter>
+                  <Routes>
+                    <Route path="/" element={<EpisodePage episodeId={EP_A} />} />
+                    <Route path="/translation" element={<p>Settings page</p>} />
+                  </Routes>
+                </SettingsRouter>
+              </LearningProvider>
+            </TranslationProviderContext>
+          </SourceProvider>
+        </LocalTranslationProvider>
+      </WorkerProvider>,
+    );
+    await settle();
+    await userEvent.click(await screen.findByRole("button", { name: "Transcript actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: LABELS.settings }));
+    expect(await screen.findByText("Settings page")).toBeInTheDocument();
   });
 });
 
@@ -1241,9 +1263,9 @@ describe("local English — withdrawal uncertainty", () => {
     expect(SETTINGS.notAllowed).toBe(
       "English translation with DeepL isn't allowed on this computer yet. Pebble asks the first time you tap English on a line.",
     );
-    expect([SETTINGS.title, LABELS.settingsNav, SETTINGS.checkAgain]).toEqual([
+    expect([SETTINGS.title, LABELS.settings, SETTINGS.checkAgain]).toEqual([
       "English translation",
-      "Translation",
+      "Translation settings",
       "Check again",
     ]);
   });

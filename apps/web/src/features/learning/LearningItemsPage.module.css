@@ -5,8 +5,8 @@
 }
 
 /*
- * The list beside a 280px column for Anki (and reset), when the content column has room for
- * both; one column otherwise, with Anki after the list.
+ * The list beside a column for Anki (and reset) that hugs its content, up to 280px, when the
+ * content column has room for both; one column otherwise, with Anki after the list.
  */
 .columns {
   --side-width: 280px;
@@ -17,8 +17,9 @@
 
 @container (min-width: 720px) {
   .columns {
-    grid-template-columns: minmax(0, 1fr) var(--side-width);
+    grid-template-columns: minmax(0, 1fr) fit-content(var(--side-width));
     align-items: start;
+    column-gap: calc(var(--space-8) * 1.5); /* 48px: the card needs air beside the list */
   }
 }
 
