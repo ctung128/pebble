@@ -6,10 +6,11 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import tempfile
 import unicodedata
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -18,6 +19,7 @@ from fastapi import Body, FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -28,6 +30,8 @@ from .contract import (
     Episode,
     Manifest,
     parse_translation_consent_request,
+    parse_translation_request,
+    translation_text_problem,
 )
 from .db import Database, now_iso
 from .errors import StorageAccessError
@@ -37,6 +41,10 @@ from .providers.base import TranscriptionProvider
 from .providers.factory import build_provider
 from .storage import EPISODE_ID, PRIVATE_DIR, PRIVATE_FILE, Storage
 from .translation import REQUESTS_IMPLEMENTED
+from .translation.config import TranslationSettings
+from .translation.deepl import DeepLClient
+from .translation.service import TranslationError, TranslationService
+from .translation.service import error as translation_failure
 from .translation.store import (
     CONSENT_VERSION,
     grant_consent,
@@ -117,7 +125,10 @@ class UploadLimit:
 
 
 #: Small JSON bodies only, by route (ADR 0008): checked before the body is read.
-JSON_BODY_LIMITS: dict[tuple[str, str], int] = {("PUT", "/translation/consent"): 1024}
+JSON_BODY_LIMITS: dict[tuple[str, str], int] = {
+    ("PUT", "/translation/consent"): 1024,
+    ("POST", "/translations"): 4096,
+}
 
 
 class JsonBodyLimit:
@@ -195,11 +206,22 @@ def _json_headers_problem(
     return None
 
 
+def _json_body(body: bytes, limit: int) -> Any:
+    """The parsed body of a size-checked JSON request (JsonBodyLimit has run already)."""
+    if len(body) > limit:
+        raise ApiError(413, "REQUEST_TOO_LARGE", "The request is too large.")
+    try:
+        return json.loads(body)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise ApiError(422, "INVALID_REQUEST", "The request isn't valid JSON.") from error
+
+
 def create_app(
     settings: Settings,
     *,
     provider: TranscriptionProvider | None = None,
     start_runner: bool = True,
+    translation_client: Callable[[TranslationSettings], DeepLClient] | None = None,
 ) -> FastAPI:
     storage = Storage(settings.data_dir)
     storage.ensure()
@@ -207,6 +229,10 @@ def create_app(
     tempfile.tempdir = str(storage.tmp_dir)
     db = Database(storage.db_path)
     db.migrate()
+    translations = TranslationService(db, settings.translation, translation_client)
+    # Reservations left by a previous run may or may not have been sent: mark them unknown.
+    # This never contacts DeepL, and usage is never refunded.
+    translations.reconcile()
     provider = provider or build_provider(settings, storage)
     service = JobService(db, provider)
     runner = JobRunner(Pipeline(settings, storage, service))
@@ -229,9 +255,14 @@ def create_app(
         service,
         runner,
     )
+    app.state.translations = translations
     app.add_middleware(UploadLimit, max_bytes=settings.max_upload_bytes)
     app.add_middleware(JsonBodyLimit)
     security.install(app, settings)
+
+    @app.exception_handler(TranslationError)
+    async def translation_error(_: Request, failure: TranslationError) -> JSONResponse:
+        return _error(failure.status, failure.code, failure.message)
 
     @app.exception_handler(ApiError)
     async def api_error(_: Request, error: ApiError) -> JSONResponse:
@@ -306,7 +337,14 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        translation = translation_health(settings.translation, db) if REQUESTS_IMPLEMENTED else None
+        translation = None
+        if REQUESTS_IMPLEMENTED:
+            try:
+                translation = translation_health(settings.translation, db)
+            except sqlite3.Error:
+                # Health must still explain an unreadable or unwritable data folder. Without
+                # the block, the app treats translation as off, which it effectively is.
+                translation = None
         return check_health(settings, storage, [provider], translation).dump()
 
     @app.get("/episodes")
@@ -464,13 +502,9 @@ def create_app(
             raise ApiError(
                 409, "TRANSLATION_OFF", "English isn't set up for Pebble on this computer."
             )
-        body = await request.body()
-        if len(body) > JSON_BODY_LIMITS[("PUT", "/translation/consent")]:
-            raise ApiError(413, "REQUEST_TOO_LARGE", "The request is too large.")
-        try:
-            payload = json.loads(body)
-        except (ValueError, UnicodeDecodeError) as error:
-            raise ApiError(422, "INVALID_REQUEST", "The request isn't valid JSON.") from error
+        payload = _json_body(
+            await request.body(), JSON_BODY_LIMITS[("PUT", "/translation/consent")]
+        )
         parsed = parse_translation_consent_request(payload)
         if not parsed.ok or parsed.data is None:
             raise ApiError(422, "INVALID_REQUEST", "The request is missing or has invalid fields.")
@@ -481,6 +515,33 @@ def create_app(
                 "That consent is out of date. Reload Pebble and review it again.",
             )
         return grant_consent(db).dump()
+
+    @app.post("/translations")
+    async def translate_line(request: Request) -> dict[str, Any]:
+        """One displayed line, on an explicit tap. Only this route may contact DeepL."""
+        payload = _json_body(await request.body(), JSON_BODY_LIMITS[("POST", "/translations")])
+        parsed = parse_translation_request(payload)
+        if not parsed.ok or parsed.data is None:
+            text = payload.get("text") if isinstance(payload, dict) else None
+            # Only a present, string `text` that breaks the shared text rules is "invalid text";
+            # anything else malformed (missing fields, wrong types, version) is a bad request.
+            if (
+                parsed.code == "INVALID_PAYLOAD"
+                and isinstance(text, str)
+                and translation_text_problem(text)
+            ):
+                raise translation_failure("TRANSLATION_INVALID_TEXT")
+            raise ApiError(422, "INVALID_REQUEST", "The request is missing or has invalid fields.")
+        line = parsed.data
+        result = await run_in_threadpool(
+            translations.translate, line.episode_id, line.segment_id, line.text
+        )
+        return result.dump()
+
+    @app.get("/episodes/{episode_id}/translations")
+    def episode_translations(episode_id: str) -> dict[str, Any]:
+        """The episode's cached English. Local and read-only: never contacts DeepL."""
+        return translations.episode_translations(episode_id).dump()
 
     @app.delete("/translation/consent")
     def withdraw_translation_consent() -> dict[str, Any]:

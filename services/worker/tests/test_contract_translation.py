@@ -152,9 +152,8 @@ def test_older_health_without_translation_means_off(name):
     assert "translation" not in result.data.dump()
 
 
-def test_the_worker_still_advertises_1_7():
-    """1.8 shapes exist, but no 1.8 endpoint does yet: the worker must not claim them."""
-    assert CURRENT_SCHEMA_VERSION == "1.7"
+def test_the_worker_advertises_1_8_now_that_translation_routes_exist():
+    assert CURRENT_SCHEMA_VERSION == "1.8"
 
 
 # --- Malformed payloads ---------------------------------------------------------------------

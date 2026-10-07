@@ -1,12 +1,14 @@
 # English line translation (DeepL)
 
-> **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); not
-> available yet.** English stays hidden for local real-ASR transcripts until it ships. Live
-> DeepL calls, including a smoke test, still require separate approval. This page is the
-> specification the implementation and its tests follow.
+> **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); the
+> worker side is built, the local app doesn't use it yet.** English stays hidden for local
+> real-ASR transcripts until the app integration ships. Live DeepL calls, including a smoke
+> test, still require separate approval. This page is the specification the implementation and
+> its tests follow.
 >
-> **Built so far:** the settings below, the worker's translation tables (database migration 2) and the consent routes. Translation requests aren't implemented, so `/health` doesn't
-> report translation yet and nothing can be translated.
+> **Built so far (worker, contract 1.8):** the settings below, the translation tables (database
+> migration 2), the consent routes, `POST /translations`, `GET /episodes/{id}/translations` and
+> the health block. Tested only with invented text and a fake provider or HTTPS transport.
 
 Optional, off by default, for the local app only. A learner taps **English** on one line;
 the worker sends that line's Chinese to DeepL and keeps the result on this computer. The
@@ -102,6 +104,12 @@ Consent carries a version; changing the dialog's wording or what is sent asks ag
   worker counts the bytes it actually receives: more than 1 KiB is 413 `REQUEST_TOO_LARGE`,
   and a body that doesn't match the declared size is 400 `INVALID_LENGTH`. Malformed bodies
   are 422 `INVALID_REQUEST`.
+- `POST /translations` with a translation request sends one line, following the order below,
+  and returns a translation result (`source: "provider"` or `"cache"`). Same body rules as
+  consent, with a 4 KiB cap. A string `text` that breaks the text rules is 422
+  `TRANSLATION_INVALID_TEXT`; other malformed bodies are 422 `INVALID_REQUEST`.
+- `GET /episodes/{id}/translations` returns the episode's cached English for the current cache
+  version, oldest first. It is local and read-only and never contacts DeepL.
 
 **Attribution** under every English line: "Translated by DeepL (deepl.com)", a link to
 `https://www.deepl.com`.
@@ -154,35 +162,70 @@ Each reservation is also recorded as an attempt (period, character count, consen
 status, failure code, HTTP status, times): never the text, the translation, or episode or
 segment ids, so attempts aren't tied to any episode and stay when one is deleted.
 
+Identical requests that arrive while one is in flight wait for it (at most 20 s; then
+`TRANSLATION_UNAVAILABLE`) and share its result or failure; a later tap is a new request. When
+the worker starts, reservations left by a previous run are marked `unknown`; nothing is sent.
+Withdrawing consent stops requests not yet reserved; one already reserved completes, and its
+result is cached.
+
 Reservations are never refunded. A reservation left behind by a crash may never have been
 sent, so the counters are an upper bound on outbound attempts.
 
 ## Transport
 
-Direct HTTPS to the fixed DeepL API host only, with certificate and hostname verification. No
-redirects (any 3xx is a failure, so the key is never sent elsewhere), no proxies, a 10 s
-timeout, a response of at most 64 KiB that must contain one non-empty translation of at most
-2,000 code points. Translation routes keep the worker's Host and Origin checks and accept small
-JSON bodies only (4 KiB; 1 KiB for consent).
+Direct HTTPS to the fixed DeepL API host only (`api-free.deepl.com:443`), with certificate and
+hostname verification. No redirects (any 3xx is a failure, so the key is never sent
+elsewhere), no proxies (proxy settings are never read; the connection is never tunnelled), one
+attempt, and a response of at most 64 KiB that must contain one non-empty translation of at
+most 2,000 code points. Translation routes keep the worker's Host and Origin checks and accept
+small JSON bodies only (4 KiB; 1 KiB for consent).
+
+**Time bound.** The request that calls DeepL enforces a 15 s budget on a monotonic clock,
+started before the host name is resolved. Noticing the timeout and cleaning up happen promptly
+but are subject to thread-scheduling overhead, so the call can end slightly after 15 s:
+
+- Every socket it opens is shut down by a watchdog when the budget runs out. That ends a
+  blocked connect, TLS handshake, header read or body read.
+- Each blocking socket operation also times out at the time left, and the body is read in
+  chunks with the budget checked between them: a slow drip of small chunks can't extend it.
+- Name resolution runs in a helper thread. Pebble stops waiting for it at the deadline, but the
+  operating system's lookup can't be interrupted, so that thread may finish later on its own.
+  It only resolves the fixed host: it can't start a request or store a result.
+- Once the budget is spent, the request fails with `TRANSLATION_UNAVAILABLE` even if a
+  response arrived at the last moment. Its attempt is recorded as failed, the reservation
+  isn't refunded, nothing is cached, and nothing is retried. A later tap is a new request.
+
+Requests that join an in-flight identical request wait at most 20 s for it. Deduplication is
+per worker process: `pebble:start` runs one worker, and the database transaction enforces the
+limits across processes either way.
+
+**Health.** `/health` reports the `translation` block whenever the worker can read its
+database. If it can't (for example, the data folder isn't writable), the block is left out,
+which means translation is off, and the rest of health still reports the underlying problem
+(`dataDirWritable`, `dataDir.hint`, `status: degraded`).
 
 ## Errors
 
 Fixed messages; DeepL's own responses are never shown or logged (the log records the code,
 HTTP status and character count only).
 
-| Situation                                     | Code                                      | Message                                                                                          |
-| --------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Translation not set up                        | `TRANSLATION_OFF`                         | English isn't set up for Pebble on this computer.                                                |
-| No current consent                            | `TRANSLATION_CONSENT_REQUIRED`            | (opens the consent dialog)                                                                       |
-| Pebble's monthly limit                        | `TRANSLATION_LOCAL_LIMIT`                 | Pebble's monthly translation limit on this computer has been reached. Saved English still shows. |
-| DeepL 429                                     | `TRANSLATION_RATE_LIMITED`                | DeepL is busy right now. Wait a moment, then tap English again.                                  |
-| DeepL 456                                     | `TRANSLATION_PROVIDER_QUOTA`              | Your DeepL account's character allowance has been reached. Check your DeepL account.             |
-| DeepL 403                                     | `TRANSLATION_KEY_REJECTED`                | DeepL didn't accept the key set up for Pebble.                                                   |
-| DeepL 400 or 413                              | `TRANSLATION_REQUEST_REJECTED`            | DeepL couldn't translate this line.                                                              |
-| 5xx, timeout, network, TLS, 3xx, bad response | `TRANSLATION_UNAVAILABLE`                 | Translation is unavailable right now. Try again later.                                           |
-| Text fails the rules                          | `TRANSLATION_INVALID_TEXT`                | This line can't be translated.                                                                   |
-| Demo, mock or incomplete transcript           | `TRANSLATION_NOT_ALLOWED`                 | (no action is shown)                                                                             |
-| Unknown or deleted episode or line            | `EPISODE_NOT_FOUND` / `SEGMENT_NOT_FOUND` | This episode or line no longer exists.                                                           |
+| Situation                                                     | Code                           | HTTP | Message                                                                                          |
+| ------------------------------------------------------------- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------ |
+| Translation not set up                                        | `TRANSLATION_OFF`              | 409  | English isn't set up for Pebble on this computer.                                                |
+| No current consent (the app opens the dialog)                 | `TRANSLATION_CONSENT_REQUIRED` | 409  | Allow translation with DeepL first.                                                              |
+| Pebble's monthly limit                                        | `TRANSLATION_LOCAL_LIMIT`      | 429  | Pebble's monthly translation limit on this computer has been reached. Saved English still shows. |
+| DeepL 429                                                     | `TRANSLATION_RATE_LIMITED`     | 503  | DeepL is busy right now. Wait a moment, then tap English again.                                  |
+| DeepL 456                                                     | `TRANSLATION_PROVIDER_QUOTA`   | 503  | Your DeepL account's character allowance has been reached. Check your DeepL account.             |
+| DeepL 403                                                     | `TRANSLATION_KEY_REJECTED`     | 502  | DeepL didn't accept the key set up for Pebble.                                                   |
+| DeepL 400 or 413                                              | `TRANSLATION_REQUEST_REJECTED` | 502  | DeepL couldn't translate this line.                                                              |
+| Other DeepL status, 3xx, timeout, network, TLS, bad response  | `TRANSLATION_UNAVAILABLE`      | 503  | Translation is unavailable right now. Try again later.                                           |
+| Text fails the rules                                          | `TRANSLATION_INVALID_TEXT`     | 422  | This line can't be translated.                                                                   |
+| Demo, mock or incomplete transcript (the app shows no action) | `TRANSLATION_NOT_ALLOWED`      | 409  | Lines from this transcript can't be translated.                                                  |
+| Unknown or deleted episode                                    | `EPISODE_NOT_FOUND`            | 404  | This episode or line no longer exists.                                                           |
+| Unknown line                                                  | `SEGMENT_NOT_FOUND`            | 404  | This episode or line no longer exists.                                                           |
+
+A joined request whose owner doesn't finish within 20 s also gets `TRANSLATION_UNAVAILABLE`.
+The table above is checked against the worker's own copy by `test_translation_requests.py`.
 
 ## Testing
 

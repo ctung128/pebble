@@ -27,7 +27,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 SUPPORTED_MAJOR = 1
-CURRENT_SCHEMA_VERSION = "1.7"
+CURRENT_SCHEMA_VERSION = "1.8"
 DURATION_TOLERANCE_MS = 500
 
 
@@ -397,6 +397,9 @@ def _translated_text(value: str) -> str:
         raise ValueError("text must not contain control characters")
     return value
 
+
+#: Public check for English from a provider (raises ValueError with a fixed message).
+validate_translated_text = _translated_text
 
 TranslationSourceText = Annotated[str, AfterValidator(_translation_source)]
 TranslatedText = Annotated[str, AfterValidator(_translated_text)]

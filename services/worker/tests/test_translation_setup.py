@@ -421,13 +421,20 @@ def test_consent_keeps_the_origin_and_host_checks(make):
 # --- Health ----------------------------------------------------------------------------
 
 
-def test_health_does_not_report_translation_before_requests_exist(make):
-    assert REQUESTS_IMPLEMENTED is False
+def test_health_reports_translation_now_that_requests_exist(make, tmp_path):
+    assert REQUESTS_IMPLEMENTED is True
     client = make()
+    before = client.get("/health").json()
+    assert before["schemaVersion"] == "1.8"
+    assert before["translation"]["newRequests"] == "consent_required"
     put_consent(client)
-    health = client.get("/health").json()
-    assert "translation" not in health
-    assert health["schemaVersion"] == "1.7"
+    assert client.get("/health").json()["translation"]["newRequests"] == "available"
+    off = make(env_for(tmp_path / "off")).get("/health").json()["translation"]
+    assert (off["configured"], off["consent"], off["newRequests"]) == (
+        False,
+        "not_configured",
+        "off",
+    )
 
 
 NOW = datetime(2026, 10, 6, 12, tzinfo=UTC)

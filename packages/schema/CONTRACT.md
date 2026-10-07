@@ -6,10 +6,8 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.7`.
-  The 1.8 translation shapes below are defined and validated, but workers keep advertising
-  `1.7` until the translation endpoints exist; the app gates translation on health's
-  `translation` field, never on the minor version alone.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.8`.
+  The app gates translation on health's `translation` field, never on the minor version alone.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
 - A different major is rejected with `UNSUPPORTED_VERSION`. Any other violation is
@@ -18,11 +16,14 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
-- **1.8 (defined, not yet advertised)** — Optional DeepL line translation
+- **1.8** — Optional DeepL line translation
   ([docs/TRANSLATION.md](../../docs/TRANSLATION.md), ADR 0008). Worker health may include
   `translation` (see [Translation](#translation-18)); absent means translation is off. New
   payloads: translation request, translation result, episode translations (cached English),
-  consent request and consent. None carries the API key or a provider's own error text.
+  consent request and consent. None carries the API key or a provider's own error text. 1.8
+  workers include `translation` in health whenever they can read their database (omitted
+  otherwise, which means off) and add `POST /translations`, `GET /episodes/{id}/translations`
+  and `PUT`/`DELETE /translation/consent`.
 - **1.7** — Jobs may include `durationMs` (the audio's measured length, once known) and
   `lineCount` (transcript lines, completed jobs only). Both are omitted while unknown, never
   `0`. The local worker adds `PATCH /episodes/{id}` with `{ "title" }` to rename an episode's

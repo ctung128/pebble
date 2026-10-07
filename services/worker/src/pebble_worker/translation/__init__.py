@@ -1,14 +1,13 @@
 """
 Optional DeepL line translation (ADR 0008, docs/TRANSLATION.md).
 
-Built in slices. So far: configuration, storage, consent and the health block. Nothing here
-makes a network call, and translation requests aren't implemented yet, so `/health` doesn't
-report translation (see `REQUESTS_IMPLEMENTED`).
+Worker side: configuration, storage, consent, the health block, the DeepL client and the
+translation service. Only POST /translations may contact DeepL. The local app doesn't use any
+of it yet.
 """
 
 from __future__ import annotations
 
-#: False until POST /translations exists. While False, /health omits `translation`: a
-#: configured worker with current consent would otherwise have to claim new requests are
-#: "available", which isn't true yet.
-REQUESTS_IMPLEMENTED = False
+#: True now that POST /translations exists: /health reports `translation`. While it was False
+#: (slice 3), a configured worker with current consent couldn't honestly report "available".
+REQUESTS_IMPLEMENTED = True

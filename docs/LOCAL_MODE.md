@@ -2,7 +2,8 @@
 
 Local mode turns audio **you own or are authorized to use** into a timestamped transcript on
 your own computer. A small Python worker does the processing; the Pebble web app talks to it
-over `127.0.0.1` only. Nothing is uploaded to the internet.
+over `127.0.0.1` only. Nothing is uploaded to the internet, except single lines you choose to
+translate if you set up the optional DeepL translation ([TRANSLATION.md](TRANSLATION.md)).
 
 > **Status: M1-A3.** The worker, its job pipeline, the mock provider, the web app's local mode
 > and the **FunASR provider** are built. FunASR runs only when selected
@@ -335,7 +336,9 @@ a sentence without an end time): that `PROVIDER_ERROR` is not retryable. See
 | `DELETE /episodes/{id}`            | Remove an episode and all its files                                  |
 | `GET /jobs`, `GET /jobs/{id}`      | Job status (poll while processing)                                   |
 | `POST /jobs/{id}/cancel`, `/retry` | Cancel or retry                                                      |
-| `PUT`, `DELETE` `/translation/...` | DeepL translation consent (see TRANSLATION.md); no translations yet  |
+| `POST /translations`               | One line to DeepL, only when asked (TRANSLATION.md)                  |
+| `GET /episodes/{id}/translations`  | The episode's cached English; never contacts DeepL                   |
+| `PUT`, `DELETE` `/translation/...` | DeepL translation consent (see TRANSLATION.md)                       |
 
 Errors use `{ "error": { "code", "message", "hint"? } }`. Uploads must confirm ownership
 (`OWNERSHIP_NOT_CONFIRMED` otherwise), use a supported extension (`.m4a .mp4 .aac .mp3 .wav
