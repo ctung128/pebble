@@ -46,6 +46,33 @@ const exited = (child) =>
     child.exitCode !== null || child.signalCode !== null ? resolve() : child.once("exit", resolve),
   );
 
+/** Whether `child` exits within `ms` (no timer is left behind). */
+function exitsWithin(child, ms) {
+  let timer;
+  return Promise.race([
+    exited(child).then(() => true),
+    new Promise((resolve) => (timer = setTimeout(resolve, ms, false))),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Ends a helper this test started, through its own handle only: SIGTERM, then SIGKILL after a
+ * short grace period. Each wait is bounded; a helper still running at the end is reported,
+ * with the test's own failure (if any) kept as the cause.
+ */
+async function stopHelper(child, testFailure, { graceMs = 500, finalMs = 2_000 } = {}) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  if (await exitsWithin(child, graceMs)) return;
+  child.kill("SIGKILL");
+  if (!(await exitsWithin(child, finalMs))) {
+    const message = `test helper ${child.pid} didn't exit within ${graceMs + finalMs} ms`;
+    throw testFailure === undefined
+      ? new Error(message)
+      : new Error(`${message}, after the test failed`, { cause: testFailure });
+  }
+}
+
 function record(dir, { pid, port, version = VERSION, launcherPid, webPid }) {
   writeRunState(
     { PEBBLE_DATA_DIR: dir },
@@ -164,10 +191,11 @@ test("a worker whose instanceId or version doesn't match is not stopped", async 
 test("a process that isn't pebble-worker is refused even if /health matches", async () => {
   const { dir, cleanup } = tempDataDir();
   const other = dummy(dir, "some-other-app");
-  const server = await serve({
-    healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
-  });
+  let server, failure;
   try {
+    server = await serve({
+      healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
+    });
     record(dir, {
       pid: other.pid,
       port: server.port,
@@ -177,21 +205,27 @@ test("a process that isn't pebble-worker is refused even if /health matches", as
     const { sys } = system(dir);
     assert.equal(await stop(sys), 1);
     assert.ok(alive(other.pid));
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
-    other.kill("SIGKILL");
-    await exited(other);
-    await server.close();
-    cleanup();
+    try {
+      await stopHelper(other, failure);
+    } finally {
+      await server?.close();
+      cleanup();
+    }
   }
 });
 
 test("the matching worker is stopped politely and its record removed", async () => {
   const { dir, cleanup } = tempDataDir();
   const worker = dummy(dir, "pebble-worker-fake");
-  const server = await serve({
-    healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
-  });
+  let server, failure;
   try {
+    server = await serve({
+      healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
+    });
     record(dir, {
       pid: worker.pid,
       port: server.port,
@@ -204,19 +238,27 @@ test("the matching worker is stopped politely and its record removed", async () 
     assert.equal(worker.signalCode, "SIGTERM");
     assert.match(text(), /Pebble stopped\./);
     assert.equal(readRunState(sys.env), null);
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
-    await server.close();
-    cleanup();
+    try {
+      await stopHelper(worker, failure); // already stopped when the test passes
+    } finally {
+      await server?.close();
+      cleanup();
+    }
   }
 });
 
 test("a worker that ignores the stop request is reported, never force-killed", async () => {
   const { dir, cleanup } = tempDataDir();
   const worker = dummy(dir, "pebble-worker-fake", { ignoreTerm: true });
-  const server = await serve({
-    healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
-  });
+  let server, failure;
   try {
+    server = await serve({
+      healthBody: health({ instanceId: INSTANCE, workerVersion: VERSION }),
+    });
     await new Promise((r) => setTimeout(r, 200)); // let it install its SIGTERM handler
     record(dir, {
       pid: worker.pid,
@@ -228,10 +270,15 @@ test("a worker that ignores the stop request is reported, never force-killed", a
     assert.equal(await stop(sys, { timeoutMs: 300 }), 1);
     assert.match(text(), /didn't stop within 0 seconds and was left running/);
     assert.ok(alive(worker.pid));
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
-    worker.kill("SIGKILL");
-    await exited(worker);
-    await server.close();
-    cleanup();
+    try {
+      await stopHelper(worker, failure);
+    } finally {
+      await server?.close();
+      cleanup();
+    }
   }
 });

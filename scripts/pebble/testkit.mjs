@@ -145,7 +145,14 @@ export async function serve({ healthBody, pageBody = "<title>Pebble</title>" } =
       response.end(pageBody);
     }
   });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // A listen failure rejects (a throw, or an "error" event), so callers' cleanup can run.
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
   return {
     port: server.address().port,
     close: () => new Promise((resolve) => server.close(resolve)),

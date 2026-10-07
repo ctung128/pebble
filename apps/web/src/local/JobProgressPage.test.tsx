@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Job } from "@pebble/schema";
@@ -361,25 +361,35 @@ describe("JobProgressPage — progress", () => {
   });
 
   it("announces stage changes, not every section", async () => {
-    renderJob([
-      makeJob({ status: "running", stage: "chunking" }),
-      makeJob({
-        status: "running",
-        stage: "transcribing",
-        progress: { completedChunks: 0, totalChunks: 4 },
-      }),
-      makeJob({
-        status: "running",
-        stage: "transcribing",
-        progress: { completedChunks: 1, totalChunks: 4 },
-      }),
-    ]);
-    const live = () => screen.getByRole("status");
-    await screen.findByText("Preparing audio…");
-    expect(live()).toHaveTextContent(""); // the first load isn't news
-    await screen.findByText("Processing section 1 of 4", {}, { timeout: 3000 });
-    expect(live()).toHaveTextContent("Processing section 1 of 4");
-    await screen.findByText("Processing section 2 of 4", {}, { timeout: 3000 });
-    expect(live()).toHaveTextContent("Processing section 1 of 4"); // a section tick says nothing yet
+    // Polls run only inside act, so each update's effects have run before the checks below.
+    vi.useFakeTimers();
+    try {
+      renderJob([
+        makeJob({ status: "running", stage: "chunking" }),
+        makeJob({
+          status: "running",
+          stage: "transcribing",
+          progress: { completedChunks: 0, totalChunks: 4 },
+        }),
+        makeJob({
+          status: "running",
+          stage: "transcribing",
+          progress: { completedChunks: 1, totalChunks: 4 },
+        }),
+      ]);
+      const live = () => screen.getByRole("status");
+      await act(() => vi.advanceTimersByTimeAsync(0)); // the first load
+      expect(headline()).toHaveTextContent("Preparing audio…");
+      expect(live()).toHaveTextContent(""); // the first load isn't news
+      await act(() => vi.advanceTimersByTimeAsync(1000)); // a stage change
+      expect(headline()).toHaveTextContent("Processing section 1 of 4");
+      expect(live()).toHaveTextContent("Processing section 1 of 4");
+      await act(() => vi.advanceTimersByTimeAsync(1000)); // a section tick
+      expect(headline()).toHaveTextContent("Processing section 2 of 4");
+      expect(live()).toHaveTextContent("Processing section 1 of 4"); // a section tick says nothing yet
+    } finally {
+      cleanup(); // unmount while its timers are still fake
+      vi.useRealTimers();
+    }
   });
 });
