@@ -11,9 +11,16 @@ import {
   type Transcript,
 } from "@pebble/schema";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter as SettingsRouter, Route, Routes } from "react-router";
+
+const downloadText = vi.hoisted(() => vi.fn());
+vi.mock("../lib/downloadText.ts", () => ({ downloadText }));
 import type { EpisodeSource, ResolvedEpisode } from "../data/EpisodeSource.ts";
 import { SourceProvider } from "../data/SourceContext.tsx";
+import { Layout } from "../App.tsx";
 import { EpisodePage } from "../features/episode/EpisodePage.tsx";
+import { buildLearningItem } from "../features/learning/buildLearningItem.ts";
+import { LearningItemsPage } from "../features/learning/LearningItemsPage.tsx";
 import { LearningProvider } from "../features/learning/LearningContext.tsx";
 import { MemoryLearningStore } from "../features/learning/MemoryLearningStore.ts";
 import { TranslationProviderContext } from "../features/translation/TranslationContext.tsx";
@@ -22,6 +29,7 @@ import { fingerprintOf } from "../features/translation/workerTranslation.ts";
 import { fakeTranslationProvider, renderWithProviders, testEpisode } from "../test/fixtures.tsx";
 import { fakeWorkerClient, funasrHealth } from "../test/localFixtures.tsx";
 import { LocalTranslationProvider } from "./LocalTranslationProvider.tsx";
+import { TranslationSettingsPage } from "./TranslationSettingsPage.tsx";
 import {
   ATTRIBUTION,
   CONSENT_BODY,
@@ -29,6 +37,7 @@ import {
   CONSENT_OUT_OF_DATE,
   CONSENT_TITLE,
   LABELS,
+  SETTINGS,
   TRANSLATION_MESSAGES,
 } from "./translationCopy.ts";
 
@@ -793,5 +802,497 @@ describe("local English — consent pending", () => {
     await settle();
     expect(client.grantTranslationConsent).toHaveBeenCalledTimes(1);
     expect(client.translateLine).not.toHaveBeenCalled();
+  });
+});
+
+// --- Saving: fingerprint-safe snapshots ------------------------------------------------------
+
+describe("local English — saving", () => {
+  const save = async (n: number) =>
+    userEvent.click((await line(n)).getByRole("button", { name: "Save" }));
+  const savedEnglish = async (store: MemoryLearningStore) => {
+    await settle();
+    return (await store.listItems()).map((item) => item.translation);
+  };
+  const withCache = (overrides: Partial<WorkerClient> = {}) =>
+    healthClient(translationHealth(), {
+      getEpisodeTranslations: vi.fn(async () =>
+        cachedRows(EP_A, [{ segment: 0, text: LINES[0]!, english: ENGLISH[0]! }]),
+      ),
+      ...overrides,
+    });
+
+  it("saves English that matches the displayed text, without a request", async () => {
+    const client = withCache();
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await save(0);
+    expect(await savedEnglish(store)).toEqual([ENGLISH[0]]);
+    expect(client.translateLine).not.toHaveBeenCalled();
+  });
+
+  it("never saves an earlier version's English for an edited line", async () => {
+    const client = withCache();
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await userEvent.click((await line(0)).getByRole("button", { name: "Edit" }));
+    const input = screen.getByRole("textbox", { name: "Edit this line" });
+    await userEvent.clear(input);
+    await userEvent.type(input, EDITED);
+    await userEvent.click(screen.getByRole("button", { name: "Save edit" }));
+    await settle();
+    await save(0);
+    const [item] = await store.listItems();
+    expect(item?.text).toBe(EDITED);
+    expect(item?.translation).toBeNull();
+    expect(client.translateLine).not.toHaveBeenCalled();
+  });
+
+  it("after a revert, saves the English that matches again", async () => {
+    const client = withCache();
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await userEvent.click((await line(0)).getByRole("button", { name: "Edit" }));
+    const input = screen.getByRole("textbox", { name: "Edit this line" });
+    await userEvent.clear(input);
+    await userEvent.type(input, EDITED);
+    await userEvent.click(screen.getByRole("button", { name: "Save edit" }));
+    await settle();
+    await userEvent.click(screen.getByRole("button", { name: "Revert" }));
+    await settle();
+    await save(0);
+    expect(await savedEnglish(store)).toEqual([ENGLISH[0]]);
+  });
+
+  it("saves no English while a request is pending, and a late answer doesn't rewrite it", async () => {
+    const pending = deferred<TranslationResult>();
+    const client = healthClient(translationHealth(), {
+      translateLine: vi.fn(() => pending.promise),
+    });
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await userEvent.click((await englishButton(1))!);
+    await save(1);
+    expect(await savedEnglish(store)).toEqual([null]);
+    await act(async () => pending.resolve(await result(EP_A, 1, LINES[1]!, ENGLISH[1]!)));
+    expect(await screen.findByText(ENGLISH[1]!)).toBeInTheDocument();
+    expect(await savedEnglish(store)).toEqual([null]); // the saved snapshot stays as it was
+    expect(client.translateLine).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves no English after a failed request", async () => {
+    const client = healthClient(translationHealth(), {
+      translateLine: vi.fn(async () => {
+        throw new WorkerError("TRANSLATION_UNAVAILABLE", "x", { status: 503 });
+      }),
+    });
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await userEvent.click((await englishButton(1))!);
+    await screen.findByText(TRANSLATION_MESSAGES.TRANSLATION_UNAVAILABLE!);
+    await save(1);
+    expect(await savedEnglish(store)).toEqual([null]);
+  });
+
+  it("a saved snapshot isn't rewritten by later edits or translations", async () => {
+    const client = withCache({
+      translateLine: vi.fn(async () => result(EP_A, 0, EDITED, "Newer English.")),
+    });
+    const { store } = renderLocalEpisode(client);
+    await settle();
+    await save(0);
+    await userEvent.click((await line(0)).getByRole("button", { name: "Edit" }));
+    const input = screen.getByRole("textbox", { name: "Edit this line" });
+    await userEvent.clear(input);
+    await userEvent.type(input, EDITED);
+    await userEvent.click(screen.getByRole("button", { name: "Save edit" }));
+    await settle();
+    await userEvent.click((await englishButton(0))!);
+    await userEvent.click(screen.getByRole("button", { name: "Translate again" }));
+    await screen.findByText("Newer English.");
+    const [item] = await store.listItems();
+    expect(item?.text).toBe(LINES[0]);
+    expect(item?.translation).toBe(ENGLISH[0]);
+  });
+});
+
+// --- Export: saved snapshots only ------------------------------------------------------------
+
+describe("local English — export", () => {
+  async function itemFor(segment: number, translation: string | null, text = LINES[segment]!) {
+    const transcript = asrTranscript(EP_A);
+    const seg = transcript.segments[segment]!;
+    return buildLearningItem({
+      episode: {
+        ...testEpisode,
+        id: EP_A,
+        title: "Episode A",
+        demo: undefined,
+        audioProvenance: { kind: "user-provided", publishable: false, notes: "Yours." },
+      },
+      transcript,
+      segment: seg,
+      correction:
+        text === seg.text
+          ? null
+          : {
+              schemaVersion: CURRENT_SCHEMA_VERSION,
+              episodeId: EP_A,
+              segmentId: seg.id,
+              originalText: seg.text,
+              correctedText: text,
+              updatedAt: "2026-10-07T00:00:00.000Z",
+            },
+      pinyin: "pinyin",
+      translation,
+    });
+  }
+
+  it("exports only the saved snapshots and never asks the worker for English", async () => {
+    const store = new MemoryLearningStore();
+    await store.putItem(await itemFor(0, "Saved snapshot English."));
+    await store.putItem(await itemFor(1, null));
+    await store.putItem(await itemFor(2, null, "好的好的。"));
+    const client = healthClient(translationHealth(), {
+      // A different, newer cache must not leak into the export.
+      getEpisodeTranslations: vi.fn(async () =>
+        cachedRows(EP_A, [{ segment: 1, text: LINES[1]!, english: "Newer cached English." }]),
+      ),
+    });
+    render(
+      <WorkerProvider client={client}>
+        <LocalTranslationProvider>
+          <SourceProvider source={source()}>
+            <TranslationProviderContext
+              provider={new SessionCachedTranslationProvider(fakeTranslationProvider().provider)}
+            >
+              <LearningProvider openStore={() => Promise.resolve(store)}>
+                <MemoryRouter>
+                  <LearningItemsPage />
+                </MemoryRouter>
+              </LearningProvider>
+            </TranslationProviderContext>
+          </SourceProvider>
+        </LocalTranslationProvider>
+      </WorkerProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Export CSV for Anki" }));
+    await waitFor(() => expect(downloadText).toHaveBeenCalled());
+    const csv = downloadText.mock.lastCall![1] as string;
+    expect(csv).toContain("Saved snapshot English.");
+    expect(csv).not.toContain("Newer cached English.");
+    expect(csv).toContain("好的好的。"); // the saved (edited) text, not the transcript's
+    const rows = csv.trim().split("\n").slice(4);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((row) => row.split(",")[2] === "")).toHaveLength(2); // no new English
+    expect(client.translateLine).not.toHaveBeenCalled();
+    expect(client.getEpisodeTranslations).not.toHaveBeenCalled();
+  });
+});
+
+// --- Settings, withdrawal and refresh -----------------------------------------------------
+
+function renderSettings(client: WorkerClient) {
+  return render(
+    <WorkerProvider client={client}>
+      <LocalTranslationProvider>
+        <SettingsRouter>
+          <TranslationSettingsPage />
+        </SettingsRouter>
+      </LocalTranslationProvider>
+    </WorkerProvider>,
+  );
+}
+
+describe("local English — settings", () => {
+  it("shows the approved details and links", async () => {
+    renderSettings(healthClient(translationHealth()));
+    expect(await screen.findByText(SETTINGS.allowed, { exact: false })).toBeInTheDocument();
+    for (const detail of SETTINGS.details) expect(screen.getByText(detail)).toBeInTheDocument();
+    for (const link of SETTINGS.links) {
+      const anchor = screen.getByRole("link", { name: link.text });
+      expect(anchor).toHaveAttribute("href", link.href);
+      expect(anchor).toHaveAttribute("rel", "noopener noreferrer");
+    }
+  });
+
+  it("withdraws only on an explicit click, after the worker confirms", async () => {
+    const withdrawn = deferred<Awaited<ReturnType<WorkerClient["withdrawTranslationConsent"]>>>();
+    const client = healthClient(translationHealth(), {
+      withdrawTranslationConsent: vi.fn(() => withdrawn.promise),
+    });
+    renderSettings(client);
+    const button = await screen.findByRole("button", { name: SETTINGS.withdraw });
+    await settle();
+    expect(client.withdrawTranslationConsent).not.toHaveBeenCalled();
+    await userEvent.click(button);
+    expect(client.withdrawTranslationConsent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(SETTINGS.afterWithdrawal)).toBeNull(); // not until confirmed
+    await act(async () =>
+      withdrawn.resolve({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        provider: "deepl",
+        status: "required",
+        consentVersion: "deepl-2026-10",
+        grantedAt: null,
+      }),
+    );
+    expect(await screen.findByText(SETTINGS.afterWithdrawal)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: SETTINGS.withdraw })).toBeNull();
+    expect(client.translateLine).not.toHaveBeenCalled();
+    expect(client.grantTranslationConsent).not.toHaveBeenCalled();
+  });
+
+  it("a failed withdrawal keeps the last confirmed state and says so", async () => {
+    const client = healthClient(translationHealth(), {
+      withdrawTranslationConsent: vi.fn(async () => {
+        throw new WorkerError("UNREACHABLE", "Pebble's local worker is not running.");
+      }),
+    });
+    renderSettings(client);
+    await userEvent.click(await screen.findByRole("button", { name: SETTINGS.withdraw }));
+    expect(await screen.findByText(SETTINGS.withdrawFailed)).toBeInTheDocument();
+    expect(screen.getByText(SETTINGS.allowed, { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(SETTINGS.afterWithdrawal)).toBeNull();
+    expect(client.withdrawTranslationConsent).toHaveBeenCalledTimes(1); // no automatic retry
+  });
+
+  it("a withdrawal the worker doesn't confirm counts as failed", async () => {
+    const client = healthClient(translationHealth(), {
+      withdrawTranslationConsent: vi.fn(async () => ({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        provider: "deepl" as const,
+        status: "current" as const,
+        consentVersion: "deepl-2026-10",
+        grantedAt: "2026-10-07T12:00:00.000Z",
+      })),
+    });
+    renderSettings(client);
+    await userEvent.click(await screen.findByRole("button", { name: SETTINGS.withdraw }));
+    expect(await screen.findByText(SETTINGS.withdrawFailed)).toBeInTheDocument();
+  });
+
+  it("after withdrawal, a tap on a line asks for consent again; cached English still shows", async () => {
+    const client = healthClient(translationHealth(), {
+      getEpisodeTranslations: vi.fn(async () =>
+        cachedRows(EP_A, [{ segment: 0, text: LINES[0]!, english: ENGLISH[0]! }]),
+      ),
+    });
+    render(
+      <WorkerProvider client={client}>
+        <LocalTranslationProvider>
+          <SourceProvider source={source()}>
+            <TranslationProviderContext
+              provider={new SessionCachedTranslationProvider(fakeTranslationProvider().provider)}
+            >
+              <LearningProvider openStore={() => Promise.resolve(new MemoryLearningStore())}>
+                <MemoryRouter>
+                  <TranslationSettingsPage />
+                  <EpisodePage episodeId={EP_A} />
+                </MemoryRouter>
+              </LearningProvider>
+            </TranslationProviderContext>
+          </SourceProvider>
+        </LocalTranslationProvider>
+      </WorkerProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: SETTINGS.withdraw }));
+    await screen.findByText(SETTINGS.afterWithdrawal);
+    await settle();
+    await userEvent.click((await englishButton(0))!);
+    expect(await screen.findByText(ENGLISH[0]!)).toBeInTheDocument(); // still readable
+    await userEvent.click((await englishButton(1))!);
+    expect(await screen.findByRole("dialog", { name: CONSENT_TITLE })).toBeInTheDocument();
+    expect(client.translateLine).not.toHaveBeenCalled();
+  });
+
+  it("shows the not-set-up message, and no Withdraw, when translation is off", async () => {
+    renderSettings(
+      healthClient(
+        translationHealth({ configured: false, consent: "not_configured", newRequests: "off" }),
+      ),
+    );
+    expect(await screen.findAllByText(TRANSLATION_MESSAGES.TRANSLATION_OFF!)).not.toHaveLength(0);
+    expect(screen.queryByRole("button", { name: SETTINGS.withdraw })).toBeNull();
+  });
+});
+
+describe("local English — limit recovery", () => {
+  const limited = () =>
+    translationHealth({
+      newRequests: "local_limit_reached",
+      limits: {
+        period: "2026-10",
+        requestsUsed: 300,
+        requestLimit: 300,
+        charactersUsed: 10,
+        characterLimit: 30000,
+      },
+    });
+  const reachable = (translation: TranslationHealth | undefined) =>
+    parseWorkerHealth({ ...funasrHealth(), ...(translation ? { translation } : {}) });
+
+  async function limitedThen(next: () => Promise<ReturnType<typeof parseWorkerHealth>>) {
+    const health = vi
+      .fn<WorkerClient["health"]>()
+      .mockResolvedValueOnce(reachable(limited()))
+      .mockImplementationOnce(next);
+    const client = fakeWorkerClient({ health });
+    renderSettings(client);
+    expect(
+      await screen.findByText(TRANSLATION_MESSAGES.TRANSLATION_LOCAL_LIMIT!, { exact: false }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: SETTINGS.checkAgain }));
+    await settle();
+    expect(health).toHaveBeenCalledTimes(2);
+    expect(client.translateLine).not.toHaveBeenCalled();
+    return client;
+  }
+
+  it("limit reached, then available: the limit message goes; nothing is translated", async () => {
+    await limitedThen(async () => reachable(translationHealth()));
+    await waitFor(() =>
+      expect(
+        screen.queryByText(TRANSLATION_MESSAGES.TRANSLATION_LOCAL_LIMIT!, { exact: false }),
+      ).toBeNull(),
+    );
+    expect(screen.getByText(SETTINGS.allowed, { exact: false })).toBeInTheDocument();
+  });
+
+  it("still limited: stays limited", async () => {
+    await limitedThen(async () => reachable(limited()));
+    expect(
+      screen.getByText(TRANSLATION_MESSAGES.TRANSLATION_LOCAL_LIMIT!, { exact: false }),
+    ).toBeInTheDocument();
+  });
+
+  it("consent required after the refresh", async () => {
+    await limitedThen(async () =>
+      reachable(translationHealth({ consent: "required", newRequests: "consent_required" })),
+    );
+    expect(await screen.findByText(SETTINGS.notAllowed)).toBeInTheDocument();
+  });
+
+  it("off after the refresh", async () => {
+    await limitedThen(async () =>
+      reachable(
+        translationHealth({ configured: false, consent: "not_configured", newRequests: "off" }),
+      ),
+    );
+    expect(await screen.findByText(TRANSLATION_MESSAGES.TRANSLATION_OFF!)).toBeInTheDocument();
+  });
+
+  it("an unreachable worker changes nothing and says so", async () => {
+    await limitedThen(async () => {
+      throw new WorkerError("UNREACHABLE", "Pebble's local worker is not running.");
+    });
+    expect(await screen.findByText(SETTINGS.checkFailed)).toBeInTheDocument();
+    expect(
+      screen.getByText(TRANSLATION_MESSAGES.TRANSLATION_LOCAL_LIMIT!, { exact: false }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("local English — settings link", () => {
+  function renderShell(client: WorkerClient | null) {
+    const shell = (
+      <LearningProvider openStore={() => Promise.resolve(new MemoryLearningStore())}>
+        <SettingsRouter>
+          <Routes>
+            <Route path="/" element={<Layout mode="local" />} />
+          </Routes>
+        </SettingsRouter>
+      </LearningProvider>
+    );
+    return render(
+      client ? (
+        <WorkerProvider client={client}>
+          <LocalTranslationProvider>{shell}</LocalTranslationProvider>
+        </WorkerProvider>
+      ) : (
+        shell
+      ),
+    );
+  }
+
+  it("appears only when the local app provides translation", async () => {
+    renderShell(healthClient(translationHealth()));
+    expect(await screen.findByRole("link", { name: LABELS.settingsNav })).toHaveAttribute(
+      "href",
+      "/translation",
+    );
+  });
+
+  it("is absent without it (the demo, or an older worker)", async () => {
+    renderShell(null);
+    await screen.findByRole("navigation", { name: "Main" });
+    expect(screen.queryByRole("link", { name: LABELS.settingsNav })).toBeNull();
+  });
+});
+
+describe("local English — withdrawal uncertainty", () => {
+  it("uses the approved copy", () => {
+    expect(SETTINGS.withdrawFailed).toBe(
+      "Pebble couldn't confirm that your choice was withdrawn. Try again.",
+    );
+    expect(SETTINGS.checkFailed).toBe(
+      "Pebble couldn't check right now. The displayed status hasn't changed.",
+    );
+    expect(SETTINGS.notAllowed).toBe(
+      "English translation with DeepL isn't allowed on this computer yet. Pebble asks the first time you tap English on a line.",
+    );
+    expect([SETTINGS.title, LABELS.settingsNav, SETTINGS.checkAgain]).toEqual([
+      "English translation",
+      "Translation",
+      "Check again",
+    ]);
+  });
+
+  it("a lost withdrawal response that did take effect is handled safely later", async () => {
+    const client = healthClient(translationHealth(), {
+      // The worker withdrew, but the response never arrived.
+      withdrawTranslationConsent: vi.fn(async () => {
+        throw new WorkerError("UNREACHABLE", "Pebble's local worker is not running.");
+      }),
+      translateLine: vi.fn(async () => {
+        throw new WorkerError("TRANSLATION_CONSENT_REQUIRED", "x", { status: 409 });
+      }),
+    });
+    render(
+      <WorkerProvider client={client}>
+        <LocalTranslationProvider>
+          <SourceProvider source={source()}>
+            <TranslationProviderContext
+              provider={new SessionCachedTranslationProvider(fakeTranslationProvider().provider)}
+            >
+              <LearningProvider openStore={() => Promise.resolve(new MemoryLearningStore())}>
+                <MemoryRouter>
+                  <TranslationSettingsPage />
+                  <EpisodePage episodeId={EP_A} />
+                </MemoryRouter>
+              </LearningProvider>
+            </TranslationProviderContext>
+          </SourceProvider>
+        </LocalTranslationProvider>
+      </WorkerProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: SETTINGS.withdraw }));
+    expect(await screen.findByText(SETTINGS.withdrawFailed)).toBeInTheDocument();
+    // Last confirmed status stays, Withdraw can be pressed again; nothing else happens.
+    expect(screen.getByRole("button", { name: SETTINGS.withdraw })).toBeInTheDocument();
+    expect(client.translateLine).not.toHaveBeenCalled();
+    await settle();
+    // The next explicit tap meets the worker's refusal: one request, fixed copy, no dialog.
+    await userEvent.click((await englishButton(0))!);
+    expect(
+      await screen.findByText(TRANSLATION_MESSAGES.TRANSLATION_CONSENT_REQUIRED!),
+    ).toBeInTheDocument();
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(client.translateLine).toHaveBeenCalledTimes(1);
+    // Readiness now reflects it: settings no longer offer Withdraw.
+    expect(await screen.findByText(SETTINGS.notAllowed)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: SETTINGS.withdraw })).toBeNull();
+    expect(screen.queryByText(SETTINGS.withdrawFailed)).toBeNull();
   });
 });

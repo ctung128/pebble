@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { TranslationHealth } from "@pebble/schema";
 import {
   WorkerTranslationContext,
   WorkerTranslationError,
@@ -39,7 +40,12 @@ interface PendingConsent {
  */
 export function LocalTranslationProvider({ children }: { children: ReactNode }) {
   const { client, status } = useWorker();
-  const health = status.kind === "ready" ? status.health.translation : undefined;
+  const base = status.kind === "ready" ? status.health.translation : undefined;
+  // An explicit refresh (translation settings) replaces the base report until the next one.
+  const [refreshed, setRefreshed] = useState<{ base: object; health: TranslationHealth } | null>(
+    null,
+  );
+  const health = base && refreshed?.base === base ? refreshed.health : base;
   const [stored, setStored] = useState<Overrides>({});
   // A fresh health report is the new baseline: overrides learned under another are ignored.
   const overrides = stored.health === health ? stored : {};
@@ -130,6 +136,31 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
           throw failure;
         }
       },
+      async withdrawConsent() {
+        let consent;
+        try {
+          consent = await client.withdrawTranslationConsent();
+        } catch (error) {
+          throw asTranslationError(error);
+        }
+        // Success only once the worker confirms consent is no longer current.
+        if (consent.status !== "required")
+          throw new WorkerTranslationError("TRANSLATION_UNAVAILABLE");
+        learn({ consent: "required" });
+      },
+      async refresh() {
+        // Health only: nothing is translated, and nothing is assumed from the browser's clock.
+        let result;
+        try {
+          result = await client.health();
+        } catch {
+          return false;
+        }
+        const translation = result.ok ? result.data.translation : undefined;
+        if (!translation || !base) return false;
+        setRefreshed({ base, health: translation });
+        return true;
+      },
       requestConsent() {
         if (pending.current) return pending.current.promise;
         let resolve: (outcome: ConsentOutcome) => void = () => {};
@@ -141,7 +172,7 @@ export function LocalTranslationProvider({ children }: { children: ReactNode }) 
         return promise;
       },
     };
-  }, [client, readiness, learn]);
+  }, [client, readiness, learn, base]);
 
   return (
     <WorkerTranslationContext.Provider value={value}>

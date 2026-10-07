@@ -2,14 +2,11 @@
 
 **Status:** Accepted (2026-10-06): the design is approved.
 
-- **Worker implementation: complete** (contract 1.8): settings, storage, consent, the DeepL
-  client with its time bound, `POST /translations`, cached retrieval and health.
-- **Local web integration: in progress.** Per-line English, cached English, "Show saved
-  English" and the consent dialog are built; fingerprint-safe saving, export safeguards,
-  translation settings (including Withdraw), recovery after a monthly-limit reset and the
-  demo-bundle guard are not (TRANSLATION.md, "Before real activation").
-- **Real activation: not approved.** No live DeepL call has been made; a smoke test and real
-  use each need separate approval.
+- **Implementation: complete** — worker (contract 1.8) and local app (per-line English, consent,
+  settings with Withdraw, fingerprint-safe saving, snapshot-only export, demo-bundle guard).
+- **Verification: gaps remain** — no live provider call; some local test suites unrun or
+  unresolved (TRANSLATION.md, "Before real activation").
+- **Real activation: not approved.** A live smoke test and real use each need separate approval.
 
 Details: [TRANSLATION.md](../TRANSLATION.md).
 

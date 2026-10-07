@@ -1,25 +1,28 @@
 # English line translation (DeepL)
 
-> **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); not
-> approved for real activation.** The worker side is complete (contract 1.8). The local web
-> integration is in progress: per-line English, cached English, **Show saved English** and the
-> consent dialog are built; save/export safeguards, translation settings (including
-> **Withdraw**) and the demo-bundle guard are not yet. Live DeepL calls, including a smoke test,
-> still require separate approval. Everything so far is tested only with invented text and fake
-> workers, providers or HTTPS transports.
+> **Status: implementation complete; not approved for real activation.** ([ADR
+> 0008](adr/0008-optional-deepl-line-translation.md).) Everything planned is built: the worker
+> (contract 1.8), the local app's per-line English, cached English, **Show saved English**, the
+> consent dialog, translation settings with **Withdraw** and an explicit re-check, fingerprint-safe
+> saving, snapshot-only export and the demo-bundle guard. It is tested only with invented text and
+> fake workers, providers or HTTPS transports.
 
-### Before real activation (slice 6)
+### Before real activation
 
-- **Fingerprint-safe saving:** a learning item stores English only when its fingerprint matches
-  the displayed text (real-ASR items save no English until then).
-- **Export safeguards:** export uses saved snapshots only and never asks for English.
-- **A precise demo-bundle guard:** the demo build must contain no provider copy, attribution,
-  translation routes, consent UI or local translation code. One narrow exception: the shared
-  schema's provider identifier (`TRANSLATION_PROVIDER = "deepl"`), which the demo bundles with
-  the contract validators. It is an identifier, not copy, and permits nothing else.
-- **Translation settings with Withdraw** (the fuller information and links above).
-- **Recovering when a reached monthly limit resets:** today the app learns "limit reached" from
-  a refused request and only clears it on a fresh health check.
+- **No live provider check yet:** real TLS, certificates on this Python build and DeepL's actual
+  responses are unverified. A live smoke test with one invented sentence needs separate approval.
+- **Open verification gaps:** the worker's five port tests and the sandbox-blocked script tests
+  haven't run with these changes; the `JobProgressPage` and `EpisodeTitle` test failures are
+  unresolved (tracked separately); there has been no uninterrupted full verification pass.
+
+**Demo bundle.** The demo build may contain no provider copy, attribution, translation routes,
+consent or settings UI, or local translation code (`apps/web/scripts/demoBundleGuard.mjs`, which
+checks every file in full). The single exception is the shared schema's provider identifier
+(`TRANSLATION_PROVIDER = "deepl"`), which the demo bundles with the contract validators. It is
+accepted only in its compiled context, followed directly by that module's next constants
+(`EN-US`, `2e3`, the start of the Han-range table), and at most once. Any other occurrence fails
+the build, including a lone literal elsewhere; if the build output changes shape, the guard fails
+closed until its pattern is updated.
 
 Optional, off by default, for the local app only. A learner taps **English** on one line;
 the worker sends that line's Chinese to DeepL and keeps the result on this computer. The
@@ -146,6 +149,33 @@ Consent carries a version; changing the dialog's wording or what is sent asks ag
 - Whether API submissions are used to train DeepL's models is **unresolved**; Pebble makes no
   claim either way.
 
+## Translation settings
+
+Local mode only: the page "English translation", linked from the sidebar ("Translation") when the
+worker reports translation. Status by readiness:
+
+| Readiness              | Shown                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Not set up (`off`)     | English isn't set up for Pebble on this computer.                                                                        |
+| Consent required       | English translation with DeepL isn't allowed on this computer yet. Pebble asks the first time you tap English on a line. |
+| Allowed                | English translation with DeepL: allowed for this computer, and **Withdraw**                                              |
+| Allowed, limit reached | The same, plus Pebble's monthly limit message and **Check again**                                                        |
+| Just withdrawn         | Saved English stays readable. New lines won't be sent to DeepL unless you allow it again.                                |
+
+- **Withdraw** needs a click, sends nothing to DeepL and deletes nothing (cached English and saved
+  items stay readable). It shows "just withdrawn" only after the worker confirms. If the response
+  fails or is lost, the page keeps the last confirmed status and says "Pebble couldn't confirm
+  that your choice was withdrawn. Try again." — it doesn't claim consent is still current;
+  **Withdraw** can be pressed again; nothing is retried or translated by itself. If the
+  withdrawal did take effect, the next tap on a line gets `TRANSLATION_CONSENT_REQUIRED` from the
+  worker, shows "Allow translation with DeepL first." and only opens the dialog on **Try again**.
+  A request already reserved may still complete (see the order below).
+- **Check again** (after Pebble's monthly limit was reached) re-reads the worker's health and
+  nothing else: it never translates, never resets counts in the browser and never infers a new
+  month from the browser's clock. If it fails: "Pebble couldn't check right now. The displayed
+  status hasn't changed." Translating afterwards is still a separate tap.
+- The details and links listed under Consent.
+
 ## Reading English
 
 - **Cache.** Worker SQLite holds every translation, owned by its episode (deleted with it),
@@ -160,8 +190,11 @@ Consent carries a version; changing the dialog's wording or what is sent asks ag
   never requests anything.
 - Cached English stays readable when translation is off, consent is withdrawn or a limit is
   reached.
-- **Saving** a learning item stores English only if it is current for the displayed text.
-  **Export** uses saved snapshots and never calls DeepL for real-ASR items.
+- **Saving** a learning item stores English only if its fingerprint matches the displayed text
+  at that moment: never an earlier version, a pending or a failed request. Saving never asks for
+  English, and a saved item is a snapshot that later edits or translations don't change.
+- **Export** writes the saved snapshots only. For real-ASR items it never asks the worker for
+  English or reads its cache; an item saved without English is exported without it.
 
 ## Limits and order of a request
 

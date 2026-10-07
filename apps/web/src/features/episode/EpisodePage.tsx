@@ -310,7 +310,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       toggleSave: (segment) => {
         if (learningLocked) return;
-        const { learning, lines, pinyin, episode, transcript } = latest.current;
+        const { learning, lines, pinyin, episode, transcript, worker } = latest.current;
         const existing = learning.itemForSegment(episode.id, segment.id);
         if (existing) {
           if (existing.note) setConfirmUnsaveId(segment.id);
@@ -325,14 +325,18 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
             segment,
             correction: learning.correctionFor(episode.id, segment.id),
             pinyin: pinyin.convert ? pinyin.convert(text) : null,
-            translation: translationAvailable
-              ? (translationProvider.peek({
-                  episodeId: episode.id,
-                  segmentId: segment.id,
-                  text,
-                  sourceText: segment.text,
-                })?.text ?? null)
-              : null,
+            // A snapshot: worker English only if it matches the displayed text now (never an
+            // earlier version, a pending or a failed request); saving never asks for any.
+            translation: workerMode
+              ? worker.currentEnglish(segment.id)
+              : translationAvailable
+                ? (translationProvider.peek({
+                    episodeId: episode.id,
+                    segmentId: segment.id,
+                    text,
+                    sourceText: segment.text,
+                  })?.text ?? null)
+                : null,
           }),
         );
       },

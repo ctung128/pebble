@@ -52,12 +52,28 @@ export interface WorkerTranslation {
    * worker records it; "cancelled" otherwise. Opening the dialog grants nothing.
    */
   requestConsent(): Promise<ConsentOutcome>;
+  /**
+   * Withdraws consent on the worker. Resolves only after the worker confirms; rejects with
+   * WorkerTranslationError otherwise. Sends nothing to the provider and deletes nothing.
+   */
+  withdrawConsent(): Promise<void>;
+  /**
+   * Re-reads the worker's health (never translates). Resolves true and updates readiness when
+   * the worker answered with translation readiness; false otherwise, changing nothing.
+   */
+  refresh(): Promise<boolean>;
   /** Fixed learner-facing copy for a worker code. */
   message(code: string): string;
   /** Shown under every provider translation. */
   attribution: { text: string; href: string };
   /** Local-only UI labels (kept out of the demo bundle). */
-  labels: { stale: string; translateAgain: string; showSaved: string; hideSaved: string };
+  labels: {
+    stale: string;
+    translateAgain: string;
+    showSaved: string;
+    hideSaved: string;
+    settingsNav: string;
+  };
 }
 
 export const WorkerTranslationContext = createContext<WorkerTranslation | null>(null);

@@ -296,6 +296,22 @@ export function useWorkerLineTranslations(
     [update],
   );
 
+  /**
+   * English to save with a learning item: only cached English whose fingerprint matches the
+   * line's exact submitted (NFC) text right now. An earlier version, a pending or failed
+   * request, or a fingerprint not yet computed means none. Never sends anything.
+   */
+  const currentEnglish = useCallback(
+    (segmentId: string): string | null => {
+      const shown = latest.current.displayed.get(segmentId);
+      if (shown === undefined) return null;
+      const fingerprint = latest.current.fingerprints.get(submittedText(shown));
+      if (!fingerprint) return null;
+      return cache.get(segmentId)?.find((row) => row.fingerprint === fingerprint)?.text ?? null;
+    },
+    [cache],
+  );
+
   /** Whether this line has any cached English (current or earlier). */
   const hasCached = useCallback(
     (segmentId: string) => (cache.get(segmentId)?.length ?? 0) > 0,
@@ -304,8 +320,8 @@ export function useWorkerLineTranslations(
 
   // Stable between state changes, so memoized rows don't re-render on every playback frame.
   return useMemo(
-    () => ({ lines, toggle, retry, showSaved, setShowSaved, hasCached }),
-    [lines, toggle, retry, showSaved, setShowSaved, hasCached],
+    () => ({ lines, toggle, retry, showSaved, setShowSaved, hasCached, currentEnglish }),
+    [lines, toggle, retry, showSaved, setShowSaved, hasCached, currentEnglish],
   );
 }
 

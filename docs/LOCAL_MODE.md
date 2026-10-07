@@ -16,8 +16,8 @@ translate if you set up the optional DeepL translation ([TRANSLATION.md](TRANSLA
 > - With the default `npm run worker`, transcripts are **mock placeholder text** (such as
 >   `（模拟转写）第 1-1 段`), not recognized speech. The mock never listens to the audio.
 > - With `npm run worker:funasr`, the local app creates real transcripts. Pinyin, editing,
->   saving and Anki export work; English stays hidden until the optional DeepL line
->   translation ([TRANSLATION.md](TRANSLATION.md); designed, not implemented yet) ships.
+>   saving and Anki export work. English for single lines is optional, off by default, and
+>   not yet approved for real use ([TRANSLATION.md](TRANSLATION.md)).
 
 Pebble starts at a local audio file you choose. It does not fetch, download or scrape audio
 from URLs or apps, and it does not work around any platform's content protections.

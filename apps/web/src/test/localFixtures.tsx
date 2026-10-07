@@ -108,6 +108,13 @@ export function fakeWorkerClient(overrides: Partial<WorkerClient> = {}) {
       consentVersion,
       grantedAt: "2026-10-07T12:00:00.000Z",
     })),
+    withdrawTranslationConsent: vi.fn(async () => ({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      provider: "deepl" as const,
+      status: "required" as const,
+      consentVersion: "deepl-2026-10",
+      grantedAt: null,
+    })),
     ...overrides,
   } satisfies WorkerClient;
   return client;

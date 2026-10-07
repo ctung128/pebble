@@ -16,6 +16,7 @@ import { StorageNotice } from "./components/StorageNotice.tsx";
 import { useLearning } from "./features/learning/LearningContext.tsx";
 import { LearningItemsPage } from "./features/learning/LearningItemsPage.tsx";
 import { EpisodePage } from "./features/episode/EpisodePage.tsx";
+import { useWorkerTranslation } from "./features/translation/workerTranslation.ts";
 import { LibraryPage } from "./features/library/LibraryPage.tsx";
 import logoMark from "./assets/logo-mark.png";
 import styles from "./App.module.css";
@@ -38,6 +39,7 @@ const LIBRARY_SECTION = /^\/(?:$|episodes\/|jobs\/)/;
 
 export function Layout({ mode }: { mode: AppMode }) {
   const { items } = useLearning();
+  const workerTranslation = useWorkerTranslation();
   const { pathname } = useLocation();
   const [shortcutSlot, setShortcutSlot] = useState<HTMLElement | null>(null);
   const chip = MODE_CHIP[mode];
@@ -75,6 +77,12 @@ export function Layout({ mode }: { mode: AppMode }) {
             Learning items
             {items.length > 0 ? <span className={styles.count}>{items.length}</span> : null}
           </NavLink>
+          {/* Local English (ADR 0008): only when the local app provides it; never the demo. */}
+          {workerTranslation ? (
+            <NavLink to="/translation" className={styles.navLink}>
+              {workerTranslation.labels.settingsNav}
+            </NavLink>
+          ) : null}
         </nav>
         {/* The episode page renders its keyboard shortcuts here (ShortcutSlot). */}
         <div ref={setShortcutSlot} className={styles.shortcuts} />

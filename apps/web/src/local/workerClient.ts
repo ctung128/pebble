@@ -68,6 +68,8 @@ export interface WorkerClient {
   translateLine(request: TranslationLineRequest): Promise<TranslationResult>;
   /** 1.8: accepts the given consent version for every browser using this worker. */
   grantTranslationConsent(consentVersion: string): Promise<TranslationConsent>;
+  /** 1.8: withdraws consent for every browser using this worker (idempotent). */
+  withdrawTranslationConsent(): Promise<TranslationConsent>;
 }
 
 export interface TranslationLineRequest {
@@ -188,6 +190,14 @@ export class HttpWorkerClient implements WorkerClient {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }),
+    );
+    if (!result.ok) throw invalid(result.message);
+    return result.data;
+  }
+
+  async withdrawTranslationConsent(): Promise<TranslationConsent> {
+    const result = parseTranslationConsent(
+      await this.request("translation/consent", { method: "DELETE" }),
     );
     if (!result.ok) throw invalid(result.message);
     return result.data;

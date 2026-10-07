@@ -6,6 +6,7 @@ import { JobProgressRoute } from "./JobProgressPage.tsx";
 import { LocalLibraryPage } from "./LocalLibraryPage.tsx";
 import { LocalRenameProvider } from "./LocalRenameProvider.tsx";
 import { LocalTranslationProvider } from "./LocalTranslationProvider.tsx";
+import { TranslationSettingsPage } from "./TranslationSettingsPage.tsx";
 
 export const localRoutes: RouteObject[] = [
   {
@@ -17,6 +18,7 @@ export const localRoutes: RouteObject[] = [
       { path: "jobs/:jobId", element: <JobProgressRoute /> },
       { path: "episodes/:episodeId", element: <EpisodeRoute /> },
       { path: "items", element: <LearningItemsPage /> },
+      { path: "translation", element: <TranslationSettingsPage /> },
       { path: "*", element: <NotFound /> },
     ],
   },

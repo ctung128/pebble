@@ -28,6 +28,8 @@ Anki's import header lines (supported by Anki 2.1.55 and newer):
 - English and pinyin are added automatically: on export, Pebble fills in whichever is missing
   (only then; nothing is fetched in the background) and keeps the results on the learning
   items. After the download, Pebble reports any items exported without English or pinyin.
+  For your own (local) transcripts, English is never added on export: items keep the English
+  saved with them, if any ([TRANSLATION.md](TRANSLATION.md)).
 - Every row has exactly six fields. Empty values stay empty in place, so a missing
   translation never shifts Note or Source into the wrong column.
 - Fields containing `,` `"` or line breaks, or starting with `#` or whitespace, are quoted, and
