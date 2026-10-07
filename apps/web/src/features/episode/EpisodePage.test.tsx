@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetGuideTipsForTests } from "../../components/GuideTip.tsx";
 import { SourceError } from "../../data/EpisodeSource.ts";
 import {
   fakeSource,
@@ -626,5 +627,27 @@ describe("EpisodePage — Copy Chinese", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(JSON.stringify([await store.listItems(), await store.listCorrections()])).toBe(before);
     expect(Object.keys(localStorage).sort().join()).toBe(keys);
+  });
+});
+
+describe("EpisodePage — guide tip (demo build)", () => {
+  beforeEach(() => {
+    resetGuideTipsForTests();
+    window.sessionStorage.clear();
+  });
+
+  it("shows the Zhongwen tip once a quarter of the lines are reached, until it's dismissed", async () => {
+    renderPage();
+    const rows = await playButtons();
+    expect(screen.queryByRole("link", { name: "Get Zhongwen" })).toBeNull();
+    await userEvent.click(rows[1]!); // line 2 of 3
+    const link = await screen.findByRole("link", { name: "Get Zhongwen" });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://chromewebstore.google.com/detail/zhongwen-chinese-english/kkmlkkjojmombglmlpbpapmhcaljjkde",
+    );
+    expect(screen.getByRole("button", { name: "Dismiss tip" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss tip" }));
+    await waitFor(() => expect(screen.queryByRole("link", { name: "Get Zhongwen" })).toBeNull());
   });
 });

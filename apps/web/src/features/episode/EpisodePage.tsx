@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { Transcript } from "@pebble/schema";
+import { GuideTip } from "../../components/GuideTip.tsx";
 import { Icon } from "../../components/Icon.tsx";
 import { MoreMenu, type MoreMenuItem } from "../../components/MoreMenu.tsx";
 import { ShortcutSlot } from "../../components/ShellSlot.tsx";
@@ -47,6 +48,9 @@ import styles from "./EpisodePage.module.css";
 
 const REVIEW_HELP_ID = "review-help";
 const LOCKED_HELP_ID = "learning-locked-help";
+/** The Zhongwen extension's store listing (a third-party dictionary, not part of Pebble). */
+const ZHONGWEN_URL =
+  "https://chromewebstore.google.com/detail/zhongwen-chinese-english/kkmlkkjojmombglmlpbpapmhcaljjkde";
 export const LEARNING_LOCKED_MESSAGE =
   "Learning tools become available after Pebble creates a real transcript.";
 export const PREVIEW_BANNER =
@@ -594,6 +598,22 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         <button type="button" className={styles.resume} onClick={resume}>
           Back to current line
         </button>
+      ) : null}
+
+      {/* Demo only: one tip, once per session, beside the transcript (docs/DESIGN_SYSTEM.md). */}
+      {!__PEBBLE_LOCAL__ ? (
+        <div className={styles.guide} data-raised={(!isFollowing && activeIndex >= 0) || undefined}>
+          <GuideTip
+            id="zhongwen-hover"
+            trigger={{ type: "episode-progress", at: 0.25 }}
+            message="Tip: With the Zhongwen browser extension turned on, hover any character to see its pinyin and meaning."
+            action={{ label: "Get Zhongwen", href: ZHONGWEN_URL }}
+            progress={{ index: activeIndex, count: segments.length }}
+            anchor={readerRef}
+            userScrolled={!isFollowing}
+            requiresHover
+          />
+        </div>
       ) : null}
 
       {/* crossOrigin: local-mode audio comes from the worker, which only answers allowlisted origins. */}

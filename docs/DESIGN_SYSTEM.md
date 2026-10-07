@@ -74,6 +74,37 @@ and 24px). The v1 uses were migrated when v2 landed (`--space-5` → `--space-6`
 - **Dark mode (off for now):** every semantic colour still has a dark value. Use semantic names,
   never primitives or hex values, so components follow the theme when it returns.
 
+## GuideTip (the Pebble character beside the transcript)
+
+`components/GuideTip.tsx`: a one-time tip from the Pebble character in the episode view, used
+for one tip so far (demo only): the Zhongwen hover tip. It's not a chatbot: no input, no
+history, no persistent help button.
+
+- **The exception:** the brand layer stays away from the transcript. The Pebble character may
+  appear beside it **only** as this tip: once per session per tip id, dismissible, in the
+  margin, never covering transcript text, line actions or the player.
+- **Character:** `assets/logo-mark.png` exactly as it is, 44px in the margin (28px inline);
+  decorative (`alt=""`, `aria-hidden`). No circle, badge, status dot or floating button.
+- **Bubble:** `--bg-subtle`, hairline `--border-subtle`, `--radius-lg`, 234px wide, a hairline
+  tail pointing left, no shadow and no juniper fill. Text `--size-body-sm` in
+  `--text-primary` ("Tip:" at 500); link in the normal link style; a ghost **Dismiss**
+  button (`aria-label` "Dismiss tip", 44px hit area). `role="status"`; it never takes focus,
+  adds no key handlers and catches pointer events only on its bubble.
+- **Placement:** in the right margin outside `--content-width`, level with the current line
+  (inside the 18–66% band `useFollowActive` keeps it in) when the margin has room for it
+  (about 340px); otherwise a slim inline row inside the column, directly above the player
+  (above "Back to current line" while that shows). Only on devices with a mouse
+  (`(hover: hover) and (pointer: fine)`); never on phones or tablets.
+- **When:** the current line passes 25% of the lines, or the learner (not Pebble's own
+  follow-scroll) scrolls 25% through the transcript. It stays until the learner dismisses it.
+  Seen-state lives in `sessionStorage` (in try/catch, with an in-memory fallback).
+- **Motion:** the one exception to colour and opacity only, limited to this character: rise
+  in (6px, `--duration-base`), the bubble reveals from its tail (scale 0.96 → 1), the text
+  fades in (`--duration-fast`), then a 2px, 1.5° idle drift on a 5 s loop. Exit is one fade.
+  Under reduced motion there's no movement at all.
+- **Hierarchy:** transcript, then player, then episode chrome, then the tip. If it ever
+  competes with the first three, make it quieter.
+
 ## Adding or changing a token
 
 1. Change it in the design system and regenerate `tokens.json` and `tokens.css`.

@@ -1,0 +1,238 @@
+/*
+ * GuideTip (docs/DESIGN_SYSTEM.md): the Pebble character with a one-line tip, in the right
+ * margin beside the current line, or as a slim row above the player when the margin is too
+ * narrow. Flat rice-paper bubble, hairline border, no shadow, no juniper fills. Only the bubble
+ * catches pointer events; the character never does.
+ */
+.tip {
+  position: fixed;
+  z-index: 11;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  pointer-events: none;
+  color: var(--text-primary);
+}
+
+.character {
+  display: block;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-top: var(--space-4);
+  transform-origin: 50% 90%;
+}
+
+.bubble {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  width: 234px;
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border: var(--border-width-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  pointer-events: auto;
+  transform-origin: 0 34px;
+}
+
+/* The tail: the same hairline and fill, pointing left to the character. */
+.bubble::before,
+.bubble::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+}
+
+.bubble::before {
+  top: 26px;
+  left: -8px;
+  border-width: 8px 8px 8px 0;
+  border-right-color: var(--border-subtle);
+}
+
+.bubble::after {
+  top: 27px;
+  left: -6px;
+  border-width: 7px 7px 7px 0;
+  border-right-color: var(--bg-subtle);
+}
+
+.text {
+  margin: 0;
+  font-size: var(--size-body-sm);
+  line-height: 1.5;
+}
+
+.lead {
+  font-weight: 500;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.link {
+  border-radius: var(--radius-xs);
+  color: var(--text-accent);
+  font-size: var(--size-body-sm);
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A quiet ghost button: 32px to look at, 44px to hit. */
+.dismiss {
+  position: relative;
+  min-height: 32px;
+  margin-right: calc(-1 * var(--space-2));
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--size-caption);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard);
+}
+
+.dismiss::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.dismiss:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+/* --- Inline: a slim row inside the column, directly above the player --- */
+
+.tip[data-variant="inline"] {
+  /* Centred over the content column, like "Back to current line". */
+  left: calc(50% + var(--sidebar-width) / 2);
+  bottom: var(--guide-tip-bottom, calc(var(--player-height) + var(--space-4)));
+  align-items: center;
+  width: min(var(--content-width), calc(100vw - var(--sidebar-width) - 2 * var(--space-6)));
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: var(--border-width-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.tip[data-variant="inline"] .character {
+  width: 28px;
+  height: 28px;
+  margin-top: 0;
+}
+
+.tip[data-variant="inline"] .bubble {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.tip[data-variant="inline"] .bubble::before,
+.tip[data-variant="inline"] .bubble::after {
+  content: none;
+}
+
+.tip[data-variant="inline"] .text {
+  flex: 1;
+}
+
+.tip[data-variant="inline"] .row {
+  flex: none;
+  gap: var(--space-3);
+}
+
+@media (max-width: 899px) {
+  .tip[data-variant="inline"] {
+    left: 50%;
+    width: calc(100vw - 2 * var(--page-gutter));
+  }
+}
+
+/*
+ * --- Motion: the one exception to colour and opacity only, limited to this character ---
+ * 1. character fades in with a 6px rise; 2. bubble reveals from its tail; 3. text fades in;
+ * 4. a 2px, 1.5° idle drift on a 5s loop. Exit: one fade.
+ */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes idle {
+  50% {
+    transform: translateY(-2px) rotate(-1.5deg);
+  }
+}
+
+.tip[data-phase="shown"] .character {
+  animation:
+    rise var(--duration-base) var(--easing-standard) both,
+    idle 5s ease-in-out calc(var(--duration-base) * 4) infinite;
+}
+
+.tip[data-phase="shown"][data-variant="margin"] .bubble {
+  animation: reveal var(--duration-base) var(--easing-standard) var(--duration-base) both;
+}
+
+.tip[data-phase="shown"] .text,
+.tip[data-phase="shown"] .row {
+  animation: fade var(--duration-fast) var(--easing-standard) calc(var(--duration-base) * 2) both;
+}
+
+.tip[data-phase="leaving"] {
+  opacity: 0;
+  transition: opacity var(--duration-base) var(--easing-standard);
+}
+
+/* Reduced motion: no movement at all; the tip simply appears and disappears. */
+.tip[data-reduced-motion] *,
+.tip[data-reduced-motion] {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip,
+  .tip * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

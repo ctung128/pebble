@@ -246,6 +246,18 @@
   font-size: var(--size-label);
 }
 
+/* --- Guide tip (demo): above "Back to current line" while that pill shows --- */
+
+.guide {
+  display: contents;
+}
+
+.guide[data-raised] {
+  --guide-tip-bottom: calc(
+    var(--player-height) + var(--space-4) + var(--control-md) + var(--space-2)
+  );
+}
+
 /* --- Back to current line: a secondary pill above the player, over the content column --- */
 
 .resume {
