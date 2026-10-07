@@ -7,8 +7,10 @@ All sentences below are invented filler text, not output from any real recording
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
+import re
 import wave
 
 import pytest
@@ -24,6 +26,7 @@ from pebble_worker.providers.funasr import (
     FunASRProvider,
     NormalizationError,
     TextConsistency,
+    UnitMappingError,
     alignment_issue,
     chunk_alignment,
     comparable_text,
@@ -39,6 +42,19 @@ from pebble_worker.storage import Storage
 CHUNK_MS = 30_000
 
 
+def spans(start, end, count):
+    """`count` touching pairs that exactly cover start..end (the last pair ends at `end`)."""
+    return [
+        [start + (end - start) * i // count, start + (end - start) * (i + 1) // count]
+        for i in range(count)
+    ]
+
+
+per_char = spans
+
+UNIT = re.compile(r"[㐀-鿿]|[A-Za-z0-9]+")
+
+
 def sentence(start, end, text, timestamp=None):
     item = {"text": text, "start": start, "end": end}
     if timestamp is not None:
@@ -46,14 +62,47 @@ def sentence(start, end, text, timestamp=None):
     return item
 
 
-def per_char(start, end, count):
-    step = (end - start) // count
-    return [[start + i * step, start + (i + 1) * step] for i in range(count)]
-
-
 def output(*sentences, text=None):
+    """
+    FunASR-1.4.16-shaped output where FunASR's own sentences were right: one unit per CJK
+    character or Latin/digit run, each sentence's pairs (or even spans) as the unit timing.
+    """
+    units, pairs = [], []
+    for s in sentences:
+        found = UNIT.findall(s["text"])
+        units += found
+        pairs += s.get("timestamp") or spans(s["start"], s["end"], max(len(found), 1))[: len(found)]
     joined = "".join(s["text"] for s in sentences) if text is None else text
-    return [{"key": "chunk", "text": joined, "timestamp": [], "sentence_info": list(sentences)}]
+    return [
+        {
+            "key": "chunk",
+            "text": joined,
+            "timestamp": pairs,
+            "raw_text": " ".join(units),
+            "sentence_info": list(sentences),
+        }
+    ]
+
+
+def one_sentence_output(key, text, start, end):
+    """FunASR-shaped output for one invented sentence, its units spread evenly over start..end."""
+    units = UNIT.findall(text)
+    pairs = spans(start, end, len(units))
+    sentence_info = [{"text": text, "start": start, "end": end, "timestamp": [*map(list, pairs)]}]
+    item = {"key": key, "text": text, "timestamp": pairs, "raw_text": " ".join(units)}
+    return [{**item, "sentence_info": sentence_info}]
+
+
+def units_output(text, units, pairs, sentence_info=None):
+    """Explicit FunASR-shaped output: punctuated text, whitespace-separated units, pairs."""
+    item = {"key": "chunk", "text": text, "timestamp": pairs, "raw_text": " ".join(units)}
+    if sentence_info is not None:
+        item["sentence_info"] = sentence_info
+    return [item]
+
+
+def lines(result, duration=CHUNK_MS):
+    return [(s.start_ms, s.end_ms, s.text) for s in normalize_output(result, duration)]
 
 
 NORMAL = output(
@@ -62,7 +111,7 @@ NORMAL = output(
 )
 
 
-# --- normalization: sentence_info is the only source of boundaries ------------------------------
+# --- normalization: lines from recognition units -------------------------------------------------
 
 
 def test_normal_output_maps_sentences_to_segments():
@@ -74,88 +123,233 @@ def test_normal_output_maps_sentences_to_segments():
     assert all(s.confidence is None and s.speaker is None for s in segments)
 
 
-@pytest.mark.parametrize(
-    ("bad", "message"),
-    [
-        ({"text": "缺少结束", "start": 100}, "no valid end time"),
-        ({"text": "缺少开始", "end": 900}, "no valid start time"),
-        ({"text": "空的时间", "start": None, "end": 900}, "no valid start time"),
-        ({"text": "负数", "start": -5, "end": 900}, "no valid start time"),
-        ({"text": "不是数字", "start": "100", "end": 900}, "no valid start time"),
-        ({"text": "布尔值", "start": True, "end": 900}, "no valid start time"),
-        ({"text": "非数", "start": 100, "end": math.nan}, "no valid end time"),
-        ({"text": "", "start": 100, "end": 900}, "has no text"),
-        ({"text": "   ", "start": 100, "end": 900}, "has no text"),
-        ({"start": 100, "end": 900}, "has no text"),
-        ({"text": "倒过来", "start": 900, "end": 100}, "ends before it starts"),
-        ({"text": "零长度", "start": 900, "end": 900}, "ends before it starts"),
-        ({"text": "超出范围", "start": 100, "end": CHUNK_MS + 501}, "outside the section"),
-        ({"text": "开始太晚", "start": CHUNK_MS, "end": CHUNK_MS + 100}, "outside the section"),
+# FunASR 1.4.16 with VAD: two VAD segments "甲 乙 丙" and "丁 戊" (one pair each unit), joined
+# with a space in raw_text but without one in the text it splits into sentences, so its
+# sentence_info pairs four text units with five pairs and drifts one character per join.
+TWO_VAD = units_output(
+    "甲乙丙。丁戊。",
+    ["甲", "乙", "丙", "丁", "戊"],
+    [[0, 100], [100, 200], [200, 300], [1000, 1100], [1100, 1200]],
+    sentence_info=[
+        {
+            "text": "甲乙丙丁。",
+            "start": 0,
+            "end": 300,
+            "timestamp": [[0, 100], [100, 200], [200, 300]],
+        },
+        {"text": "戊。", "start": 1000, "end": 1200, "timestamp": [[1000, 1100], [1100, 1200]]},
     ],
 )
-def test_invalid_sentences_fail_instead_of_being_guessed(bad, message):
+
+
+def test_displaced_sentence_info_after_a_vad_join_is_not_used():
+    assert lines(TWO_VAD) == [(0, 300, "甲乙丙。"), (1000, 1200, "丁戊。")]
+
+
+def test_several_joins_stay_aligned_with_no_timed_punctuation_only_tail():
+    # Four VAD segments of two units: FunASR's sentence text is three characters ahead by the
+    # end, and its last sentence is only "。". Each line here keeps its own units' pairs.
+    units = list("甲乙丙丁戊己庚辛")
+    pairs = [[i * 100, i * 100 + 100] for i in range(8)]
+    result = units_output("甲乙。丙丁。戊己。庚辛。", units, pairs)
+    assert lines(result) == [
+        (0, 200, "甲乙。"),
+        (200, 400, "丙丁。"),
+        (400, 600, "戊己。"),
+        (600, 800, "庚辛。"),
+    ]
+    assert all(any("一" <= c <= "鿿" for c in text) for _, _, text in lines(result))
+
+
+def test_latin_words_and_numbers_keep_their_single_unit_pairs():
+    result = units_output(
+        "我用 iPhone 15 拍照，很好。",
+        ["我", "用", "iPhone", "15", "拍", "照", "很", "好"],
+        [
+            [0, 100],
+            [100, 200],
+            [200, 700],
+            [700, 900],
+            [900, 1000],
+            [1000, 1100],
+            [1300, 1400],
+            [1400, 1500],
+        ],
+    )
+    segments = normalize_output(result, CHUNK_MS)
+    assert [(s.start_ms, s.end_ms, s.text) for s in segments] == [
+        (0, 1100, "我用 iPhone 15 拍照，"),
+        (1300, 1500, "很好。"),
+    ]
+    assert [s.review_flags for s in segments] == [(), ()]
+
+
+@pytest.mark.parametrize(
+    ("text", "units", "expected"),
+    [
+        # Inside a unit, punctuation is the unit's own text and never a boundary.
+        ("涨了3.5个点。", ["涨", "了", "3.5", "个", "点"], ["涨了3.5个点。"]),
+        ("U.S.的政策。", ["U.S.", "的", "政", "策"], ["U.S.的政策。"]),
+        ("好。然后。", ["好。", "然", "后"], ["好。然后。"]),
+        # ASCII , and . between units (decimals, Latin) are kept and never end a line.
+        ("涨了3.5个点。", ["涨", "了", "3", "5", "个", "点"], ["涨了3.5个点。"]),
+        ("hello, world. 好。", ["hello", "world", "好"], ["hello, world. 好。"]),
+        # The marks FunASR itself ends sentences at (comma, full stop, question mark,
+        # enumeration comma) and exclamation marks.
+        ("苹果、香蕉，都好。", list("苹果香蕉都好"), ["苹果、", "香蕉，", "都好。"]),
+        ("真的\uff1f\uff01好。", list("真的好"), ["真的\uff1f\uff01", "好。"]),
+        # Quoted speech: the colon and opening quote don't split; a closing quote stays with
+        # the line it closes; an opening quote after a full stop starts the next line.
+        (
+            "他说\uff1a“你好。”然后走了。",
+            list("他说你好然后走了"),
+            ["他说\uff1a“你好。”", "然后走了。"],
+        ),
+        ("走了。“好”。", list("走了好"), ["走了。", "“好”。"]),
+        # Semicolons don't split; content after the last mark is kept as a final line.
+        ("一\uff1b二。三", list("一二三"), ["一\uff1b二。", "三"]),
+    ],
+)
+def test_line_boundary_policy(text, units, expected):
+    pairs = [[i * 100, i * 100 + 100] for i in range(len(units))]
+    assert [t for _, _, t in lines(units_output(text, units, pairs))] == expected
+
+
+def test_a_line_is_timed_by_its_first_and_last_units_only():
+    units = list("一二三四")
+    pairs = [[100, 250], [260, 400], [900, 1000], [1000, 1180]]
+    assert lines(units_output("一二，三四。", units, pairs)) == [
+        (100, 400, "一二，"),
+        (900, 1180, "三四。"),
+    ]
+
+
+def test_all_recognized_content_is_kept_in_order():
+    text = "价格涨了5%，约¥30。A&B 的 50/50 计划\uff01"
+    units = ["价", "格", "涨", "了", "5%", "约", "¥30", "A&B", "的", "50/50", "计", "划"]
+    pairs = [[i * 100, i * 100 + 100] for i in range(len(units))]
+    joined = "".join(t for _, _, t in lines(units_output(text, units, pairs)))
+    assert comparable_text(joined) == comparable_text(text)
+    assert joined.replace(" ", "") == text.replace(" ", "")
+
+
+@pytest.mark.parametrize(
+    ("result", "message"),
+    [
+        (
+            units_output("甲乙丙。", ["甲", "乙", "丙"], [[0, 1], [1, 2]]),
+            "3 units but 2 timestamp pairs",
+        ),
+        (
+            units_output("甲乙丙丁。", ["甲", "乙", "丙"], [[0, 1], [1, 2], [2, 3]]),
+            "content after its 3 units",
+        ),
+        (units_output("甲丙。", ["甲", "乙"], [[0, 1], [1, 2]]), "unit 2 of 2 doesn't match"),
+        (units_output("甲乙x丙。", ["甲", "乙", "丙"], [[0, 1], [1, 2], [2, 3]]), "unit 3 of 3"),
+        ([{"key": "c", "text": "甲乙。", "timestamp": [[0, 1], [1, 2]]}], "no unit text"),
+        ([{"key": "c", "text": "", "timestamp": [[0, 1]], "raw_text": "甲"}], "unit 1 of 1"),
+    ],
+)
+def test_mappings_that_are_not_exact_fail_instead_of_being_guessed(result, message):
+    with pytest.raises(UnitMappingError, match=message) as raised:
+        normalize_output(result, CHUNK_MS)
+    assert not any(c in str(raised.value) for c in "甲乙丙丁")  # counts only, never text
+
+
+@pytest.mark.parametrize(
+    ("pair", "message"),
+    [
+        ([100], "unit 2 has a malformed timestamp pair"),
+        ("100,200", "unit 2 has a malformed timestamp pair"),
+        ([100, None], "unit 2 has no valid time"),
+        ([-5, 200], "unit 2 has no valid time"),
+        (["100", 200], "unit 2 has no valid time"),
+        ([True, 200], "unit 2 has no valid time"),
+        ([100, math.nan], "unit 2 has no valid time"),
+    ],
+)
+def test_invalid_unit_timing_fails_instead_of_being_guessed(pair, message):
     with pytest.raises(NormalizationError, match=message):
-        normalize_output(output(sentence(10, 90, "开头"), bad, text="有文字"), CHUNK_MS)
+        normalize_output(units_output("甲乙。", ["甲", "乙"], [[0, 50], pair]), CHUNK_MS)
+
+
+@pytest.mark.parametrize(
+    ("pairs", "message"),
+    [
+        ([[900, 900]], "ends before it starts"),
+        ([[900, 100]], "ends before it starts"),
+        ([[100, CHUNK_MS + 501]], "outside the section"),
+        ([[CHUNK_MS, CHUNK_MS + 100]], "outside the section"),
+    ],
+)
+def test_invalid_lines_fail(pairs, message):
+    with pytest.raises(NormalizationError, match=message):
+        normalize_output(units_output("甲。", ["甲"], pairs), CHUNK_MS)
 
 
 def test_end_within_the_bound_tolerance_is_kept_as_reported():
-    [segment] = normalize_output(output(sentence(29_000, CHUNK_MS + 400, "结尾")), CHUNK_MS)
+    [segment] = normalize_output(
+        units_output("结尾", ["结", "尾"], [[29_000, 29_500], [29_500, CHUNK_MS + 400]]), CHUNK_MS
+    )
     assert segment.end_ms == CHUNK_MS + 400  # merge clips to the audio duration
 
 
-def test_out_of_order_sentences_fail():
+def test_out_of_order_lines_fail():
     with pytest.raises(NormalizationError, match="starts before the previous"):
-        normalize_output(output(sentence(2000, 3000, "第二"), sentence(500, 1500, "第一")), 9000)
+        normalize_output(
+            units_output(
+                "第二。第一。",
+                list("第二第一"),
+                [[2000, 2500], [2500, 3000], [500, 1000], [1000, 1500]],
+            ),
+            9000,
+        )
 
 
 def test_overlap_beyond_tolerance_fails_but_small_overlap_is_kept():
     with pytest.raises(NormalizationError, match="overlaps the previous"):
-        normalize_output(output(sentence(0, 2000, "前面"), sentence(1800, 3000, "后面")), 9000)
-    segments = normalize_output(
-        output(sentence(0, 2000, "前面"), sentence(1950, 3000, "后面")), 9000
+        normalize_output(
+            units_output(
+                "前面。后面。",
+                list("前面后面"),
+                [[0, 1000], [1000, 2000], [1800, 2400], [2400, 3000]],
+            ),
+            9000,
+        )
+    result = units_output(
+        "前面。后面。", list("前面后面"), [[0, 1000], [1000, 2000], [1950, 2400], [2400, 3000]]
     )
-    assert [(s.start_ms, s.end_ms) for s in segments] == [(0, 2000), (1950, 3000)]
-
-
-def test_touching_sentences_are_valid():
-    segments = normalize_output(
-        output(sentence(0, 2000, "前面"), sentence(2000, 3000, "后面")), 9000
-    )
-    assert len(segments) == 2
+    assert [(s, e) for s, e, _ in lines(result, 9000)] == [(0, 2000), (1950, 3000)]
 
 
 def test_float_times_are_rounded_to_milliseconds():
-    [segment] = normalize_output(output(sentence(100.4, 899.6, "小数")), 9000)
-    assert (segment.start_ms, segment.end_ms) == (100, 900)
+    assert lines(units_output("小数", ["小", "数"], [[100.4, 500], [500, 899.6]]), 9000) == [
+        (100, 900, "小数")
+    ]
 
 
-# --- character timestamps: only a consistency check ---------------------------------------------
+def test_upstream_sentence_info_shape_problems_still_fail():
+    with pytest.raises(NormalizationError, match="not a list"):
+        normalize_output([{"key": "c", "text": "", "sentence_info": "x"}], CHUNK_MS)
 
 
-def test_character_timestamp_count_mismatch_is_flagged_not_repaired():
-    # 7 characters but 6 timestamps, then 3 characters but 4 (a boundary one character off).
-    shifted = output(
-        sentence(1000, 2300, "我们明天再见面明。", per_char(1000, 2300, 6)),
-        sentence(4000, 4700, "天见吧。", per_char(4000, 4700, 4)),
+# --- the alignment flag: a diagnostic only ------------------------------------------------------
+
+
+def test_alignment_flag_marks_out_of_order_unit_pairs_and_changes_nothing():
+    pairs = [[0, 100], [300, 400], [200, 300], [400, 500]]
+    [segment] = normalize_output(units_output("一二三四。", list("一二三四"), pairs), CHUNK_MS)
+    assert (segment.start_ms, segment.end_ms, segment.text) == (0, 500, "一二三四。")
+    assert segment.review_flags == ("timestamp_alignment_anomaly",)
+
+
+def test_alignment_flag_compares_line_tokens_with_unit_pairs():
+    # "U.S." is one recognition unit but two Latin runs, so the token count differs.
+    [segment] = normalize_output(
+        units_output("U.S.的。", ["U.S.", "的"], [[0, 300], [300, 400]]), CHUNK_MS
     )
-    segments = normalize_output(shifted, CHUNK_MS)
-    assert [s.review_flags for s in segments] == [
-        ("timestamp_alignment_anomaly",),
-        ("timestamp_alignment_anomaly",),
-    ]
-    assert [(s.start_ms, s.end_ms, s.text) for s in segments] == [
-        (1000, 2300, "我们明天再见面明。"),
-        (4000, 4700, "天见吧。"),
-    ]
-
-
-def test_timestamps_outside_the_sentence_are_flagged():
-    bad = output(sentence(1000, 2000, "两个", [[900, 1500], [1500, 2000]]))
-    assert normalize_output(bad, CHUNK_MS)[0].review_flags == ("timestamp_alignment_anomaly",)
-
-
-def test_missing_character_timestamps_are_not_an_anomaly():
-    assert normalize_output(output(sentence(0, 900, "没有")), CHUNK_MS)[0].review_flags == ()
+    assert segment.review_flags == ("timestamp_alignment_anomaly",)
+    assert (segment.start_ms, segment.end_ms) == (0, 400)
 
 
 @pytest.mark.parametrize(
@@ -229,14 +423,15 @@ def test_provider_keeps_the_last_chunks_alignment_without_changing_segments(stor
         [],
         [{"key": "chunk", "text": "", "timestamp": []}],
         [{"key": "chunk", "text": "  ", "timestamp": [], "sentence_info": []}],
+        [{"key": "chunk", "text": "", "timestamp": [], "raw_text": " "}],
     ],
 )
 def test_no_speech_in_a_chunk_gives_no_segments(silent):
     assert normalize_output(silent, CHUNK_MS) == []
 
 
-def test_text_without_sentence_timing_fails():
-    with pytest.raises(NormalizationError, match="without sentence timing"):
+def test_text_without_unit_timing_fails():
+    with pytest.raises(NormalizationError, match="without unit timing"):
         normalize_output([{"key": "chunk", "text": "有字没有时间", "timestamp": []}], CHUNK_MS)
 
 
@@ -383,15 +578,14 @@ def test_text_consistency_reads_provider_output_and_never_keeps_text():
 
 
 def test_inconsistent_text_is_logged_as_numbers_and_never_changes_segments(storage, caplog):
+    # FunASR's sentence_info lost the second sentence, but its units and text are complete:
+    # the consistency diagnostic reports that, and the lines come from the units as usual.
     install_models(storage)
-    mismatched = output(
-        sentence(600, 1900, "今天天气很好，", per_char(600, 1900, 6)),
-        text="今天天气很好，我们去公园散步。",
-    )
+    mismatched = [{**NORMAL[0], "sentence_info": NORMAL[0]["sentence_info"][:1]}]
     provider, _ = make_provider(storage, FakeAutoModel(mismatched))
     with caplog.at_level(logging.INFO, logger="pebble.funasr"):
         segments = provider.transcribe(CHUNK, NEVER)
-    assert segments == [RawSegment(600, 1900, "今天天气很好，")]  # nothing added or repaired
+    assert segments == normalize_output(NORMAL, CHUNK_MS)
     messages = [r.getMessage() for r in caplog.records]
     assert any(
         "text_consistency=whole_text_has_unmatched_content whole_length=13 sentence_length=6 "
@@ -616,7 +810,7 @@ def test_models_load_lazily_once_from_local_folders(storage):
     provider.transcribe(CHUNK, NEVER)
     assert len(loads) == 1
     assert loads[0] == {role: model_dir(storage, spec) for role, spec in SPECS.items()}
-    assert model.calls == [{"sentence_timestamp": True}] * 2
+    assert model.calls == [{"sentence_timestamp": True, "return_raw_text": True}] * 2
     assert provider.health().detail == "FunASR Paraformer is loaded (CPU)."
 
 
@@ -686,14 +880,69 @@ def test_execution_failure_is_a_retryable_provider_error(storage):
 
 def test_normalization_failure_is_a_clear_non_retryable_error(storage):
     install_models(storage)
-    bad = output(sentence(100, None, "没有结束"))
+    bad = units_output("没有结束", list("没有结束"), [[0, 1], [1, 2], [2, None], [3, 4]])
     provider, _ = make_provider(storage, FakeAutoModel(bad))
     with pytest.raises(PipelineError) as raised:
         provider.transcribe(CHUNK, NEVER)
     error = raised.value
     assert error.code == FailureCode.PROVIDER_ERROR and error.retryable is False
-    assert "sentence 1 has no valid end time" in error.message
+    assert "unit 3 has no valid time" in error.message
     assert "没有结束" not in error.message  # recognized text never appears in errors
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        [{"key": "c", "text": "甲乙丙。", "timestamp": [[0, 1], [1, 2], [2, 3]]}],  # no raw_text
+        units_output("甲乙丙丁。", ["甲", "乙", "丙"], [[0, 1], [1, 2], [2, 3]]),
+        units_output("甲乙丙。", ["甲", "乙", "丙"], [[0, 1], [1, 2]]),
+    ],
+)
+def test_unit_mapping_failure_is_a_safe_internal_error(storage, caplog, bad):
+    install_models(storage)
+    provider, _ = make_provider(storage, FakeAutoModel(bad))
+    with (
+        caplog.at_level(logging.INFO, logger="pebble.funasr"),
+        pytest.raises(PipelineError) as raised,
+    ):
+        provider.transcribe(CHUNK, NEVER)
+    error = raised.value
+    assert error.code == FailureCode.INTERNAL_ERROR and error.retryable is True
+    assert "section 1" in error.message
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("unit mapping failed" in m for m in messages)
+    for text in [error.message, error.hint or "", *messages]:
+        assert not any(c in text for c in "甲乙丙丁")  # never recognized or raw text
+
+
+def test_raw_unit_text_is_never_logged_kept_or_returned(storage, caplog):
+    install_models(storage)
+    provider, _ = make_provider(storage, FakeAutoModel(TWO_VAD))
+    with caplog.at_level(logging.DEBUG, logger="pebble.funasr"):
+        segments = provider.transcribe(CHUNK, NEVER)
+    raw = TWO_VAD[0]["raw_text"]
+    assert raw == "甲 乙 丙 丁 戊"
+    assert not any(c in r.getMessage() for r in caplog.records for c in "甲乙丙丁戊")
+    stored = json.dumps([s.__dict__ for s in segments], ensure_ascii=False)  # what jobs persist
+    assert "raw_text" not in stored and raw not in stored
+    assert {f for s in segments for f in vars(s)} == {
+        "start_ms",
+        "end_ms",
+        "text",
+        "confidence",
+        "speaker",
+        "review_flags",
+    }
+    assert not any(raw in repr(value) for value in vars(provider).values())
+    payload = merge(
+        episode_id="ep-0123456789ab",
+        duration_ms=CHUNK_MS,
+        language="zh-CN",
+        chunks=[ChunkResult(0, segments, index=0)],
+        provider=provider,
+    ).dump()
+    dumped = json.dumps(payload, ensure_ascii=False)  # what the API serves
+    assert "raw_text" not in dumped and raw not in dumped
 
 
 def test_cancel_is_checked_before_loading(storage):
@@ -765,8 +1014,11 @@ def test_valid_chunk_reads_as_float_samples(tmp_path):
 def test_merge_offsets_chunks_and_keeps_flags_and_provenance(storage):
     provider, _ = make_provider(storage)
     first = normalize_output(NORMAL, CHUNK_MS)
+    # A long line whose unit pairs are out of order: flagged, never changed.
+    pairs = per_char(200, 7600, 11)
+    pairs[4], pairs[5] = pairs[5], pairs[4]
     second = normalize_output(
-        output(sentence(200, 7600, "这是一句很长很长的句子。", per_char(200, 7600, 3))), CHUNK_MS
+        units_output("这是一句很长很长的句子。", list("这是一句很长很长的句子"), pairs), CHUNK_MS
     )
     transcript = merge(
         episode_id="ep-0123456789ab",

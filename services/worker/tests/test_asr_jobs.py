@@ -6,7 +6,7 @@ import json
 
 import pytest
 from conftest import upload, wait_for_job
-from test_funasr_provider import RUNTIME, SPECS, install_models
+from test_funasr_provider import RUNTIME, SPECS, install_models, one_sentence_output
 
 from pebble_worker.config import Settings
 from pebble_worker.contract import CURRENT_SCHEMA_VERSION, parse_transcript
@@ -23,15 +23,7 @@ class SentencePerChunk:
 
     def generate(self, *, input, **kwargs):
         duration = len(input) // SAMPLES_PER_MS
-        text = "这是一句测试。"
-        return [
-            {
-                "key": "chunk",
-                "text": text,
-                "timestamp": [],
-                "sentence_info": [{"text": text, "start": 100, "end": duration - 100}],
-            }
-        ]
+        return one_sentence_output("chunk", "这是一句测试。", 100, duration - 100)
 
 
 class Silence:

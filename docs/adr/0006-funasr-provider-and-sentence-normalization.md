@@ -1,6 +1,6 @@
 # ADR 0006 — FunASR provider and sentence-level normalization
 
-**Status:** Accepted (2026-10-03)
+**Status:** Accepted (2026-10-03); boundaries amended by [ADR 0007](0007-lines-from-funasr-recognition-units.md)
 
 ## Context
 

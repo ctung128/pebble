@@ -176,22 +176,33 @@ transcript text is recorded anywhere in the repository):
 | `timestamp`                 | `[[startMs, endMs], …]` integers, one pair per character/word |
 | `sentence_info[]`           | `{ text, start, end, timestamp }`; `start`/`end` integer ms   |
 | `sentence_info[].timestamp` | per-character pairs for that sentence                         |
-| not present                 | `spk` (no diarization), `raw_text`, any confidence value      |
+| `raw_text`                  | requested; units, space-separated, one per `timestamp` pair   |
+| not present                 | `spk` (no diarization), any confidence value                  |
 | empty result                | `[{ key, text: "", timestamp: [] }]` (no `sentence_info`)     |
 
-Times are milliseconds from the start of the chunk. Across a chunk there is one timestamp per
-recognized character, but the split between sentences can be off by one character at a
-punctuation boundary, so per-character timestamps do not reliably belong to the sentence that
-contains the character.
+Times are milliseconds from the start of the chunk. Across a chunk there is one `timestamp`
+pair per recognition unit (a Chinese character, or a whole Latin word). In FunASR 1.4.16,
+`sentence_info` text is **not** reliably paired with its timing: the text it splits into
+sentences joins VAD segments without a space, so each join fuses two characters into one unit
+and every later sentence's text runs one character further ahead of its timestamps, ending in
+timed sentences that hold only punctuation (ADR 0007). Pebble therefore doesn't use it.
 
 ### Normalization rules
 
-`sentence_info` is the only source of segment boundaries:
+Lines are a validated reconstruction from FunASR's recognition units (ADR 0007): the units
+in `raw_text` are matched, in order and exactly, against the punctuated `text`; only
+whitespace and punctuation may come between two units (where the punctuation model put its
+marks). Each unit keeps its own `timestamp` pair; nothing is split, interpolated, duplicated or
+redistributed. A line ends after `，` `。` `？` `、` `！` `!` `?` placed **between** units (the
+marks FunASR itself ends sentences at, plus exclamation and ASCII question marks), together
+with any closing quote or bracket right after it. ASCII `,` and `.`, `；` `：`, opening
+quotes, dashes and ellipses never end a line, and punctuation inside a unit (`3.5`, `U.S.`)
+never does, so a boundary can't fall inside a unit. Text after the last mark is a final line.
 
 | Transcript segment | From                                                       |
 | ------------------ | ---------------------------------------------------------- |
-| `startMs`, `endMs` | `sentence_info.start`, `.end`, offset by the chunk start   |
-| `text`             | `sentence_info.text` (whitespace trimmed, otherwise as is) |
+| `startMs`, `endMs` | first unit's start, last unit's end, offset by chunk start |
+| `text`             | that span of the punctuated `text` (whitespace trimmed)    |
 | `confidence`       | always `null`                                              |
 | `speaker`          | always `null`                                              |
 | `tokens`           | always `null` (no word/character timing is exposed)        |
@@ -200,16 +211,24 @@ contains the character.
 The segment's `text` is the original transcript text; learner corrections are stored
 separately in the browser and never overwrite it.
 
-The provider fails the chunk — and with it the job (`PROVIDER_ERROR`, not retryable) —
-rather than guessing, when a sentence has no valid start or end (missing, non-numeric,
-negative or non-finite), has empty text, ends at or before it starts, starts at or after the
-chunk's end or ends more than 500 ms past it, starts before the previous sentence, or overlaps
-the previous sentence by more than 100 ms. It also fails if FunASR returns text with no
-sentence timing. It never rebuilds sentence timing from character timestamps, never merges or
-splits sentences, and never edits the text.
+The provider fails the chunk — and with it the job — rather than guessing:
+
+- `INTERNAL_ERROR` (the app shows its generic "something went wrong" copy) when the units and
+  text don't correspond exactly: `raw_text` is missing, the unit and pair counts differ, a
+  unit doesn't appear next in the text, or the text has content beyond the units. The log
+  records counts only.
+- `PROVIDER_ERROR` (not retryable) when a pair isn't two valid times (missing, non-numeric,
+  negative or non-finite), a line ends at or before it starts, starts at or after the chunk's
+  end or ends more than 500 ms past it, starts before the previous line, or overlaps it by
+  more than 100 ms; or when FunASR returns text with no unit timing.
+
+It never estimates timing from a character's share of a unit, never edits the text, and never
+falls back to FunASR's `sentence_info`. `raw_text` stays in memory: it is never logged, stored,
+served or shown.
 
 **Whole text versus sentences (diagnostic only).** For each chunk, the worker compares
-FunASR's whole recognized `text` with its sentences joined in order. Both sides are reduced by
+FunASR's whole recognized `text` with its `sentence_info` sentences joined in order. It cannot
+see the VAD-join drift above (every character survives, attached to the wrong timing). Both sides are reduced by
 exactly these rules first: Unicode NFKC (full-width and half-width forms become one form);
 whitespace removed, even between digits; sentence punctuation removed (Unicode categories
 P\*); and Latin A–Z lowercased. Punctuation that can change meaning is kept: `% ‰ ‱ # & @ /`

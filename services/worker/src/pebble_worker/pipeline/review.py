@@ -10,10 +10,12 @@ human review and benchmarking (M1-B).
 - `short_fragment`: duration < `short_fragment_ms` (default 800).
 - `speech_gap`: the gap since the previous segment's end (or since 0 ms, for the first
   segment) > `speech_gap_ms` (default 2000).
-- `timestamp_alignment_anomaly`: set by the provider when a sentence's text and its
-  per-character timestamps don't correspond (see providers/funasr.py). Benchmarks showed it
-  is a developer diagnostic, not a learner-review signal: it marks bookkeeping differences,
-  not audible timing problems (docs/BENCHMARKS.md). It never gets UI or review slots.
+- `timestamp_alignment_anomaly`: set by the provider when a line's tokens and its unit
+  timestamp pairs don't correspond (see providers/funasr.py). It is a developer diagnostic,
+  not a learner-review signal, and never gets UI or review slots. A flag alone doesn't prove
+  a line is misaligned, but such mapping discrepancies can come with audible misalignment:
+  before ADR 0007, FunASR's drifting sentence text set it on lines a listener heard out of
+  sync (docs/BENCHMARKS.md).
 
 A gap after the last segment is not flagged.
 """

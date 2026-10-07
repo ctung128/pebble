@@ -62,7 +62,9 @@ and model weights in Git, the public demo, or any deployment artifact.
   never serve paths outside the data directory. Mock output is `mock`, never `asr`.
 - FunASR provider: `PEBBLE_PROVIDER=funasr` explicit, no fallback to mock, CPU only, lazy
   loading, verified local model paths with update checks off, `confidence` always `null`.
-  Segments come only from `sentence_info`; fail rather than guess. Review flags are not
+  Segments come only from `sentence_info` or from a validated reconstruction from FunASR's
+  raw units, their timestamp pairs and its punctuated output (ADR 0007); fail rather than
+  guess. Review flags are not
   confidence and never rewrite text. English translation stays hidden in local real-ASR mode
   until a real provider exists (M1-C).
 - Model weights live only in `~/.pebble/models` (downloaded by `models pull`); never commit,

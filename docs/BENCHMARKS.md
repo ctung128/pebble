@@ -218,10 +218,15 @@ transcript.
 
 ### Alignment diagnostic (`alignment`)
 
-`timestamp_alignment_anomaly` is set when a sentence's text and its per-character timestamps
-don't correspond. The starter runs showed it is a **private developer diagnostic, not a
-learner-review signal**: it fires often, in clusters, shifts with chunk context, and showed no
-timing pattern a listener would notice. It gets no review slot and no UI.
+`timestamp_alignment_anomaly` is set when a line's text and its timestamp pairs don't
+correspond. It is a **private developer diagnostic, not a learner-review signal**, and gets no
+review slot and no UI. The starter runs found it firing often, in clusters, shifting with chunk
+context, and concluded it marked bookkeeping only. That conclusion was too strong: a later
+private listening check found lines out of sync by up to ~7 s where it clustered, caused by
+FunASR 1.4.16's sentence text drifting after each VAD join (ADR 0007). A flag alone still
+doesn't prove a line is misaligned, but a discrepancy can come with audible misalignment.
+Runs made before ADR 0007 measured FunASR's drifting `sentence_info`, not Pebble's current
+lines.
 
 Each new run records, as numbers only: flagged sentences by reason (`count_difference`,
 `timestamp_outside_segment_range`, `timestamps_out_of_order`, `malformed_timestamps`), a

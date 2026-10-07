@@ -6,8 +6,11 @@ punctuation, on the CPU, from the pinned local models in `<data>/models` (docs/M
 - Nothing heavy is imported until the first transcription: then the model files are
   verified (size + SHA-256) and FunASR loads them from their local folders with its update
   check off, so normal operation makes no network calls.
-- Segment boundaries come only from FunASR's `sentence_info`. Anything that can't be
-  normalized safely fails clearly; nothing is guessed, merged, split or rewritten.
+- Segments are built from FunASR's own recognition units (`raw_text`), each with its
+  timestamp pair, matched in order against the punctuated `text` (ADR 0007). FunASR 1.4.16's
+  `sentence_info` text drifts away from its timing across VAD segments, so it isn't used for
+  segments. Anything that can't be matched exactly fails clearly; nothing is guessed,
+  interpolated or rewritten.
 - `confidence` is always None: FunASR reports no confidence for these models.
 """
 
@@ -99,6 +102,13 @@ Signature = tuple[tuple[str, int, int], ...]
 
 class NormalizationError(Exception):
     """FunASR output that cannot be turned into timed segments without guessing."""
+
+
+class UnitMappingError(Exception):
+    """
+    FunASR's recognition units, their timestamp pairs and its punctuated text don't correspond
+    exactly, so no line can be timed without guessing. Messages hold numbers only, never text.
+    """
 
 
 def installed_runtime() -> dict[str, str] | None:
@@ -284,7 +294,9 @@ class FunASRProvider:
         if len(audio) == 0:
             return []
         try:
-            result = model.generate(input=audio, sentence_timestamp=True)
+            # `raw_text` (the per-VAD unit text, one unit per timestamp pair) stays in memory:
+            # it is never logged, stored or returned.
+            result = model.generate(input=audio, sentence_timestamp=True, return_raw_text=True)
         except Exception as error:  # FunASR/torch errors; their messages never contain text
             log.error("chunk %d: FunASR failed: %s", chunk.index, type(error).__name__)
             raise PipelineError(
@@ -297,6 +309,13 @@ class FunASRProvider:
         log.info("chunk %d: output %s", chunk.index, describe_output(result))
         try:
             segments = normalize_output(result, chunk.duration_ms)
+        except UnitMappingError as error:
+            log.error("chunk %d: unit mapping failed: %s", chunk.index, error)
+            raise PipelineError(
+                FailureCode.INTERNAL_ERROR,
+                f"Pebble couldn't match the speech timings to the recognized text in section "
+                f"{chunk.index + 1}, so nothing was saved from it.",
+            ) from error
         except NormalizationError as error:
             log.error("chunk %d: normalization failed: %s", chunk.index, error)
             raise PipelineError(
@@ -403,11 +422,15 @@ def read_chunk(chunk: AudioChunk) -> Any:
 
 def normalize_output(result: Any, chunk_duration_ms: int) -> list[RawSegment]:
     """
-    FunASR `generate()` output for one chunk → chunk-relative segments.
+    FunASR `generate(..., return_raw_text=True)` output for one chunk → chunk-relative segments.
 
-    Sentence boundaries come only from `sentence_info[*].start/end` (milliseconds). Character
-    timestamps are used only to check that a sentence's text and timing correspond; a mismatch
-    adds the `timestamp_alignment_anomaly` review flag and changes nothing else.
+    Lines come from `unit_sentences`: FunASR's recognition units (`raw_text`, one per
+    `timestamp` pair) matched in order against its punctuated `text`. `sentence_info` is not
+    used (in FunASR 1.4.16 its text drifts away from its timing after each VAD join). A line's
+    start/end are its first unit's start and last unit's end, unchanged. A mapping that isn't
+    exact raises `UnitMappingError`; timing that can't be used raises `NormalizationError`.
+    The `timestamp_alignment_anomaly` flag still compares each line's tokens with its pairs; it
+    is a diagnostic and changes nothing.
     """
     if not isinstance(result, list):
         raise NormalizationError(f"expected a list of results, got {type(result).__name__}")
@@ -416,26 +439,22 @@ def normalize_output(result: Any, chunk_duration_ms: int) -> list[RawSegment]:
     if len(result) != 1 or not isinstance(result[0], dict):
         raise NormalizationError("expected exactly one result for one section")
     item: dict[str, Any] = result[0]
-    text = item.get("text")
-    has_text = isinstance(text, str) and bool(text.strip())
-    sentences = item.get("sentence_info")
-    if sentences is None or sentences == []:
-        if has_text:
-            raise NormalizationError("text was recognized without sentence timing")
-        return []  # no speech in this section
-    if not isinstance(sentences, list):
+    if not isinstance(item.get("sentence_info", []), list):
         raise NormalizationError("sentence timing is not a list")
+    text = item.get("text")
+    raw_text = item.get("raw_text")
+    has_text = isinstance(text, str) and bool(text.strip())
+    has_units = isinstance(raw_text, str) and bool(raw_text.strip())
+    if not has_text and not has_units:
+        return []  # no speech in this section
+    timestamps = item.get("timestamp")
+    if has_text and (not isinstance(timestamps, list) or not timestamps):
+        raise NormalizationError("text was recognized without unit timing")
 
     segments: list[RawSegment] = []
     previous: tuple[int, int] | None = None
-    for n, sentence in enumerate(sentences, start=1):
-        if not isinstance(sentence, dict):
-            raise NormalizationError(f"sentence {n} is not an object")
-        start = _ms(sentence.get("start"), n, "start")
-        end = _ms(sentence.get("end"), n, "end")
-        sentence_text = sentence.get("text")
-        if not isinstance(sentence_text, str) or not sentence_text.strip():
-            raise NormalizationError(f"sentence {n} has no text")
+    for n, line in enumerate(unit_sentences(text, raw_text, timestamps), start=1):
+        start, end, sentence_text = line.start_ms, line.end_ms, line.text
         if end <= start:
             raise NormalizationError(f"sentence {n} ends before it starts")
         if start >= chunk_duration_ms or end > chunk_duration_ms + BOUND_TOLERANCE_MS:
@@ -448,10 +467,10 @@ def normalize_output(result: Any, chunk_duration_ms: int) -> list[RawSegment]:
         previous = (start, end)
         flags = (
             ()
-            if alignment_issue(sentence_text, sentence.get("timestamp"), start, end) is None
+            if alignment_issue(sentence_text, line.timestamps, start, end) is None
             else ("timestamp_alignment_anomaly",)
         )
-        segments.append(RawSegment(start, end, sentence_text.strip(), review_flags=flags))
+        segments.append(RawSegment(start, end, sentence_text, review_flags=flags))
     return segments
 
 
@@ -461,6 +480,105 @@ def _ms(value: Any, n: int, field: str) -> int:
     if not math.isfinite(value) or value < 0:
         raise NormalizationError(f"sentence {n} has no valid {field} time")
     return round(value)
+
+
+# --- lines from recognition units -----------------------------------------------------------
+
+#: Punctuation that ends a line when FunASR's punctuation model puts it *between* two units:
+#: the four CT-Transformer marks FunASR itself ends sentences at (full-width comma, full stop
+#: and question mark, and the enumeration comma), plus the full-width exclamation mark and
+#: ASCII ! and ?. Never a line end: ASCII `,` and `.` (decimals, abbreviations), semicolons,
+#: colons, quotes, brackets, dashes and ellipses, or any punctuation that is part of a
+#: recognition unit's own text.
+LINE_END_MARKS = frozenset("\uff0c\u3002\uff1f\u3001\uff01?!")
+
+
+@dataclass(frozen=True)
+class UnitLine:
+    """One line built from whole recognition units, with exactly those units' pairs."""
+
+    start_ms: int
+    end_ms: int
+    text: str
+    timestamps: list[list[int]]
+
+
+def unit_sentences(text: Any, raw_text: Any, timestamps: Any) -> list[UnitLine]:
+    """
+    FunASR's units matched, in order, against its punctuated `text` → lines.
+
+    `raw_text` holds the recognition units separated by whitespace, one per `timestamp` pair
+    (FunASR joins its VAD segments with a space there). Each unit must appear next in `text`,
+    exactly; only whitespace and punctuation (Unicode P*) may come between units, which is
+    where the punctuation model inserted its marks. Every unit and every pair is used once, in
+    order: nothing is split, interpolated, duplicated or redistributed. A line ends after a
+    LINE_END_MARKS mark between two units (plus any closing quotes or brackets right after
+    it), so a boundary can never fall inside a unit. The text of each line is `text` itself,
+    so all recognized content and punctuation is kept; content `text` has beyond the units,
+    or units it lacks, raise UnitMappingError. Messages carry counts only.
+    """
+    if not isinstance(text, str):
+        raise UnitMappingError("FunASR returned no punctuated text")
+    if not isinstance(raw_text, str):
+        raise UnitMappingError("FunASR returned no unit text")
+    units = raw_text.split()
+    count = len(timestamps) if isinstance(timestamps, list) else 0
+    if count != len(units):
+        raise UnitMappingError(f"{len(units)} units but {count} timestamp pairs")
+    pairs = [_unit_pair(pair, n) for n, pair in enumerate(timestamps, start=1)]
+
+    lines: list[UnitLine] = []
+    line_from = first = pos = 0
+    for i, unit in enumerate(units):
+        gap_start = pos
+        while pos < len(text) and not text.startswith(unit, pos) and _inserted(text[pos]):
+            pos += 1
+        if not text.startswith(unit, pos):
+            raise UnitMappingError(f"unit {i + 1} of {len(units)} doesn't match the text")
+        if i > 0:
+            cut = _line_end(text, gap_start, pos)
+            if cut is not None:
+                lines.append(_unit_line(text, line_from, cut, pairs[first:i]))
+                line_from, first = cut, i
+        pos += len(unit)
+    if not all(_inserted(char) for char in text[pos:]):
+        raise UnitMappingError(f"the text has content after its {len(units)} units")
+    if units:
+        lines.append(_unit_line(text, line_from, len(text), pairs[first:]))
+    return lines
+
+
+def _unit_pair(pair: Any, n: int) -> list[int]:
+    if not isinstance(pair, list | tuple) or len(pair) != 2:
+        raise NormalizationError(f"unit {n} has a malformed timestamp pair")
+    values = []
+    for value in pair:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise NormalizationError(f"unit {n} has no valid time")
+        if not math.isfinite(value) or value < 0:
+            raise NormalizationError(f"unit {n} has no valid time")
+        values.append(round(value))
+    return values
+
+
+def _inserted(char: str) -> bool:
+    """What the punctuation model may add between units: whitespace and punctuation."""
+    return char.isspace() or unicodedata.category(char).startswith("P")
+
+
+def _line_end(text: str, gap_start: int, gap_end: int) -> int | None:
+    """Where a line ends inside the inserted gap text[gap_start:gap_end], if it does."""
+    marks = [i for i in range(gap_start, gap_end) if text[i] in LINE_END_MARKS]
+    if not marks:
+        return None
+    cut = marks[-1] + 1
+    while cut < gap_end and unicodedata.category(text[cut]) in ("Pe", "Pf"):
+        cut += 1  # a closing quote or bracket stays with the line it closes
+    return cut
+
+
+def _unit_line(text: str, start: int, end: int, pairs: list[list[int]]) -> UnitLine:
+    return UnitLine(pairs[0][0], pairs[-1][1], text[start:end].strip(), pairs)
 
 
 AlignmentReason = Literal[

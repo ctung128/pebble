@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_funasr_provider import RUNTIME, SPECS, install_models
+from test_funasr_provider import RUNTIME, SPECS, install_models, one_sentence_output
 
 from pebble_worker.bench import analysis
 from pebble_worker.bench.corpus import CorpusError, find_clip, load_corpus
@@ -56,16 +56,7 @@ class SentencePerChunk:
         duration = len(input) // 16
         if not self.text:
             return [{"key": "c", "text": "", "timestamp": []}]
-        return [
-            {
-                "key": "c",
-                "text": self.text,
-                "timestamp": [],
-                "sentence_info": [
-                    {"text": self.text, "start": 100, "end": max(200, duration - 100)}
-                ],
-            }
-        ]
+        return one_sentence_output("c", self.text, 100, max(200, duration - 100))
 
 
 class Exploding:
@@ -404,14 +395,18 @@ def test_ratings_are_read_back_as_counts_only(storage, audio):
 
 
 class ExtraTimestamp(SentencePerChunk):
-    """One more character timestamp than the sentence has characters."""
+    """
+    FunASR's own sentence has one more timestamp than characters (the diagnostic reads
+    `sentence_info`); the units it returns have two pairs out of order, so Pebble's line is
+    flagged too. Units and pairs still correspond, so the chunk is transcribed.
+    """
 
     def generate(self, *, input, **kwargs):
         [item] = super().generate(input=input, **kwargs)
         [sentence] = item["sentence_info"]
-        stamps = [[100 + 50 * i, 150 + 50 * i] for i in range(7)]  # 6 characters, 7 stamps
-        sentence["timestamp"] = stamps
-        item["timestamp"] = stamps
+        sentence["timestamp"] = [[100 + 50 * i, 150 + 50 * i] for i in range(7)]  # 6 chars
+        pairs = item["timestamp"]
+        pairs[1], pairs[2] = pairs[2], pairs[1]
         return [item]
 
 
@@ -423,12 +418,12 @@ def test_alignment_diagnostic_is_numbers_only(storage, audio):
     assert alignment["flagged"] == alignment["sentences"] == chunks
     assert alignment["byReason"]["count_difference"] == chunks
     assert alignment["countDifference"]["+1"] == chunks
-    assert alignment["chunks"]["checked"] == chunks and alignment["chunks"]["consistent"] == 0
+    assert alignment["chunks"]["checked"] == chunks == alignment["chunks"]["consistent"]
     assert alignment["chunks"]["totals"][0] == {
         "index": 0,
         "textTokens": 6,
-        "timestamps": 7,
-        "consistent": False,
+        "timestamps": 6,
+        "consistent": True,
     }
     assert result["review"]["categories"]["control"] == 0  # anomalous segments aren't controls
     assert INVENTED not in json.dumps(alignment)

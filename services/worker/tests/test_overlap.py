@@ -16,6 +16,7 @@ from itertools import pairwise
 
 import pytest
 from test_bench import fake_provider, run_warm, tone_input
+from test_funasr_provider import one_sentence_output
 
 from pebble_worker.bench import compare, overlap, paired
 from pebble_worker.bench.overlap import ChunkRange, OverlapUnresolved, chunk_ranges, resolve
@@ -320,14 +321,7 @@ class StartOfChunk:
     def generate(self, *, input, **kwargs):
         duration = len(input) // 16
         end = min(duration - 50, 700)
-        return [
-            {
-                "key": "c",
-                "text": SENTINEL,
-                "timestamp": [],
-                "sentence_info": [{"text": SENTINEL, "start": 100, "end": end}],
-            }
-        ]
+        return one_sentence_output("c", SENTINEL, 100, end)
 
 
 def run_overlaps(storage, audio, overlaps, model=None):
