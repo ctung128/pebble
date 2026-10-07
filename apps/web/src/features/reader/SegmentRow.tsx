@@ -41,7 +41,9 @@ export const SegmentRow = memo(function SegmentRow({
     : {};
   const time = formatTime(segment.startMs);
   const translationId = `translation-${segment.id}`;
-  const translationOpen = showTranslation && (view.translation?.open ?? false);
+  // A line may hide its own English action (e.g. local English isn't set up and it has none).
+  const translationAction = showTranslation && !view.translationHidden;
+  const translationOpen = translationAction && (view.translation?.open ?? false);
   // Copy state is per row and short-lived; it never leaves this component.
   const copy = useCopyText();
   const copyFailed = showCopy && copy.status === "failed";
@@ -118,7 +120,7 @@ export const SegmentRow = memo(function SegmentRow({
           </span>
           <span className={styles.visuallyHidden}>Pinyin</span>
         </button>
-        {showTranslation ? (
+        {translationAction ? (
           <button
             type="button"
             className={styles.action}
@@ -202,7 +204,32 @@ export const SegmentRow = memo(function SegmentRow({
               {view.translation.status === "loading" ? (
                 <span className={styles.muted}>Loading translation…</span>
               ) : view.translation.status === "ready" ? (
-                <p lang="en">{view.translation.text}</p>
+                <>
+                  {view.translation.stale ? (
+                    <p className={styles.muted}>
+                      {view.translation.stale.label}{" "}
+                      <button
+                        type="button"
+                        className={styles.link}
+                        onClick={() => actions.retryTranslation(segment)}
+                      >
+                        {view.translation.stale.action}
+                      </button>
+                    </p>
+                  ) : null}
+                  <p lang="en">{view.translation.text}</p>
+                  {view.translation.attribution ? (
+                    <p className={styles.attribution}>
+                      <a
+                        href={view.translation.attribution.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {view.translation.attribution.text}
+                      </a>
+                    </p>
+                  ) : null}
+                </>
               ) : (
                 <p className={styles.muted}>
                   {view.translation.message}{" "}

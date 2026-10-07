@@ -1,14 +1,25 @@
 # English line translation (DeepL)
 
-> **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); the
-> worker side is built, the local app doesn't use it yet.** English stays hidden for local
-> real-ASR transcripts until the app integration ships. Live DeepL calls, including a smoke
-> test, still require separate approval. This page is the specification the implementation and
-> its tests follow.
->
-> **Built so far (worker, contract 1.8):** the settings below, the translation tables (database
-> migration 2), the consent routes, `POST /translations`, `GET /episodes/{id}/translations` and
-> the health block. Tested only with invented text and a fake provider or HTTPS transport.
+> **Status: design approved ([ADR 0008](adr/0008-optional-deepl-line-translation.md)); not
+> approved for real activation.** The worker side is complete (contract 1.8). The local web
+> integration is in progress: per-line English, cached English, **Show saved English** and the
+> consent dialog are built; save/export safeguards, translation settings (including
+> **Withdraw**) and the demo-bundle guard are not yet. Live DeepL calls, including a smoke test,
+> still require separate approval. Everything so far is tested only with invented text and fake
+> workers, providers or HTTPS transports.
+
+### Before real activation (slice 6)
+
+- **Fingerprint-safe saving:** a learning item stores English only when its fingerprint matches
+  the displayed text (real-ASR items save no English until then).
+- **Export safeguards:** export uses saved snapshots only and never asks for English.
+- **A precise demo-bundle guard:** the demo build must contain no provider copy, attribution,
+  translation routes, consent UI or local translation code. One narrow exception: the shared
+  schema's provider identifier (`TRANSLATION_PROVIDER = "deepl"`), which the demo bundles with
+  the contract validators. It is an identifier, not copy, and permits nothing else.
+- **Translation settings with Withdraw** (the fuller information and links above).
+- **Recovering when a reached monthly limit resets:** today the app learns "limit reached" from
+  a refused request and only clears it on a fresh health check.
 
 Optional, off by default, for the local app only. A learner taps **English** on one line;
 the worker sends that line's Chinese to DeepL and keeps the result on this computer. The
@@ -60,8 +71,19 @@ endpoint.
 ## Consent
 
 Asked once, enforced by the worker, shared by every browser that uses this worker. The first
-English tap on a configured worker without current consent opens the dialog; **Translate**
-records consent and sends that one line, **Cancel** sends nothing.
+English tap on a configured worker without current consent opens the dialog.
+
+- Recording consent by itself never sends a line. Opening the dialog grants nothing.
+- The dialog's **Translate** is one explicit action that authorizes both steps: record consent,
+  then send the line that was tapped, once.
+- After consent is recorded, the line is sent only if the same episode is still open, the line's
+  text (and so its fingerprint) is unchanged, and the page is still there. Otherwise nothing is
+  sent; the recorded consent stays, and a later tap is a new, explicit request.
+- **Cancel** (or Escape) records nothing and sends nothing.
+- If the worker refuses the consent version, the dialog says "That consent is out of date. Reload
+  Pebble and review it again."; if recording fails otherwise, it says "Pebble couldn't record
+  your choice. No translation request was sent." In both cases nothing is sent and nothing is
+  retried by itself.
 
 **Dialog** (exact copy; no expandable details):
 

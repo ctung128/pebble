@@ -1,8 +1,16 @@
 import {
+  CURRENT_SCHEMA_VERSION,
+  TRANSLATION_PROVIDER,
+  parseEpisodeTranslations,
   parseJob,
+  parseTranslationConsent,
+  parseTranslationResult,
   parseWorkerHealth,
+  type EpisodeTranslations,
   type Job,
   type ParseResult,
+  type TranslationConsent,
+  type TranslationResult,
   type WorkerHealth,
 } from "@pebble/schema";
 
@@ -54,6 +62,19 @@ export interface WorkerClient {
   /** 1.7: changes only the episode's user-facing title; resolves with its job. */
   renameEpisode(episodeId: string, title: string): Promise<Job>;
   upload(request: UploadRequest): Promise<Job>;
+  /** 1.8: the episode's cached English. Local and read-only: never contacts DeepL. */
+  getEpisodeTranslations(episodeId: string): Promise<EpisodeTranslations>;
+  /** 1.8: one displayed line, sent only on an explicit request. */
+  translateLine(request: TranslationLineRequest): Promise<TranslationResult>;
+  /** 1.8: accepts the given consent version for every browser using this worker. */
+  grantTranslationConsent(consentVersion: string): Promise<TranslationConsent>;
+}
+
+export interface TranslationLineRequest {
+  episodeId: string;
+  segmentId: string;
+  /** Exactly the text to translate (NFC, as checked by the shared text rules). */
+  text: string;
 }
 
 /** Worker episode ids; anything else is never sent to the delete endpoint. */
@@ -116,6 +137,60 @@ export class HttpWorkerClient implements WorkerClient {
         body: JSON.stringify({ title }),
       }),
     );
+  }
+
+  async getEpisodeTranslations(episodeId: string): Promise<EpisodeTranslations> {
+    if (!LOCAL_EPISODE_ID.test(episodeId)) {
+      throw new WorkerError("EPISODE_NOT_FOUND", "No such episode.", { status: 404 });
+    }
+    const result = parseEpisodeTranslations(
+      await this.request(`episodes/${episodeId}/translations`),
+    );
+    if (!result.ok) throw invalid(result.message);
+    if (result.data.episodeId !== episodeId)
+      throw invalid("The cached English is for another episode.");
+    return result.data;
+  }
+
+  async translateLine({
+    episodeId,
+    segmentId,
+    text,
+  }: TranslationLineRequest): Promise<TranslationResult> {
+    if (!LOCAL_EPISODE_ID.test(episodeId)) {
+      throw new WorkerError("EPISODE_NOT_FOUND", "No such episode.", { status: 404 });
+    }
+    // Exactly the approved request: no other fields or metadata.
+    const body = { schemaVersion: CURRENT_SCHEMA_VERSION, episodeId, segmentId, text };
+    const result = parseTranslationResult(
+      await this.request("translations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+    if (!result.ok) throw invalid(result.message);
+    if (result.data.episodeId !== episodeId || result.data.segmentId !== segmentId) {
+      throw invalid("The translation is for another line.");
+    }
+    return result.data;
+  }
+
+  async grantTranslationConsent(consentVersion: string): Promise<TranslationConsent> {
+    const body = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      provider: TRANSLATION_PROVIDER,
+      consentVersion,
+    };
+    const result = parseTranslationConsent(
+      await this.request("translation/consent", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+    if (!result.ok) throw invalid(result.message);
+    return result.data;
   }
 
   upload({ file, title, ownershipConfirmed, onProgress, signal }: UploadRequest): Promise<Job> {

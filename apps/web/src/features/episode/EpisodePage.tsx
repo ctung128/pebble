@@ -37,6 +37,8 @@ import { TranscriptReader } from "../reader/TranscriptReader.tsx";
 import { useFollowActive } from "../reader/useFollowActive.ts";
 import { useTranslationProvider } from "../translation/TranslationContext.tsx";
 import { useLineTranslations } from "../translation/useLineTranslations.ts";
+import { useWorkerLineTranslations } from "../translation/useWorkerLineTranslations.ts";
+import { useWorkerTranslation } from "../translation/workerTranslation.ts";
 import { deriveReviewHints } from "../uncertainty/reviewHints.ts";
 import { resolvePlayerKey, type PlayerKeyAction } from "./playerKeys.ts";
 import {
@@ -170,6 +172,25 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const englishToggle = !__PEBBLE_LOCAL__ && translationAvailable;
   const [englishShowAll, setEnglishShowAll] = useState(false);
 
+  // Local real-ASR transcripts: English from the worker (ADR 0008). Only the local app
+  // provides it, and only when the worker's health reports translation; the demo never does.
+  // Mock and other transcripts never use it.
+  const workerTranslation = useWorkerTranslation();
+  const workerApi = transcript.provenance.kind === "asr" ? workerTranslation : null;
+  const workerMode = workerApi !== null;
+  const displayed = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const segment of segments) {
+      map.set(
+        segment.id,
+        learning.correctionFor(episode.id, segment.id)?.correctedText ?? segment.text,
+      );
+    }
+    return map;
+  }, [segments, learning, episode.id]);
+  const worker = useWorkerLineTranslations(workerApi, episode.id, displayed);
+  const workerCanSend = workerApi !== null && workerApi.readiness.newRequests !== "off";
+
   const lines = useMemo(() => {
     const map = new Map<string, LineView>();
     for (const segment of segments) {
@@ -190,9 +211,15 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
               text: pinyinConvert ? pinyinConvert(text) : null,
             }
           : { visible: false },
-        // A translation of the previous text doesn't describe an edited line.
-        translation:
-          translationAvailable && translation?.forText === text ? translation : undefined,
+        // A translation of the previous text doesn't describe an edited line (the worker's
+        // lines match on the fingerprint of the exact text instead).
+        translation: workerMode
+          ? worker.lines.get(segment.id)
+          : translationAvailable && translation?.forText === text
+            ? translation
+            : undefined,
+        // Without local English set up, only lines that have saved English offer it.
+        translationHidden: workerMode && !workerCanSend && !worker.hasCached(segment.id),
         saved: learning.itemForSegment(episode.id, segment.id) !== null,
         confirmingUnsave: confirmUnsaveId === segment.id,
         editing: editingId === segment.id,
@@ -213,6 +240,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     confirmUnsaveId,
     editingId,
     translationAvailable,
+    workerMode,
+    workerCanSend,
+    worker,
   ]);
 
   const toggleAllEnglish = () => {
@@ -226,9 +256,9 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
 
   // Row actions read the latest state through a ref so their identities stay stable and
   // memoized rows don't re-render on every playback frame.
-  const latest = useRef({ lines, learning, pinyin, translations, episode, transcript });
+  const latest = useRef({ lines, learning, pinyin, translations, worker, episode, transcript });
   useLayoutEffect(() => {
-    latest.current = { lines, learning, pinyin, translations, episode, transcript };
+    latest.current = { lines, learning, pinyin, translations, worker, episode, transcript };
   });
 
   const toggleOriginalShown = useCallback((segmentId: string, show?: boolean) => {
@@ -261,11 +291,19 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       },
       retryPinyin: () => latest.current.pinyin.retry(),
       toggleTranslation: (segment) => {
+        if (workerMode) {
+          latest.current.worker.toggle(segment);
+          return;
+        }
         if (!translationAvailable) return;
         const view = latest.current.lines.get(segment.id);
         if (view) latest.current.translations.toggle(segment, view.text, view.translation);
       },
       retryTranslation: (segment) => {
+        if (workerMode) {
+          latest.current.worker.retry(segment);
+          return;
+        }
         if (!translationAvailable) return;
         const view = latest.current.lines.get(segment.id);
         if (view) latest.current.translations.retry(segment, view.text);
@@ -330,6 +368,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       startCue,
       failCue,
       translationProvider,
+      workerMode,
       toggleOriginalShown,
       learningLocked,
       translationAvailable,
@@ -474,6 +513,17 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
                 {pinyin.showAll ? "Hide pinyin" : "Show pinyin"}
               </button>
             )}
+            {workerApi ? (
+              // Reveals saved English for the lines' current text only; never sends anything.
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={worker.showSaved}
+                onClick={() => worker.setShowSaved(!worker.showSaved)}
+              >
+                {worker.showSaved ? workerApi.labels.hideSaved : workerApi.labels.showSaved}
+              </button>
+            ) : null}
             {capabilities.copy && segments.length > 0 ? (
               <button
                 ref={copyTranscriptButton}
@@ -560,11 +610,14 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           actions={actions}
           reviewDescriptionId={REVIEW_HELP_ID}
           lockedDescriptionId={learningLocked ? LOCKED_HELP_ID : undefined}
-          showTranslation={!translationHidden}
+          showTranslation={!translationHidden || workerMode}
           showCopy={capabilities.copy}
         />
         <ShortcutSlot>
-          <Shortcuts learningLocked={learningLocked} translationAvailable={translationAvailable} />
+          <Shortcuts
+            learningLocked={learningLocked}
+            translationAvailable={translationAvailable || workerCanSend}
+          />
         </ShortcutSlot>
       </section>
 

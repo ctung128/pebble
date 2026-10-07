@@ -13,6 +13,8 @@ export interface LineView {
     | { visible: false }
     | { visible: true; status: "loading" | "ready" | "error"; text: string | null };
   translation: LineTranslation | undefined;
+  /** Hide this line's English action (local English isn't set up and the line has none). */
+  translationHidden?: boolean;
   saved: boolean;
   confirmingUnsave: boolean;
   editing: boolean;

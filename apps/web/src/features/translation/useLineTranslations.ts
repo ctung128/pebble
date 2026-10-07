@@ -5,7 +5,16 @@ import { TranslationError } from "./TranslationProvider.ts";
 
 export type LineTranslation =
   | { open: boolean; forText: string; status: "loading" }
-  | { open: boolean; forText: string; status: "ready"; text: string }
+  | {
+      open: boolean;
+      forText: string;
+      status: "ready";
+      text: string;
+      /** English for an earlier version of the line (worker cache), with its labels. */
+      stale?: { label: string; action: string };
+      /** Shown under provider English (worker translations only). */
+      attribution?: { text: string; href: string };
+    }
   | { open: boolean; forText: string; status: "error"; message: string; retryable: boolean };
 
 /**

@@ -15,8 +15,9 @@ import { HttpWorkerClient } from "./workerClient.ts";
 import { WorkerProvider } from "./WorkerContext.tsx";
 
 /**
- * No translation provider exists in local mode yet. The reader needs one in context; its
- * English controls are disabled for mock transcripts, so this is never actually called.
+ * The session translation provider is the demo's interface; local mode never uses it. Local
+ * real-ASR English comes from the worker through LocalTranslationProvider (ADR 0008), and mock
+ * transcripts keep English locked, so this is never actually called.
  */
 const noTranslation: TranslationProvider = {
   id: "none",

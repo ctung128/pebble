@@ -359,3 +359,15 @@
     grid-row: 2;
   }
 }
+
+/* Provider attribution under worker English (ADR 0008). */
+.attribution {
+  margin: var(--space-1) 0 0;
+  font-size: var(--size-caption);
+  color: var(--text-secondary);
+}
+
+.attribution a {
+  color: inherit;
+  text-underline-offset: 2px;
+}

@@ -1,8 +1,17 @@
 # ADR 0008 — Optional English line translation with DeepL
 
-**Status:** Accepted (2026-10-06): the design is approved. The feature is not implemented or
-available yet; English stays hidden for local real-ASR transcripts until it ships. Live DeepL
-calls still require separate approval. Details: [TRANSLATION.md](../TRANSLATION.md).
+**Status:** Accepted (2026-10-06): the design is approved.
+
+- **Worker implementation: complete** (contract 1.8): settings, storage, consent, the DeepL
+  client with its time bound, `POST /translations`, cached retrieval and health.
+- **Local web integration: in progress.** Per-line English, cached English, "Show saved
+  English" and the consent dialog are built; fingerprint-safe saving, export safeguards,
+  translation settings (including Withdraw), recovery after a monthly-limit reset and the
+  demo-bundle guard are not (TRANSLATION.md, "Before real activation").
+- **Real activation: not approved.** No live DeepL call has been made; a smoke test and real
+  use each need separate approval.
+
+Details: [TRANSLATION.md](../TRANSLATION.md).
 
 ## Context
 

@@ -1,0 +1,79 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--bg-page) 60%, transparent);
+}
+
+.dialog {
+  display: grid;
+  gap: var(--space-4);
+  width: min(28rem, 100%);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--size-display-sm);
+  line-height: 1.2;
+}
+
+.body,
+.problem {
+  margin: 0;
+  font-size: var(--size-body);
+  line-height: 1.5;
+}
+
+.problem {
+  color: var(--error);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.confirm,
+.cancel {
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  font: inherit;
+  font-size: var(--size-body-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.confirm {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.confirm:hover {
+  background: var(--accent-hover);
+}
+
+.confirm[aria-disabled="true"] {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.cancel {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.cancel:hover {
+  background: var(--bg-hover);
+}

@@ -5,6 +5,7 @@ import { AddAudioPage } from "./AddAudioPage.tsx";
 import { JobProgressRoute } from "./JobProgressPage.tsx";
 import { LocalLibraryPage } from "./LocalLibraryPage.tsx";
 import { LocalRenameProvider } from "./LocalRenameProvider.tsx";
+import { LocalTranslationProvider } from "./LocalTranslationProvider.tsx";
 
 export const localRoutes: RouteObject[] = [
   {
@@ -26,7 +27,9 @@ const router = createHashRouter(localRoutes);
 export function LocalApp() {
   return (
     <LocalRenameProvider>
-      <RouterProvider router={router} />
+      <LocalTranslationProvider>
+        <RouterProvider router={router} />
+      </LocalTranslationProvider>
     </LocalRenameProvider>
   );
 }

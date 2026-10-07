@@ -89,6 +89,25 @@ export function fakeWorkerClient(overrides: Partial<WorkerClient> = {}) {
       makeJob({ episodeTitle: title, status: "completed", stage: "merging" }),
     ),
     upload: vi.fn(async () => makeJob()),
+    getEpisodeTranslations: vi.fn(async (episodeId: string) => ({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      episodeId,
+      provider: "deepl" as const,
+      targetLanguage: "EN-US" as const,
+      cacheVersion: 1 as const,
+      translations: [],
+    })),
+    // Never expected unless a test sets it up: a stray submission fails loudly.
+    translateLine: vi.fn(async (): Promise<never> => {
+      throw new Error("unexpected translation request");
+    }),
+    grantTranslationConsent: vi.fn(async (consentVersion: string) => ({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      provider: "deepl" as const,
+      status: "current" as const,
+      consentVersion,
+      grantedAt: "2026-10-07T12:00:00.000Z",
+    })),
     ...overrides,
   } satisfies WorkerClient;
   return client;

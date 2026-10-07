@@ -183,3 +183,114 @@ describe("HttpWorkerClient.upload (XHR)", () => {
     expect((await errorFrom(pending)).code).toBe("INVALID_RESPONSE");
   });
 });
+
+describe("HttpWorkerClient — translation (1.8)", () => {
+  const EP = "ep-0123456789ab";
+  const FP = "a".repeat(64);
+  const translation = {
+    schemaVersion: "1.8",
+    episodeId: EP,
+    segmentId: "seg-0001",
+    fingerprint: FP,
+    provider: "deepl",
+    targetLanguage: "EN-US",
+    text: "Invented English.",
+    source: "provider",
+    createdAt: "2026-10-07T12:00:00.000Z",
+  };
+
+  it("sends exactly one line in the approved request shape", async () => {
+    const fetchImpl = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      json(translation),
+    );
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    const result = await client.translateLine({
+      episodeId: EP,
+      segmentId: "seg-0001",
+      text: "好的。",
+    });
+    expect(result.text).toBe("Invented English.");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(`${BASE}/translations`);
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      schemaVersion: "1.8",
+      episodeId: EP,
+      segmentId: "seg-0001",
+      text: "好的。",
+    });
+    expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("refuses a translation for another line or a malformed one", async () => {
+    for (const body of [
+      { ...translation, segmentId: "seg-0002" },
+      { ...translation, text: "" },
+    ]) {
+      const client = new HttpWorkerClient(BASE, { fetchImpl: async () => json(body) });
+      const error = await errorFrom(
+        client.translateLine({ episodeId: EP, segmentId: "seg-0001", text: "好的。" }),
+      );
+      expect(error.code).toBe("INVALID_RESPONSE");
+    }
+  });
+
+  it("keeps the worker's fixed error code", async () => {
+    const client = new HttpWorkerClient(BASE, {
+      fetchImpl: async () =>
+        json({ error: { code: "TRANSLATION_LOCAL_LIMIT", message: "limit" } }, 429),
+    });
+    const error = await errorFrom(
+      client.translateLine({ episodeId: EP, segmentId: "seg-0001", text: "好的。" }),
+    );
+    expect(error).toMatchObject({ code: "TRANSLATION_LOCAL_LIMIT", status: 429 });
+  });
+
+  it("reads cached English with a GET only, for local episode ids only", async () => {
+    const cached = {
+      schemaVersion: "1.8",
+      episodeId: EP,
+      provider: "deepl",
+      targetLanguage: "EN-US",
+      cacheVersion: 1,
+      translations: [],
+    };
+    const fetchImpl = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      json(cached),
+    );
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    expect((await client.getEpisodeTranslations(EP)).translations).toEqual([]);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(`${BASE}/episodes/${EP}/translations`);
+    expect(init?.method).toBeUndefined();
+    expect(init?.body).toBeUndefined();
+    await errorFrom(client.getEpisodeTranslations("../health"));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const other = new HttpWorkerClient(BASE, {
+      fetchImpl: async () => json({ ...cached, episodeId: "ep-ffffffffffff" }),
+    });
+    expect((await errorFrom(other.getEpisodeTranslations(EP))).code).toBe("INVALID_RESPONSE");
+  });
+
+  it("grants consent with the given version only", async () => {
+    const fetchImpl = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      json({
+        schemaVersion: "1.8",
+        provider: "deepl",
+        status: "current",
+        consentVersion: "deepl-2026-10",
+        grantedAt: "2026-10-07T12:00:00.000Z",
+      }),
+    );
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    expect((await client.grantTranslationConsent("deepl-2026-10")).status).toBe("current");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(`${BASE}/translation/consent`);
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      schemaVersion: "1.8",
+      provider: "deepl",
+      consentVersion: "deepl-2026-10",
+    });
+  });
+});
