@@ -266,3 +266,196 @@ Each entry has a replay command (`ffplay` on the run's `normalized.wav`) and box
 - rough correction time in seconds, and an optional note
 
 `bench report` counts the ticks and times; it never copies the text.
+
+## Speaker diarization evaluation (ADR 0009)
+
+A bounded, benchmark-only check of CAM++ speaker labels on **one full episode you name**,
+before any production speaker code. Decision record:
+[ADR 0009](adr/0009-local-speaker-diarization-evaluation.md).
+
+**Inputs, read-only.**
+
+- An existing completed local episode (`ep-…`) and its stored ASR transcript. The database is
+  opened read-only.
+- Its audio: `work/normalized.wav` when it is still valid. Otherwise the source is normalized
+  into a **temporary** file in the run folder, read once, and deleted before embedding starts.
+- Nothing is transcribed. Transcript text, segment IDs, the database and the translation cache
+  are never written.
+- Requires the speaker model (`npm run worker:models -- pull --speaker`). The network is blocked
+  for the whole run.
+
+**What it does.**
+
+1. **Windows.** Cuts every transcript line into 1.5 s windows (0.75 s shift; FunASR's
+   `sv_chunk`).
+2. **One embedding pass.** Embeds each window once with CAM++ on the CPU, streaming in batches.
+   The embeddings exist only as one in-memory array: never written, deleted once clustering
+   ends, and gone with the run's process in any case.
+3. **Clustering.** Clusters the whole episode with FunASR's installed `ClusterBackend`. Each
+   configuration gets a fresh copy of the same embeddings:
+
+   | Configuration                  | Count hint | Seed (default `--seed 7`) |
+   | ------------------------------ | ---------- | ------------------------- |
+   | `auto`                         | none       | `seed` (7)                |
+   | `auto-r2`, `auto-r3` (repeats) | none       | `seed+1`, `seed+2` (8, 9) |
+   | `hint` (with `--speakers N`)   | N          | `seed` (7)                |
+
+   All seeds are recorded (`settings.autoSeeds`, `settings.hintSeed`, each configuration's
+   `seed`). NumPy's global RNG is seeded before each call; numba threading may still add
+   variation, which the repeats measure.
+
+4. **Actual counts and branch.** `result.json` records the windows actually embedded and, per
+   configuration, the clustering branch that **actually ran** (`path`, recorded by wrapping the
+   backend's three clusterers) next to the branch the installed thresholds predict
+   (`expectedPath`). The dry run's `windowsFromLineTimes` is computed from the stored line
+   times only; the run's own count is the one to trust.
+5. **Line labels.** Labels each line `S1`, `S2`, … by majority, and flags it `mixed` when a second
+   speaker holds at least 2 windows and 25% of them. Noise windows (`-1`) never vote.
+6. **Review sample.** Picks 40–60 lines (default 50, seeded) for a **blind** review; see
+   "Sampling and weighting" below.
+
+```bash
+cd services/worker
+.venv/bin/pebble-worker bench diarize --episode ep-… --dry-run           # counts only
+.venv/bin/pebble-worker bench diarize --episode ep-… [--speakers N] [--deadline-minutes 30]
+#   then fill in ~/.pebble/benchmarks/diarize/<run>/review.md by listening
+.venv/bin/pebble-worker bench diarize-score --run <run>                  # numbers only
+```
+
+### Deadline and cleanup
+
+The run is in a child process with a finite wall-clock deadline: 30 minutes by default,
+`--deadline-minutes` from 5 to 60. The deadline covers everything: normalizing, model load,
+embedding, clustering and writing.
+
+- **Cooperative stop.** The child checks the deadline between steps, between embedding batches
+  (64 windows) and between clustering configurations.
+- **Hard stop.** A single clustering call can't be interrupted. If the child is still running
+  60 s after the deadline, or the command is interrupted (Ctrl+C), the parent kills it and
+  cleans up itself.
+- **Success.** The folder holds only `result.json`, `key.json` and `review.md`. No temporary
+  audio or embeddings remain.
+- **Timeout, failure, interruption or kill.** Every file the run wrote is deleted (including
+  temporary audio), leaving a numbers-only `result.json` with `status` (`timed_out`,
+  `failed`, `interrupted`, `killed_at_deadline`), the stage reached and timings so far. Nothing
+  outside the run folder is touched.
+
+### Sampling and weighting
+
+Every line belongs to exactly one stratum (first match wins):
+
+| Stratum      | Rule                                                                                                  | Quota of the sample |
+| ------------ | ----------------------------------------------------------------------------------------------------- | ------------------- |
+| `short`      | under 1.5 s (duration only)                                                                           | about 20%           |
+| `transition` | `auto`'s speaker differs from the previous line's                                                     | about 24%           |
+| `difficult`  | mixed or unassigned in any configuration, or `auto` disagrees with a repeat or the hint after mapping | about 20%           |
+| `spread`     | everything else                                                                                       | the rest            |
+
+- **How lines are drawn.** Within `short`, `transition` and `difficult`, lines are drawn at
+  random. `spread` lines are drawn one at random per equal slice of the episode's spread lines,
+  so the whole timeline is covered. A stratum smaller than its quota is taken whole, and the
+  shortfall is filled at random from the remaining lines, each labelled with its own stratum.
+  `key.json` records every line's stratum and the stratum sizes.
+- **Why weighting is needed.** Short, transition and difficult lines are deliberately
+  **oversampled**, and `transition` and `difficult` are defined by the model's own output. The
+  raw sample mix therefore differs from the episode's. The raw accuracy can differ from the
+  episode's in either direction; no direction is assumed.
+- **Assumptions behind `spread`.**
+  - `spread` lines are drawn by a time-stratified (systematic) design: the stratum's lines in
+    time order are cut into as many equal slices **by line count** (not duration) as its quota,
+    and one line is drawn at random from each slice.
+  - This covers the whole timeline. The estimate nonetheless treats the draw as a simple random
+    sample of the stratum, which holds only if accuracy doesn't vary in step with the slicing.
+  - Random shortfall fills (when a stratum is smaller than its quota) mix a second design into
+    some strata.
+  - The other strata are simple random draws within the stratum.
+- **What the score reports:**
+  - `episodeEstimate`, **exploratory** (each part carries `"status": "exploratory"`). Each
+    stratum's accuracy is weighted by that stratum's share of the episode's lines, computed
+    separately for all, long and short lines. It comes with an approximate normal 95% interval
+    (finite-population correction; also exploratory) and `populationCovered`, the share of the
+    episode in strata with at least one answered line. The proposed 90% target is compared
+    against the long-line `episodeEstimate`. With roughly 50 reviewed lines it is a rough
+    indication, not a measurement.
+  - **Support per stratum** (`byStratum`):
+    - `inEpisode`: lines in the episode;
+    - `picked`: lines picked;
+    - `speakerAnswered`: lines with a speaker answer;
+    - `unsureOrBlank`: lines left unsure or blank;
+    - `unassigned`: answered lines the configuration left without a speaker;
+    - the stratum's raw accuracy, with its Wilson interval.
+  - **Unassigned lines, explicitly:**
+    - `unassigned`: answered lines with no predicted speaker, counted as wrong;
+    - `unassignedInEpisode`: every line of the episode with no predicted speaker.
+  - The raw sample figures (`all`, `long`, `short`, with Wilson intervals), for diagnosis.
+- **Remaining biases:**
+  - speakers are mapped one-to-one to your letters using the reviewed lines themselves, so every
+    accuracy is somewhat optimistic;
+  - strata with few answered lines give wide or (when all right or all wrong) zero-width
+    intervals;
+  - mixed-flag counts are raw sample counts, with mixed lines oversampled.
+
+### The review sheet and run folder
+
+**The review sheet** (`review.md`, private: it contains transcript text and local paths).
+
+- **Header:** enter the number of distinct speakers in the whole episode.
+- **Each line:**
+  - replay it from the episode's own audio, also with 3 s of lead-in;
+  - tick one speaker (`A`–`F` used consistently, `other`, `unsure`);
+  - tick one turn answer (`one speaker`, `two or more`, `unsure`).
+- **Blind:** no predicted label, flag, stratum or selection reason appears on the sheet.
+
+**Run folder** `~/.pebble/benchmarks/diarize/<UTC time>-<episode>/`:
+
+| File          | Contents                                                                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `result.json` | numbers only: status, windows actually embedded, per configuration (seed, hint, actual and expected branch, speakers, noise windows, minor clusters, mixed and unassigned lines, repeat agreement), stratum sizes, timings, memory, versions, settings |
+| `key.json`    | per line: segment ID, times, stratum, label and mixed flag per configuration; the review picks. No text.                                                                                                                                               |
+| `review.md`   | the blind sheet (text)                                                                                                                                                                                                                                 |
+| `score.json`  | after review; numbers only                                                                                                                                                                                                                             |
+
+**Report** (`diarize-score`), with each part reported separately for `auto` and `hint`:
+
+- **Speaker count:** reviewed vs predicted, the signed error, and minor clusters. Leave the
+  header's whole-episode count blank if you aren't confident; the comparison is then marked
+  omitted, never guessed.
+- **Dominant-line accuracy:**
+  - exploratory `episodeEstimate` for all, long (≥ 2 s) and short lines;
+  - raw sample figures with Wilson intervals;
+  - per-stratum support and accuracy;
+  - unassigned lines, both reviewed and across the episode.
+- **Mixed-flag quality:** true and false positives and negatives, precision and recall against
+  your `two or more` ticks. A flag estimates more than one turn; it is not verified overlap.
+- **Performance:** peak memory and minutes per audio hour.
+  - `primaryProcessingMs` covers the primary configuration: audio read, model load, the one
+    embedding pass, `auto` clustering, and `hint` clustering if run.
+  - `evaluationOverheadMs` is the repeat clusterings.
+  - `benchmarkMeasuredMs` is both added together.
+- **Proposed targets** (labelled _proposed, not established_):
+  - ≥ 90% long-line `episodeEstimate` (exploratory);
+  - ≤ 5 min per audio hour;
+  - ≤ 2 GB peak memory.
+
+### Targeted check of unmatched clusters (diagnostic)
+
+`bench diarize-targeted --run <run>` follows a scored review. It runs no inference, reads no
+audio samples, and neither opens the database nor reads transcript text.
+
+- **Which clusters:** those the one-to-one matching left without a reviewer letter.
+- **Which lines:** up to 5 not-yet-reviewed lines per cluster, one at random per equal slice of
+  the cluster's remaining lines in time order.
+- **The sheet** (`targeted-review.md`) is blind: times, segment IDs and replay commands only;
+  no cluster or predicted speaker. Each line gets one answer: `A`, `B` (the main review's
+  voices), `another voice` or `unsure`. The key is `targeted-key.json`; nothing is ever
+  overwritten.
+- **Scoring:** `bench diarize-targeted --run <run> --score` counts answers per cluster
+  (`targeted-score.json`). It answers whether the small clusters sound like A/B or another
+  voice. It is not a representative accuracy estimate and never updates the main score.
+
+**Bounds.**
+
+- One episode and one run (plus the optional hint configuration in the same run), within the
+  deadline.
+- No new corpus, no defaults changed, no tuning loop.
+- A second run, a different episode or changed settings each need approval.

@@ -1,4 +1,4 @@
-import { memo, type Ref } from "react";
+import { memo, type ReactNode, type Ref } from "react";
 import type { Segment } from "@pebble/schema";
 import { StatusView } from "../../components/StatusView.tsx";
 import type { LineActions, LineView } from "./lineView.ts";
@@ -21,6 +21,10 @@ interface TranscriptReaderProps {
   showTranslation?: boolean;
   /** Shows the "Copy Chinese" action (a local clipboard copy of the displayed line). */
   showCopy?: boolean;
+  /** Names announced (not shown) with each line's speaker letter, by segment id. */
+  speakerNames?: ReadonlyMap<string, string> | null;
+  /** An extra per-line control (local mode), kept stable so rows stay memoized. */
+  lineAccessory?: ((segment: Segment) => ReactNode) | null;
   ref?: Ref<HTMLOListElement>;
 }
 
@@ -38,6 +42,8 @@ export const TranscriptReader = memo(function TranscriptReader({
   lockedDescriptionId,
   showTranslation = true,
   showCopy = false,
+  lineAccessory = null,
+  speakerNames = null,
   ref,
 }: TranscriptReaderProps) {
   const speakers = segments.some((segment) => segment.speaker);
@@ -66,6 +72,8 @@ export const TranscriptReader = memo(function TranscriptReader({
               lockedDescriptionId={lockedDescriptionId}
               showTranslation={showTranslation}
               showCopy={showCopy}
+              lineAccessory={lineAccessory}
+              speakerName={speakerNames?.get(segment.id) ?? null}
             />
           </li>
         );

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "1.9",
+  "episodeId": "ep-0123456789ab",
+  "current": {
+    "runId": "spk-0123456789ab",
+    "completedAt": "2026-10-07T12:00:00.000Z",
+    "provenance": {
+      "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+      "modelRevision": "v2.0.2",
+      "clustering": "umap-hdbscan",
+      "windows": 12,
+      "noiseWindows": 0,
+      "unassignedLines": 0,
+      "speakerCountHint": null
+    },
+    "speakers": [
+      {
+        "id": "S1",
+        "lines": 2,
+        "windows": 6
+      },
+      {
+        "id": "S2",
+        "lines": 1,
+        "windows": 3
+      },
+      {
+        "id": "S3",
+        "lines": 1,
+        "windows": 3
+      }
+    ],
+    "assignments": {
+      "seg-0001": "S1",
+      "seg-0002": "S2",
+      "seg-0003": "S3",
+      "seg-0004": "S1"
+    },
+    "corrections": {
+      "names": {
+        "S1": "Host"
+      },
+      "merges": {
+        "S3": "S1"
+      },
+      "notSpeaker": [],
+      "lines": {
+        "seg-0002": null
+      },
+      "updatedAt": "2026-10-07T12:05:00.000Z",
+      "revision": 2
+    },
+    "effective": {
+      "seg-0001": "S1",
+      "seg-0002": null,
+      "seg-0003": "S1",
+      "seg-0004": "S1"
+    }
+  },
+  "latest": {
+    "runId": "spk-ba9876543210",
+    "status": "failed",
+    "failure": {
+      "code": "TIMED_OUT",
+      "message": "Speaker detection took too long and was stopped.",
+      "retryable": true
+    },
+    "createdAt": "2026-10-07T13:00:00.000Z",
+    "updatedAt": "2026-10-07T13:40:00.000Z"
+  }
+}

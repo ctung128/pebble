@@ -12,7 +12,13 @@ import pytest
 from pebble_worker.cli import main
 from pebble_worker.errors import StorageAccessError
 from pebble_worker.models import commands
-from pebble_worker.models.manifest import MANIFEST, ModelFile, ModelSpec
+from pebble_worker.models.manifest import (
+    CAMPPLUS_SV_ZH,
+    MANIFEST,
+    SPEAKER_MODELS,
+    ModelFile,
+    ModelSpec,
+)
 from pebble_worker.models.pull import hub_environment, modelscope_downloader, pull
 from pebble_worker.models.verify import file_path, model_dir, verify_model
 from pebble_worker.storage import Storage
@@ -51,6 +57,40 @@ def test_manifest_entries_are_complete_and_consistent(spec):
 
 def test_manifest_total_size():
     assert sum(s.total_size for s in MANIFEST) == 1_296_079_251
+
+
+def test_speaker_model_is_pinned_and_kept_out_of_the_required_manifest():
+    # ADR 0009: optional, for the diarization evaluation only; transcription never needs it.
+    assert SPEAKER_MODELS == (CAMPPLUS_SV_ZH,)
+    assert CAMPPLUS_SV_ZH not in MANIFEST
+    spec = CAMPPLUS_SV_ZH
+    assert (spec.role, spec.model_id, spec.revision) == (
+        "speaker",
+        "iic/speech_campplus_sv_zh-cn_16k-common",
+        "v2.0.2",
+    )
+    assert spec.license == "Apache-2.0"
+    assert spec.model_id.split("/")[1] in spec.attribution
+    # Exactly the runtime files configuration.json references, plus that file itself: no
+    # README, example audio, images or requirements.txt.
+    assert [f.path for f in spec.files] == [
+        "configuration.json",
+        "config.yaml",
+        "campplus_cn_common.bin",
+    ]
+    assert all(SHA256.match(f.sha256) and f.size > 0 for f in spec.files)
+    assert spec.total_size == sum(f.size for f in spec.files) == 28_037_453
+
+
+def test_setup_check_and_transcription_never_require_the_speaker_model():
+    import inspect
+
+    from pebble_worker.checks import run_checks
+    from pebble_worker.providers.funasr import MODELS
+
+    assert inspect.signature(run_checks).parameters["specs"].default is MANIFEST
+    assert set(MODELS) == {"asr", "vad", "punctuation"}
+    assert CAMPPLUS_SV_ZH not in MODELS.values()
 
 
 # --- fake models for verify/pull ----------------------------------------------------------------
@@ -208,6 +248,15 @@ def test_models_verify_exits_non_zero_when_models_are_missing(env, capsys):
     assert MANIFEST[0].files[2].sha256 in out
 
 
+def test_models_speaker_flag_lists_and_verifies_only_the_speaker_model(env, capsys):
+    assert main(["models", "list", "--speaker"]) == 0
+    out = capsys.readouterr().out
+    assert CAMPPLUS_SV_ZH.model_id in out and CAMPPLUS_SV_ZH.revision in out
+    assert all(spec.model_id not in out for spec in MANIFEST)
+    assert main(["models", "verify", "--speaker"]) == 1
+    assert "0 passed, 0 failed, 3 missing. Models are NOT ready." in capsys.readouterr().out
+
+
 def test_models_verify_output_reports_expected_and_actual_per_file(storage, capsys):
     spec = _fake_spec(CONTENTS)
     _install(storage, spec, {**CONTENTS, "model.pt": b"WEIGHTS"})
@@ -316,6 +365,8 @@ def test_modelscope_downloader_sets_hub_environment_before_import(storage, monke
     for name in ("MODELSCOPE_CACHE", "MODELSCOPE_HOME"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setitem(sys.modules, "modelscope", None)
+    # Also blocked when an earlier test already imported it (through funasr).
+    monkeypatch.setitem(sys.modules, "modelscope.hub.snapshot_download", None)
     with pytest.raises(Exception, match="ModelScope is not installed"):
         modelscope_downloader(storage)
     assert os.environ["MODELSCOPE_CACHE"] == str(storage.root / "models")

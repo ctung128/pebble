@@ -1,4 +1,4 @@
-"""`pebble-worker serve`, `doctor`, `check`, `models list|verify|pull` and `bench …`."""
+"""`pebble-worker serve`, `doctor`, `check`, `models list|verify|pull [--speaker]` and `bench …`."""
 
 from __future__ import annotations
 
@@ -34,6 +34,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument("--verify", action="store_true", help="also hash every model file")
     models = commands.add_parser("models", help="list, verify or download the pinned models")
     models.add_argument("action", choices=("list", "verify", "pull"))
+    models.add_argument(
+        "--speaker",
+        action="store_true",
+        help="the optional speaker-embedding model for the diarization evaluation (ADR 0009) "
+        "instead of the speech models; transcription never needs it",
+    )
     from .bench.commands import add_parser as add_bench_parser
 
     add_bench_parser(commands)
@@ -56,7 +62,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor":
         return doctor(settings)
     if args.command == "models":
-        return models_command(settings, args.action)
+        return models_command(settings, args.action, speaker=args.speaker)
     if args.command == "bench":
         from .bench.commands import run_command as bench_command
 
@@ -156,10 +162,11 @@ def doctor(settings: Settings) -> int:
     return 0 if healthy else 1
 
 
-def models_command(settings: Settings, action: str) -> int:
+def models_command(settings: Settings, action: str, *, speaker: bool = False) -> int:
     from .models import commands
+    from .models.manifest import MANIFEST, SPEAKER_MODELS
 
-    return commands.run(Storage(settings.data_dir), action)
+    return commands.run(Storage(settings.data_dir), action, SPEAKER_MODELS if speaker else MANIFEST)
 
 
 def check_command(settings: Settings, *, as_json: bool, verify: bool) -> int:

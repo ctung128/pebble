@@ -53,6 +53,22 @@ describe("demo bundle guard", () => {
     expect(check(SCHEMA_CHUNK, SCHEMA_CHUNK).join("\n")).toMatch(/2 provider identifiers/);
   });
 
+  it.each([
+    ["the speakers route", "`episodes/${e}/speakers`"],
+    ["the corrections route", '"/speakers/corrections"'],
+    ["the detect control", "Detect speakers"],
+    ["the speaker key", "Speakers in this episode"],
+    ["the merge confirmation", "Merge speakers"],
+    ["model setup copy", "npm run worker:models -- pull --speaker"],
+    ["sandbox copy", "Speaker detection needs macOS's built-in sandbox"],
+  ])("fails on local speaker %s", (_, forbidden) => {
+    expect(check(`var a=1;${forbidden};`).length).toBeGreaterThan(0);
+  });
+
+  it("allows the reader's generic speaker letter, which the demo fixtures use", () => {
+    expect(check('var s=`Speaker ${t}`;var l="Speaker";')).toEqual([]);
+  });
+
   it("still catches the existing local-mode markers", () => {
     expect(check("fetch(`http://127.0.0.1:8790/health`)").length).toBeGreaterThan(0);
     expect(check("FunASR Paraformer").length).toBeGreaterThan(0);

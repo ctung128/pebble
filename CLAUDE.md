@@ -40,10 +40,29 @@ Approved models — exactly these, pinned in `services/worker/src/pebble_worker/
 - `iic/speech_fsmn_vad_zh-cn-16k-common-pytorch` @ `v2.0.4`
 - `iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch` @ `v2.0.4`
 
+Optional, evaluation only (ADR 0009): `iic/speech_campplus_sv_zh-cn_16k-common` @ `v2.0.2` in
+`SPEAKER_MODELS` (never in `MANIFEST`; `npm run worker:models -- pull|verify --speaker`).
+Health, doctor, setup, startup, transcription and translation must never require it.
+
+Speaker diarization (ADR 0009): CAM++ is approved for an experimental first version. The
+evaluation is done; don't run more benchmarks without approval. The synthetic-tested core, the
+child-process runner, the store and migration 3 live in `pebble_worker/speakers` and `db.py`
+(uncommitted, under review), with routes, runner scheduling, health, contract 1.9 and the
+local speaker UI (`apps/web/src/local/speakers`, tested with fake worker responses only). No
+automatic runs; a real CAM++ smoke run and activation each need approval. Migration 3 applies automatically on worker
+start, so don't restart Pebble on this tree until it is approved. Socket-opening tests (the five
+worker port tests and `npm run test:scripts`) need explicit approval before any run. The speaker child runs only inside the macOS
+Seatbelt network sandbox (`speakers/isolation.py`); never add an unsandboxed fallback. Migration 3, contract 1.9, production routes, queue integration,
+UI and automatic runs each need review first. No automatic small-cluster merges, music
+classification, mixed-line warnings or line splitting. Speaker labels never enter DeepL source
+text. Keep transcript text, segment IDs and translation
+cache identity unchanged; generic episode-local IDs only; no cross-episode recognition or stored
+voiceprints; embeddings stay in memory.
+
 Not approved: the larger Chinese-English punctuation model, any other FunASR model, speaker
-diarization, MPS support/configuration, cloud or API transcription, any translation provider
-other than DeepL as specified in ADR 0008, and model weights in Git, the public demo, or any
-deployment artifact.
+diarization beyond the ADR 0009 evaluation, MPS support/configuration, cloud or API
+transcription, any translation provider other than DeepL as specified in ADR 0008, and model
+weights in Git, the public demo, or any deployment artifact.
 
 ## Hard boundaries
 
@@ -66,13 +85,13 @@ deployment artifact.
   Segments come only from `sentence_info` or from a validated reconstruction from FunASR's
   raw units, their timestamp pairs and its punctuated output (ADR 0007); fail rather than
   guess. Review flags are not
-  confidence and never rewrite text. English translation stays hidden in local real-ASR mode
-  until the DeepL translation of ADR 0008 / `docs/TRANSLATION.md` ships.
-- DeepL translation (ADR 0008): design approved, not implemented yet. Off by default, worker
+  confidence and never rewrite text.
+- DeepL English line translation (ADR 0008, `docs/TRANSLATION.md`, contract 1.8) is
+  implemented in the worker and local app and is in use. Keep it working. Off by default, worker
   only. The worker reads `DEEPL_AUTH_KEY` from its environment only to authenticate requests;
   it never returns, prints, logs, or persists the key. One displayed line per explicit tap,
-  never batch, background or on export; worker-enforced consent and limits. No live DeepL
-  call without separate approval.
+  never batch, background or on export; worker-enforced consent and limits. Tests,
+  benchmarks and development work never call DeepL.
 - Model weights live only in `~/.pebble/models` (downloaded by `models pull`); never commit,
   bundle or serve them. Smoke-test audio and outputs stay out of the repository.
 - Mock transcripts (`provenance.kind === "mock"`) are learning-locked: no pinyin, translation,

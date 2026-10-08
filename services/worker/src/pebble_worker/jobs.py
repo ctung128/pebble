@@ -22,12 +22,12 @@ from __future__ import annotations
 
 import json
 import logging
-import queue
 import sqlite3
 import threading
 import uuid
+from collections import deque
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import Settings
 from .contract import CURRENT_SCHEMA_VERSION, Job, JobStage, parse_job, require_valid
@@ -39,6 +39,9 @@ from .pipeline.normalize import normalize
 from .pipeline.probe import probe
 from .providers.base import AudioChunk, RawSegment, TranscriptionProvider
 from .storage import Storage
+
+if TYPE_CHECKING:
+    from .speakers.service import SpeakerWork
 
 log = logging.getLogger("pebble.jobs")
 
@@ -480,36 +483,72 @@ class Pipeline:
 
 
 class JobRunner:
-    """One background thread; one job at a time, in submission order."""
+    """
+    One background thread doing one thing at a time: transcription jobs in submission order and,
+    when no transcription job is waiting, queued speaker runs (ADR 0009), oldest first. A running
+    speaker run is never interrupted by a new job; the job simply goes next. On stop, waiting
+    jobs are still drained as before, but no new speaker run starts (they stay queued and resume
+    at the next start).
+    """
 
-    def __init__(self, pipeline: Pipeline) -> None:
+    def __init__(self, pipeline: Pipeline, speakers: SpeakerWork | None = None) -> None:
         self.pipeline = pipeline
-        self._queue: queue.Queue[str | None] = queue.Queue()
+        self.speakers = speakers
+        self._jobs: deque[str] = deque()
+        self._speaker_runs: deque[str] = deque()
+        self._wake = threading.Condition()
+        self._stopping = False
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         self.pipeline.service.recover_interrupted()
-        for job_id in self.pipeline.service.queued_ids():
-            self._queue.put(job_id)
+        queued_runs = self.speakers.recover() if self.speakers else []
+        with self._wake:
+            self._jobs.extend(self.pipeline.service.queued_ids())
+            self._speaker_runs.extend(queued_runs)
+            self._stopping = False
         self._thread = threading.Thread(target=self._loop, name="pebble-jobs", daemon=True)
         self._thread.start()
 
     def submit(self, job_id: str) -> None:
-        self._queue.put(job_id)
+        with self._wake:
+            self._jobs.append(job_id)
+            self._wake.notify()
+
+    def submit_speakers(self, run_id: str) -> None:
+        with self._wake:
+            self._speaker_runs.append(run_id)
+            self._wake.notify()
 
     def stop(self, timeout: float = 10) -> None:
         if self._thread is None:
             return
-        self._queue.put(None)
+        with self._wake:
+            self._stopping = True
+            self._wake.notify()
         self._thread.join(timeout)
         self._thread = None
 
+    def _next(self) -> tuple[str, str] | None:
+        with self._wake:
+            while not self._jobs and not (self._speaker_runs and not self._stopping):
+                if self._stopping:
+                    return None
+                self._wake.wait()
+            if self._jobs:  # transcription first, always
+                return "job", self._jobs.popleft()
+            return "speakers", self._speaker_runs.popleft()
+
     def _loop(self) -> None:
-        while (job_id := self._queue.get()) is not None:
+        while (item := self._next()) is not None:
+            kind, work_id = item
             try:
-                self.pipeline.run(job_id)
-            except Exception:  # the runner must survive anything a single job does
-                log.exception("runner: job %s crashed", job_id)
+                if kind == "job":
+                    self.pipeline.run(work_id)
+                elif self.speakers is not None:
+                    self.speakers.run(work_id)
+            except Exception:  # the runner must survive anything a single item does
+                log.exception("runner: %s %s crashed", kind, work_id)
 
 
 def _raw_segment(stored: dict[str, Any]) -> RawSegment:

@@ -1,7 +1,8 @@
 // Fails the demo build if any local-mode code reached it: the public demo must contain no
 // worker URL, upload UI, upload request code, local speech-recognition (FunASR) copy or model
-// identifiers, or local translation copy, routes, consent/settings UI or provider name (one
-// schema identifier excepted; see demoBundleGuard.mjs). Skipped for local-mode builds.
+// identifiers, local translation copy, routes, consent/settings UI or provider name (one
+// schema identifier excepted), or local speaker routes, controls or model copy (see
+// demoBundleGuard.mjs). Skipped for local-mode builds.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.9",
+  "episodeId": "ep-0123456789ab",
+  "current": {
+    "runId": "spk-0123456789ab",
+    "completedAt": "2026-10-07T12:00:00.000Z",
+    "provenance": {
+      "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+      "modelRevision": "v2.0.2",
+      "clustering": "spectral",
+      "windows": 6,
+      "noiseWindows": 0,
+      "unassignedLines": 0,
+      "speakerCountHint": 2
+    },
+    "speakers": [
+      {
+        "id": "S1",
+        "lines": 2,
+        "windows": 6
+      }
+    ],
+    "assignments": {
+      "seg-0001": "S1",
+      "seg-0002": "S2"
+    },
+    "corrections": null,
+    "effective": {
+      "seg-0001": "S1",
+      "seg-0002": "S1"
+    }
+  },
+  "latest": null
+}

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, type ReactNode } from "react";
 import type { Segment } from "@pebble/schema";
 import { Icon } from "../../components/Icon.tsx";
 import { formatTime } from "../../lib/formatTime.ts";
@@ -20,6 +20,10 @@ interface SegmentRowProps {
   lockedDescriptionId?: string | undefined;
   showTranslation?: boolean;
   showCopy?: boolean;
+  /** An extra control at the end of the line's actions (local mode), or null. */
+  lineAccessory?: ((segment: Segment) => ReactNode) | null;
+  /** A confirmed speaker name, announced after the letter; never visible line text. */
+  speakerName?: string | null;
 }
 
 export const SegmentRow = memo(function SegmentRow({
@@ -33,6 +37,8 @@ export const SegmentRow = memo(function SegmentRow({
   lockedDescriptionId,
   showTranslation = true,
   showCopy = false,
+  lineAccessory = null,
+  speakerName = null,
 }: SegmentRowProps) {
   // Locked actions stay focusable and visible (discoverable) but do nothing.
   const locked = lockedDescriptionId !== undefined;
@@ -95,6 +101,9 @@ export const SegmentRow = memo(function SegmentRow({
                 {segment.speaker ? (
                   <>
                     <span className={styles.visuallyHidden}>Speaker</span> {segment.speaker}
+                    {speakerName ? (
+                      <span className={styles.visuallyHidden}>, {speakerName}</span>
+                    ) : null}
                   </>
                 ) : null}
               </span>{" "}
@@ -176,6 +185,7 @@ export const SegmentRow = memo(function SegmentRow({
             {copy.status === "copied" ? "Copied" : ""}
           </span>
         ) : null}
+        {lineAccessory ? lineAccessory(segment) : null}
       </div>
 
       {hasDetails ? (

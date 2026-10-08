@@ -21,6 +21,7 @@ import { usePinyin } from "../pinyin/usePinyin.ts";
 import { PlayerBar } from "../player/PlayerBar.tsx";
 import { useAudioPlayer, type AudioPlayer } from "../player/useAudioPlayer.ts";
 import { useEpisodeRename } from "./episodeRename.ts";
+import { useSpeakerOverlay } from "../speakers/speakerOverlay.ts";
 import { EpisodeTitle } from "./EpisodeTitle.tsx";
 import { usePlaybackProgress } from "./usePlaybackProgress.ts";
 import { useReplayCue } from "./useReplayCue.ts";
@@ -160,6 +161,21 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
     convert: pinyinConvert,
   } = pinyin;
   const flagged = useMemo(() => deriveReviewHints(segments, reviewHints), [segments, reviewHints]);
+  // Local mode only (the demo's overlay is always null): speaker letters for the displayed lines.
+  // The transcript isn't changed; copy, English, saving and corrections use the original lines.
+  const speakerOverlay = useSpeakerOverlay(episode.id, transcript);
+  const speakerLabels = speakerOverlay?.labels;
+  const displayedSegments = useMemo(
+    () =>
+      speakerLabels
+        ? segments.map((segment) =>
+            speakerLabels.has(segment.id)
+              ? { ...segment, speaker: speakerLabels.get(segment.id) ?? null }
+              : segment,
+          )
+        : segments,
+    [segments, speakerLabels],
+  );
 
   // What learners may do depends only on the transcript's provenance (transcriptCapabilities.ts).
   // Mock transcripts must never feed learning features; ASR transcripts have no English yet.
@@ -556,6 +572,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         ) : null}
       </header>
 
+      {speakerOverlay?.panel ?? null}
+
       <section aria-labelledby="transcript-heading">
         {/* The display toggles sit in the header row; the heading keeps the outline. */}
         <h2 id="transcript-heading" className={styles.visuallyHidden}>
@@ -587,7 +605,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
         ) : null}
         <TranscriptReader
           ref={readerRef}
-          segments={segments}
+          segments={displayedSegments}
           activeIndex={activeIndex}
           language={transcript.language}
           lines={lines}
@@ -596,6 +614,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
           lockedDescriptionId={learningLocked ? LOCKED_HELP_ID : undefined}
           showTranslation={!translationHidden || workerMode}
           showCopy={capabilities.copy}
+          lineAccessory={speakerOverlay?.lineAccessory ?? null}
+          speakerNames={speakerOverlay?.spokenNames ?? null}
         />
         <ShortcutSlot>
           <Shortcuts

@@ -5,6 +5,7 @@ import { AddAudioPage } from "./AddAudioPage.tsx";
 import { JobProgressRoute } from "./JobProgressPage.tsx";
 import { LocalLibraryPage } from "./LocalLibraryPage.tsx";
 import { LocalRenameProvider } from "./LocalRenameProvider.tsx";
+import { LocalSpeakersProvider } from "./speakers/LocalSpeakersProvider.tsx";
 import { LocalTranslationProvider } from "./LocalTranslationProvider.tsx";
 import { TranslationSettingsPage } from "./TranslationSettingsPage.tsx";
 import { TranslationUsageMeter } from "./TranslationUsageMeter.tsx";
@@ -31,7 +32,9 @@ export function LocalApp() {
   return (
     <LocalRenameProvider>
       <LocalTranslationProvider>
-        <RouterProvider router={router} />
+        <LocalSpeakersProvider>
+          <RouterProvider router={router} />
+        </LocalSpeakersProvider>
       </LocalTranslationProvider>
     </LocalRenameProvider>
   );

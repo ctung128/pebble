@@ -11,9 +11,12 @@ from conftest import EXAMPLES
 from pebble_worker.contract import (
     Transcript,
     TranscriptProvenance,
+    parse_episode_speakers,
     parse_episode_translations,
     parse_job,
     parse_manifest,
+    parse_speaker_corrections_request,
+    parse_speaker_run_request,
     parse_transcript,
     parse_translation_consent,
     parse_translation_consent_request,
@@ -33,6 +36,9 @@ PARSERS = {
     "translation-request": parse_translation_request,
     "translation-result": parse_translation_result,
     "episode-translations": parse_episode_translations,
+    "episode-speakers": parse_episode_speakers,
+    "speaker-corrections-request": parse_speaker_corrections_request,
+    "speaker-run-request": parse_speaker_run_request,
 }
 #: Browser-only payloads the worker never reads or writes.
 BROWSER_ONLY = {"demo-translations", "illustrative-uncertainty", "correction", "learning-item"}

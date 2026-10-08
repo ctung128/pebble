@@ -3,11 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   parseCorrection,
   parseDemoTranslations,
+  parseEpisodeSpeakers,
   parseEpisodeTranslations,
   parseIllustrativeUncertainty,
   parseJob,
   parseLearningItem,
   parseManifest,
+  parseSpeakerCorrectionsRequest,
+  parseSpeakerRunRequest,
   parseTranscript,
   parseTranslationConsent,
   parseTranslationConsentRequest,
@@ -36,6 +39,9 @@ const PARSERS: [prefix: string, parse: (payload: unknown) => ParseResult<unknown
   ["translation-request", parseTranslationRequest],
   ["translation-result", parseTranslationResult],
   ["episode-translations", parseEpisodeTranslations],
+  ["episode-speakers", parseEpisodeSpeakers],
+  ["speaker-corrections-request", parseSpeakerCorrectionsRequest],
+  ["speaker-run-request", parseSpeakerRunRequest],
 ];
 const parserFor = (file: string) => {
   const entry = PARSERS.find(([prefix]) => file.startsWith(prefix));

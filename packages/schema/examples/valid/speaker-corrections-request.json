@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.9",
+  "episodeId": "ep-0123456789ab",
+  "runId": "spk-0123456789ab",
+  "names": {
+    "S1": "Host",
+    "S2": "Guest"
+  },
+  "merges": {
+    "S3": "S1"
+  },
+  "notSpeaker": ["S4"],
+  "lines": {
+    "seg-0002": "S2",
+    "seg-0007": null
+  },
+  "revision": 0
+}

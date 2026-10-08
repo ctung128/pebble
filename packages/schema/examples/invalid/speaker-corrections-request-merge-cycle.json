@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.9",
+  "episodeId": "ep-0123456789ab",
+  "runId": "spk-0123456789ab",
+  "names": {},
+  "merges": {
+    "S2": "S1",
+    "S1": "S2"
+  },
+  "notSpeaker": [],
+  "lines": {},
+  "revision": 0
+}

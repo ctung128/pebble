@@ -27,8 +27,11 @@ from . import security
 from .config import Settings
 from .contract import (
     CURRENT_SCHEMA_VERSION,
+    SPEAKER_RUN_ID_PATTERN,
     Episode,
     Manifest,
+    parse_speaker_corrections_request,
+    parse_speaker_run_request,
     parse_translation_consent_request,
     parse_translation_request,
     translation_text_problem,
@@ -39,6 +42,8 @@ from .health import check_health
 from .jobs import ACTIVE_STATUSES, JobConflict, JobRunner, JobService, Pipeline
 from .providers.base import TranscriptionProvider
 from .providers.factory import build_provider
+from .speakers.service import SpeakerWork
+from .speakers.store import CorrectionError, SpeakerConflict, SpeakerNotAvailable
 from .storage import EPISODE_ID, PRIVATE_DIR, PRIVATE_FILE, Storage
 from .translation import REQUESTS_IMPLEMENTED
 from .translation.config import TranslationSettings
@@ -129,6 +134,23 @@ JSON_BODY_LIMITS: dict[tuple[str, str], int] = {
     ("PUT", "/translation/consent"): 1024,
     ("POST", "/translations"): 4096,
 }
+SPEAKER_RUN_BODY_LIMIT = 1024
+SPEAKER_CORRECTIONS_BODY_LIMIT = 1024 * 1024  # 1 MiB of actual bytes (ADR 0009)
+#: Routes with an id in the path: (method, pattern, limit).
+JSON_BODY_PATTERNS: tuple[tuple[str, re.Pattern[str], int], ...] = (
+    ("POST", re.compile(r"^/episodes/[^/]+/speakers$"), SPEAKER_RUN_BODY_LIMIT),
+    ("PUT", re.compile(r"^/episodes/[^/]+/speakers/corrections$"), SPEAKER_CORRECTIONS_BODY_LIMIT),
+)
+
+
+def json_body_limit(method: str, path: str) -> int | None:
+    limit = JSON_BODY_LIMITS.get((method, path))
+    if limit is not None:
+        return limit
+    for route_method, pattern, route_limit in JSON_BODY_PATTERNS:
+        if method == route_method and pattern.match(path):
+            return route_limit
+    return None
 
 
 class JsonBodyLimit:
@@ -143,11 +165,7 @@ class JsonBodyLimit:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        limit = (
-            JSON_BODY_LIMITS.get((scope["method"], scope["path"]))
-            if scope["type"] == "http"
-            else None
-        )
+        limit = json_body_limit(scope["method"], scope["path"]) if scope["type"] == "http" else None
         if limit is None:
             await self.app(scope, receive, send)
             return
@@ -206,13 +224,31 @@ def _json_headers_problem(
     return None
 
 
-def _json_body(body: bytes, limit: int) -> Any:
-    """The parsed body of a size-checked JSON request (JsonBodyLimit has run already)."""
+class _DuplicateKey(ValueError):
+    pass
+
+
+def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _DuplicateKey
+        result[key] = value
+    return result
+
+
+def _json_body(body: bytes, limit: int, *, unique_keys: bool = False) -> Any:
+    """
+    The parsed body of a size-checked JSON request (JsonBodyLimit has run already). With
+    `unique_keys`, an object that repeats a key is refused instead of silently keeping the last.
+    """
     if len(body) > limit:
         raise ApiError(413, "REQUEST_TOO_LARGE", "The request is too large.")
     try:
-        return json.loads(body)
-    except (ValueError, UnicodeDecodeError) as error:
+        return json.loads(body, object_pairs_hook=_unique_keys if unique_keys else None)
+    except _DuplicateKey as error:
+        raise ApiError(422, "DUPLICATE_KEYS", "The request repeats a field.") from error
+    except (ValueError, UnicodeDecodeError, RecursionError) as error:
         raise ApiError(422, "INVALID_REQUEST", "The request isn't valid JSON.") from error
 
 
@@ -222,6 +258,7 @@ def create_app(
     provider: TranscriptionProvider | None = None,
     start_runner: bool = True,
     translation_client: Callable[[TranslationSettings], DeepLClient] | None = None,
+    speakers: SpeakerWork | None = None,
 ) -> FastAPI:
     storage = Storage(settings.data_dir)
     storage.ensure()
@@ -235,7 +272,8 @@ def create_app(
     translations.reconcile()
     provider = provider or build_provider(settings, storage)
     service = JobService(db, provider)
-    runner = JobRunner(Pipeline(settings, storage, service))
+    speakers = speakers or SpeakerWork(db, storage, settings)
+    runner = JobRunner(Pipeline(settings, storage, service), speakers)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -256,6 +294,7 @@ def create_app(
         runner,
     )
     app.state.translations = translations
+    app.state.speakers = speakers
     app.add_middleware(UploadLimit, max_bytes=settings.max_upload_bytes)
     app.add_middleware(JsonBodyLimit)
     security.install(app, settings)
@@ -345,7 +384,11 @@ def create_app(
                 # Health must still explain an unreadable or unwritable data folder. Without
                 # the block, the app treats translation as off, which it effectively is.
                 translation = None
-        return check_health(settings, storage, [provider], translation).dump()
+        try:
+            speaker_health = speakers.health()  # file presence only; never loads or hashes
+        except OSError:
+            speaker_health = None
+        return check_health(settings, storage, [provider], translation, speaker_health).dump()
 
     @app.get("/episodes")
     def list_episodes() -> dict[str, Any]:
@@ -462,6 +505,9 @@ def create_app(
             raise ApiError(
                 409, "JOB_ACTIVE", "This episode is still processing.", hint="Cancel the job first."
             )
+        # Speaker work first: queued runs never start, a running child is stopped (the runner
+        # polls the run's status) and any late result is discarded. Then files, then rows.
+        speakers.store.cancel_for_episode(episode_id)
         storage.remove_episode(episode_id)
         with db.tx() as conn:
             conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
@@ -547,6 +593,121 @@ def create_app(
     def withdraw_translation_consent() -> dict[str, Any]:
         """Stops future submissions. Idempotent; saved English stays readable."""
         return withdraw_consent(db).dump()
+
+    # --- Speakers (1.9, ADR 0009). Local only: handlers never load a model, read audio or run
+    # inference; they validate, claim work atomically, and hand it to the single runner.
+
+    def speaker_episode(episode_id: str) -> Any:
+        row = ready_episode_row(episode_id)  # 404 unknown, 409 not finished processing
+        with db.tx() as conn:
+            kind = conn.execute(
+                "SELECT json_extract(body, '$.provenance.kind') AS kind FROM transcripts "
+                "WHERE episode_id = ?",
+                (episode_id,),
+            ).fetchone()
+        if kind is None or kind["kind"] != "asr":
+            raise ApiError(
+                409,
+                "SPEAKERS_NOT_ELIGIBLE",
+                "Speaker detection needs a real transcript of this episode.",
+            )
+        return row
+
+    def speakers_payload(episode_id: str) -> dict[str, Any]:
+        try:
+            return speakers.payload(episode_id)
+        except SpeakerNotAvailable as error:
+            raise ApiError(404, "NOT_FOUND", "No such episode.") from error
+
+    @app.post("/episodes/{episode_id}/speakers", status_code=202)
+    async def start_speakers(episode_id: str, request: Request) -> dict[str, Any]:
+        payload = _json_body(await request.body(), SPEAKER_RUN_BODY_LIMIT, unique_keys=True)
+        parsed = parse_speaker_run_request(payload)
+        if not parsed.ok or parsed.data is None:
+            raise ApiError(422, "INVALID_REQUEST", "The request is missing or has invalid fields.")
+        hint = parsed.data.speaker_count
+        return await run_in_threadpool(start_speaker_run, episode_id, hint)
+
+    def start_speaker_run(episode_id: str, hint: int | None) -> dict[str, Any]:
+        row = speaker_episode(episode_id)
+        normalized = storage.work_dir(episode_id) / "normalized.wav"
+        if not normalized.is_file() and not storage.resolve_relative(row["source_path"]).is_file():
+            raise ApiError(409, "AUDIO_UNAVAILABLE", "This episode's audio is no longer available.")
+        availability = speakers.health()
+        if availability.state == "isolation_unavailable":
+            raise ApiError(
+                503,
+                "SPEAKER_ISOLATION_UNAVAILABLE",
+                "Speaker detection can't run on this computer.",
+                hint=availability.hint,
+            )
+        if availability.state != "ready":
+            raise ApiError(
+                503,
+                "SPEAKER_MODEL_UNAVAILABLE",
+                "The speaker model isn't installed.",
+                hint=availability.hint,
+            )
+        try:
+            run_id = speakers.store.create_run(episode_id, hint)
+        except SpeakerConflict as error:
+            raise ApiError(
+                409, "SPEAKER_RUN_ACTIVE", "Speakers are already being detected for this episode."
+            ) from error
+        except SpeakerNotAvailable as error:
+            raise ApiError(404, "NOT_FOUND", "No such episode.") from error
+        runner.submit_speakers(run_id)
+        return speakers_payload(episode_id)
+
+    @app.get("/episodes/{episode_id}/speakers")
+    def get_speakers(episode_id: str) -> dict[str, Any]:
+        """Read-only: current successful labels and the latest run's state, kept apart."""
+        episode_row(episode_id)
+        return speakers_payload(episode_id)
+
+    #: Fixed copy for correction refusals: never the submitted names or validation details.
+    correction_errors: dict[str, tuple[int, str]] = {
+        "EPISODE_NOT_FOUND": (404, "NOT_FOUND"),
+        "RUN_MISMATCH": (409, "SPEAKER_RUN_MISMATCH"),
+        "RUN_NOT_COMPLETED": (409, "SPEAKER_RUN_NOT_COMPLETED"),
+        "REVISION_CONFLICT": (409, "SPEAKER_CORRECTIONS_STALE"),
+        "INVALID_CORRECTIONS": (422, "SPEAKER_CORRECTIONS_INVALID"),
+    }
+
+    @app.put("/episodes/{episode_id}/speakers/corrections")
+    async def put_speaker_corrections(episode_id: str, request: Request) -> dict[str, Any]:
+        payload = _json_body(await request.body(), SPEAKER_CORRECTIONS_BODY_LIMIT, unique_keys=True)
+        parsed = parse_speaker_corrections_request(payload)
+        if not parsed.ok or parsed.data is None or parsed.data.episode_id != episode_id:
+            raise ApiError(
+                422, "SPEAKER_CORRECTIONS_INVALID", "These speaker corrections aren't valid."
+            )
+        correction = parsed.data
+        episode_row(episode_id)
+
+        def save() -> dict[str, Any]:
+            try:
+                return speakers.store.put_corrections(correction)
+            except CorrectionError as error:
+                status, code = correction_errors[error.code]
+                messages = {
+                    "SPEAKER_CORRECTIONS_INVALID": "These speaker corrections aren't valid.",
+                    "NOT_FOUND": "No such episode.",
+                }
+                raise ApiError(status, code, messages.get(code, error.message)) from error
+
+        return await run_in_threadpool(save)
+
+    @app.post("/episodes/{episode_id}/speakers/runs/{run_id}/cancel")
+    def cancel_speakers(episode_id: str, run_id: str) -> dict[str, Any]:
+        """Cancels exactly this run; an already-ended run is left as it is (idempotent)."""
+        episode_row(episode_id)
+        if not re.fullmatch(SPEAKER_RUN_ID_PATTERN.strip("^$"), run_id):
+            raise ApiError(404, "NOT_FOUND", "No such speaker run.")
+        try:
+            return speakers.store.cancel_run(episode_id, run_id)
+        except SpeakerNotAvailable as error:
+            raise ApiError(404, "NOT_FOUND", "No such speaker run.") from error
 
     @app.get("/jobs")
     def list_jobs() -> dict[str, Any]:

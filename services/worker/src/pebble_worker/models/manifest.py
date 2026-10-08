@@ -4,9 +4,14 @@ The pinned model manifest: the single source of truth for which weights Pebble u
 Every entry is an exact ModelScope model ID at an exact tag, with the size and SHA-256 of each
 runtime file (the files the model's `configuration.json` references, plus that file itself).
 Never point an entry at a floating revision such as `master`. Sizes and hashes were read from the
-ModelScope file API for the pinned tag on 2026-10-03; `pebble-worker models verify` checks them.
+ModelScope file API for the pinned tag on 2026-10-03 (the speaker model on 2026-10-07);
+`pebble-worker models verify` checks them.
 
 Weights live only under `<PEBBLE_DATA_DIR>/models`. They are never committed, bundled or served.
+
+`MANIFEST` is what transcription needs. `SPEAKER_MODELS` is the optional speaker-embedding
+model for the diarization evaluation (ADR 0009): pulled and verified only on request
+(`models … --speaker`), never required by health, doctor, setup or transcription.
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-ModelRole = Literal["asr", "vad", "punctuation"]
+ModelRole = Literal["asr", "vad", "punctuation", "speaker"]
 
 #: Directory under the Pebble data directory that holds every downloaded model.
 MODELS_DIRNAME = "models"
@@ -157,3 +162,39 @@ CT_PUNC_ZH = ModelSpec(
 )
 
 MANIFEST: tuple[ModelSpec, ...] = (PARAFORMER, FSMN_VAD, CT_PUNC_ZH)
+
+CAMPPLUS_SV_ZH = ModelSpec(
+    role="speaker",
+    model_id="iic/speech_campplus_sv_zh-cn_16k-common",
+    revision="v2.0.2",
+    license="Apache-2.0",
+    license_source=(
+        "ModelScope model card metadata and README front matter at the pinned tag: "
+        "`license: Apache License 2.0`. The card does not link the FunASR Model Open Source "
+        "License, and the repository has no separate license file."
+    ),
+    attribution=(
+        "speech_campplus_sv_zh-cn_16k-common (CAM++ speaker verification, Mandarin, 16 kHz) by "
+        "Alibaba Tongyi Lab, published by the iic organization on ModelScope. "
+        "Licensed under Apache-2.0."
+    ),
+    files=(
+        ModelFile(
+            "configuration.json",
+            581,
+            "6f7acaf1e81ca121f4a3c71b6ddb66beec24350a3ef330e2c846f17829176a8f",
+        ),
+        ModelFile(
+            "config.yaml", 537, "17342041bd5b22f6fd7e32f6e7a267b0bf65f018c0a721bada6547e3d28fbfc9"
+        ),
+        ModelFile(
+            "campplus_cn_common.bin",
+            28036335,
+            "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+        ),
+    ),
+    total_size=28037453,
+)
+
+#: Optional: speaker diarization evaluation only (ADR 0009). Not part of MANIFEST.
+SPEAKER_MODELS: tuple[ModelSpec, ...] = (CAMPPLUS_SV_ZH,)

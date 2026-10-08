@@ -4,9 +4,13 @@
 
 - **Implementation: complete** — worker (contract 1.8) and local app (per-line English, consent,
   settings with Withdraw, fingerprint-safe saving, snapshot-only export, demo-bundle guard).
-- **Verification: gaps remain** — no live provider call; some local test suites unrun or
-  unresolved (TRANSLATION.md, "Before real activation").
-- **Real activation: not approved.** A live smoke test and real use each need separate approval.
+- **Live:** the isolated provider smoke test has passed, and English translation is in real use.
+- **Verification: follow-ups remain** (TRANSLATION.md, "Outstanding verification follow-ups").
+  Live coverage is narrow: no test suite makes a live call. Separately, complete verification
+  hasn't happened. `JobProgressPage` synchronization was fixed and mutation-tested in `cd00303`,
+  whose uninterrupted sandbox-compatible sequence passed (one full web run; three clean full
+  web runs are separate evidence). The `AddAudioPage` and `EpisodeTitle` failures
+  remain unresolved, and there has been no uninterrupted full pass.
 
 Details: [TRANSLATION.md](../TRANSLATION.md).
 
@@ -72,4 +76,4 @@ the UI.
   reserved just before a crash may never have been sent, and is not refunded.
 - Behind a proxy-only network, translation is unavailable.
 - No live DeepL test runs in CI; tests use invented text, fake providers and a fake HTTPS
-  transport. A live smoke test is a separate, manual step.
+  transport. The live smoke test is a separate, manual step (passed).

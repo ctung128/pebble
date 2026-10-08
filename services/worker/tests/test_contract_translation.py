@@ -152,8 +152,10 @@ def test_older_health_without_translation_means_off(name):
     assert "translation" not in result.data.dump()
 
 
-def test_the_worker_advertises_1_8_now_that_translation_routes_exist():
-    assert CURRENT_SCHEMA_VERSION == "1.8"
+def test_the_worker_advertises_at_least_1_8_now_that_translation_routes_exist():
+    # 1.9 (speakers, ADR 0009) is a later minor; translation stays as specified in 1.8.
+    major, minor = (int(part) for part in CURRENT_SCHEMA_VERSION.split("."))
+    assert major == 1 and minor >= 8
 
 
 # --- Malformed payloads ---------------------------------------------------------------------

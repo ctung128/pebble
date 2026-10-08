@@ -6,7 +6,7 @@ worker. Both are tested against `examples/`.
 
 ## Versioning
 
-- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.8`.
+- Every top-level payload has `schemaVersion: "MAJOR.MINOR"`. The current version is `1.9`.
   The app gates translation on health's `translation` field, never on the minor version alone.
 - Readers accept any `1.x` and **ignore unknown fields**, so minor versions may add optional
   fields.
@@ -16,6 +16,18 @@ worker. Both are tested against `examples/`.
 
 ## Changelog
 
+- **1.9** — Local speaker labels ([ADR 0009](../../docs/adr/0009-local-speaker-diarization-evaluation.md)).
+  - **Health:** worker health may include `speakers: { state, hint }`, where `state` is `ready`,
+    `model_missing`, `model_incomplete` or `isolation_unavailable`. It is absent from older
+    workers, which means unavailable, and it never affects `status`.
+  - **New payloads:** speaker run request, episode speakers and speaker corrections request (see
+    [Speakers](#speakers-19)).
+  - **Routes:**
+    - `POST /episodes/{id}/speakers`
+    - `GET /episodes/{id}/speakers`
+    - `PUT /episodes/{id}/speakers/corrections`
+    - `POST /episodes/{id}/speakers/runs/{runId}/cancel`
+  - Transcript, translation and learning-item payloads are unchanged.
 - **1.8** — Optional DeepL line translation
   ([docs/TRANSLATION.md](../../docs/TRANSLATION.md), ADR 0008). Worker health may include
   `translation` (see [Translation](#translation-18)); absent means translation is off. New
@@ -250,3 +262,93 @@ validators run against every file in `examples/`, and the expected code, path an
 each invalid example live in `examples/expectations.json`. Browser-only payloads
 (translations, illustrative uncertainty, corrections, learning items) are validated by Zod
 only.
+
+## Speakers (1.9)
+
+Local speaker labels ([ADR 0009](../../docs/adr/0009-local-speaker-diarization-evaluation.md)).
+Clients that don't know about speakers are unaffected: health's `speakers` field and the routes
+are additive. Payloads carry ids, times, counts and names the learner typed: never transcript
+text, audio or embeddings. Speaker names are display-only and never part of DeepL source text.
+
+**Speaker run request** (`POST /episodes/{id}/speakers`). `{ schemaVersion, speakerCount? }`,
+where `speakerCount` is an optional hint of 1–15 (null or absent: automatic). The JSON body is
+at most 1 KiB and may not repeat keys.
+
+- **202:** the episode speakers, with `latest.status: "queued"`. The handler only validates and
+  claims the work; it never loads a model, reads audio or runs inference.
+- **404 `NOT_FOUND`:** no such episode.
+- **409:**
+  - `EPISODE_NOT_READY`: transcription hasn't finished;
+  - `SPEAKERS_NOT_ELIGIBLE`: the episode has no real (ASR) transcript;
+  - `AUDIO_UNAVAILABLE`: the audio is gone;
+  - `SPEAKER_RUN_ACTIVE`: a run is already queued or running. Claiming is atomic, so concurrent
+    requests start at most one run.
+- **503:** `SPEAKER_MODEL_UNAVAILABLE` or `SPEAKER_ISOLATION_UNAVAILABLE`, with a `hint`.
+
+**Reading** (`GET /episodes/{id}/speakers`) is side-effect free and returns the episode speakers.
+
+**Corrections** (`PUT /episodes/{id}/speakers/corrections`). The body is at most 1 MiB of
+actual bytes, with no repeated keys. It must name the run and the `revision` the edit was based
+on. Refusals use fixed copy and never echo names or validation details:
+
+- `SPEAKER_CORRECTIONS_INVALID` (422);
+- `SPEAKER_RUN_MISMATCH` (409): not the episode's current run;
+- `SPEAKER_RUN_NOT_COMPLETED` (409);
+- `SPEAKER_CORRECTIONS_STALE` (409): the revision changed. Nothing is overwritten.
+
+**Cancel** (`POST /episodes/{id}/speakers/runs/{runId}/cancel`) cancels exactly that run if it is
+queued or running. For a run that already ended it changes nothing (idempotent), and it never
+affects any other run. It returns the episode speakers; 404 if the run isn't the episode's.
+
+**Episode speakers.** `{ schemaVersion, episodeId, current, latest }`.
+
+- `current` is the latest **completed** run for the current transcript, or `null`. It stays
+  while a re-detection is queued, running, failed or cancelled. Fields:
+  - `runId` (`spk-` + 12 hex) and `completedAt`;
+  - `provenance`: `{ modelId, modelRevision, clustering, windows, noiseWindows,
+unassignedLines }`;
+  - `speakers`: `[{ id, lines, windows }]`, with ids exactly `S1…Sn` in order;
+  - `assignments`: the original assignments, segment id → speaker id or `null` (unassigned);
+  - `corrections`: `null`, or `{ names, merges, notSpeaker, lines, updatedAt }`;
+  - `effective`: the assignments with the corrections applied, covering exactly the same lines.
+- `current.provenance.speakerCountHint` is the run's hint or `null`; stored corrections carry a
+  `revision` (1, 2, …).
+- `latest` is the most recent run of any status, or `null`: `{ runId, status, failure,
+createdAt, updatedAt }`.
+  - `status` is `queued`, `running`, `completed`, `failed` or `cancelled`.
+  - `failure` is `{ code, message, retryable }`, set exactly when the run failed or was
+    cancelled. The message is fixed copy.
+
+**Failure codes:** `SPEAKER_MODEL_UNAVAILABLE`, `AUDIO_UNAVAILABLE`, `INVALID_INPUT`,
+`EMBEDDING_FAILED`, `CLUSTERING_FAILED`, `NETWORK_ISOLATION_FAILED`, `TIMED_OUT`, `CANCELLED`,
+`WORKER_RESTARTED`, `CHILD_FAILED`, `RESULT_INVALID`, `TRANSCRIPT_CHANGED`.
+
+Segment ids used as keys in speaker payloads are ASCII (`[A-Za-z0-9._:-]{1,64}`), so ordering is
+the same in every language. With corrections present, `effective` may name only visible
+speakers: never a merged-away or not-a-speaker cluster.
+
+**Speaker corrections request.** `{ schemaVersion, episodeId, runId, revision, names, merges,
+notSpeaker, lines }`. It replaces the run's corrections as a whole. `revision` is the stored
+revision the edit was based on, `0` when none is saved yet.
+
+- `names`: speaker id → name. A name is 1–60 code points, NFC, with no control characters, and
+  not empty.
+- `merges`: source → target. A speaker can't merge into itself, and a merge target can't itself
+  be merged (no chains).
+- `notSpeaker`: unique speaker ids whose lines show as unassigned, for example music. These
+  clusters can't be merged.
+- `lines`: segment id → speaker id, or `null` for not-a-speaker/unassigned. A line can only be
+  reassigned to a speaker that is neither merged away nor marked not-a-speaker.
+- A merged-away speaker can't be named.
+- **Bounds:** at most 200 entries each in `names`, `merges` and `notSpeaker`, and 20,000 in
+  `lines`.
+- **Order:** issues are reported in a fixed order, whatever the key order:
+  1. sizes;
+  2. merges, by speaker number: self-merge, chain or cycle, not-a-speaker;
+  3. duplicate not-a-speaker entries;
+  4. names of merged speakers;
+  5. line targets, by segment id.
+- **Privacy:** messages never repeat a submitted name. Names are user-entered display text, not
+  transcript text, and never part of DeepL source text.
+- **Run checks:** the worker additionally checks every id against the run's own speakers and
+  lines, and accepts corrections only for the episode's current run.

@@ -115,6 +115,66 @@ MIGRATIONS: list[str] = [
       granted_at TEXT NOT NULL
     );
     """,
+    # 3 — local speaker labels (ADR 0009). Additive: no existing table or row changes. Runs keep
+    # ids and times only, never transcript text, audio or embeddings; everything cascades with
+    # its episode.
+    """
+    CREATE TABLE speaker_runs (
+      id TEXT PRIMARY KEY,
+      episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+      status TEXT NOT NULL
+        CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+      failure_code TEXT CHECK (failure_code GLOB '[A-Z]*' AND failure_code NOT GLOB '*[^A-Z_]*'),
+      model_id TEXT NOT NULL,
+      model_revision TEXT NOT NULL,
+      -- the transcript version the run labelled (transcripts.created_at); a newer transcript
+      -- makes the run stale rather than silently re-pointing it
+      transcript_created_at TEXT NOT NULL,
+      speaker_hint INTEGER CHECK (speaker_hint BETWEEN 1 AND 15),  -- learner's count, or NULL
+      clustering TEXT,                        -- the clustering branch that actually ran
+      windows INTEGER CHECK (windows >= 0),
+      noise_windows INTEGER CHECK (noise_windows >= 0),
+      unassigned_lines INTEGER CHECK (unassigned_lines >= 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      completed_at TEXT,
+      CHECK ((status IN ('failed', 'cancelled')) = (failure_code IS NOT NULL)),
+      CHECK ((status = 'completed') = (completed_at IS NOT NULL))
+    );
+    CREATE INDEX speaker_runs_by_episode ON speaker_runs (episode_id, created_at);
+    -- at most one queued or running speaker run per episode
+    CREATE UNIQUE INDEX speaker_runs_one_active ON speaker_runs (episode_id)
+      WHERE status IN ('queued', 'running');
+
+    -- A completed run's generic speakers, S1…Sn in order of first appearance.
+    CREATE TABLE speaker_labels (
+      run_id TEXT NOT NULL REFERENCES speaker_runs(id) ON DELETE CASCADE,
+      speaker_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 1),
+      lines INTEGER NOT NULL CHECK (lines >= 0),
+      windows INTEGER NOT NULL CHECK (windows >= 0),
+      PRIMARY KEY (run_id, speaker_id),
+      UNIQUE (run_id, position),
+      CHECK (speaker_id = 'S' || position)
+    );
+
+    -- The run's original assignments, never edited. NULL speaker: unassigned.
+    CREATE TABLE speaker_assignments (
+      run_id TEXT NOT NULL REFERENCES speaker_runs(id) ON DELETE CASCADE,
+      segment_id TEXT NOT NULL,
+      speaker_id TEXT,
+      PRIMARY KEY (run_id, segment_id),
+      FOREIGN KEY (run_id, speaker_id) REFERENCES speaker_labels (run_id, speaker_id)
+    );
+
+    -- Learner corrections for one completed run (validated JSON), kept apart from the originals.
+    CREATE TABLE speaker_corrections (
+      run_id TEXT PRIMARY KEY REFERENCES speaker_runs(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      revision INTEGER NOT NULL CHECK (revision >= 1),  -- compare-and-set: stale edits refused
+      updated_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

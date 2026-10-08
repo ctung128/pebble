@@ -17,6 +17,14 @@ import {
   type TranslationResult,
 } from "./lineTranslation.ts";
 import { ManifestSchema, type Manifest } from "./manifest.ts";
+import {
+  EpisodeSpeakersSchema,
+  SpeakerCorrectionsRequestSchema,
+  SpeakerRunRequestSchema,
+  type EpisodeSpeakers,
+  type SpeakerCorrectionsRequest,
+  type SpeakerRunRequest,
+} from "./speakers.ts";
 import { DemoTranslationsSchema, type DemoTranslations } from "./translations.ts";
 import { TranscriptSchema, type Transcript } from "./transcript.ts";
 import { checkSchemaVersion, SUPPORTED_MAJOR } from "./version.ts";
@@ -104,3 +112,14 @@ export const parseTranslationConsentRequest = (
 
 export const parseTranslationConsent = (payload: unknown): ParseResult<TranslationConsent> =>
   parseWith(TranslationConsentSchema, payload, "Translation consent");
+
+export const parseSpeakerCorrectionsRequest = (
+  payload: unknown,
+): ParseResult<SpeakerCorrectionsRequest> =>
+  parseWith(SpeakerCorrectionsRequestSchema, payload, "Speaker corrections");
+
+export const parseEpisodeSpeakers = (payload: unknown): ParseResult<EpisodeSpeakers> =>
+  parseWith(EpisodeSpeakersSchema, payload, "Episode speakers");
+
+export const parseSpeakerRunRequest = (payload: unknown): ParseResult<SpeakerRunRequest> =>
+  parseWith(SpeakerRunRequestSchema, payload, "Speaker run request");

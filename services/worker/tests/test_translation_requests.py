@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from pebble_worker.api import create_app
 from pebble_worker.config import Settings
 from pebble_worker.contract import (
+    CURRENT_SCHEMA_VERSION,
     parse_episode_translations,
     parse_translation_result,
     parse_worker_health,
@@ -1042,7 +1043,7 @@ def test_health_reports_readiness_and_the_local_limit(world):
     w = world(PEBBLE_TRANSLATION_MONTHLY_REQUEST_LIMIT="1")
     w.add_episode()
     health = w.client.get("/health").json()
-    assert health["schemaVersion"] == "1.8" and parse_worker_health(health).ok
+    assert health["schemaVersion"] == CURRENT_SCHEMA_VERSION and parse_worker_health(health).ok
     assert health["translation"]["newRequests"] == "consent_required"
     w.consent()
     assert w.client.get("/health").json()["translation"]["newRequests"] == "available"

@@ -125,6 +125,31 @@
       "code": "INVALID_PAYLOAD",
       "path": "grantedAt",
       "message": "exactly when consent is current"
+    },
+    "speaker-corrections-request-merge-chain.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "merges.S3",
+      "message": "no chains"
+    },
+    "episode-speakers-unknown-speaker.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "current.assignments.seg-0002",
+      "message": "unknown speaker"
+    },
+    "speaker-corrections-request-merge-cycle.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "merges.S1",
+      "message": "no chains or cycles"
+    },
+    "episode-speakers-effective-hidden.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "current.effective.seg-0003",
+      "message": "must be visible"
+    },
+    "speaker-run-request-count-too-high.json": {
+      "code": "INVALID_PAYLOAD",
+      "path": "speakerCount",
+      "message": "."
     }
   }
 }

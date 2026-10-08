@@ -219,8 +219,8 @@ def test_migrates_from_version_1_and_keeps_every_existing_row(tmp_path):
     v1_database(path)
     before = {t: rows(path, t) for t in ("episodes", "jobs", "chunks", "transcripts")}
     db = Database(path)
-    assert db.migrate() == 2
-    assert db.schema_version == 2
+    assert db.migrate() == 3  # 3: speaker tables (ADR 0009), additive
+    assert db.schema_version == 3
     assert {t: rows(path, t) for t in before} == before
     for table in ("translations", "translation_usage", "translation_attempts"):
         assert rows(path, table) == []
@@ -238,14 +238,14 @@ def test_migrating_again_is_a_no_op(tmp_path):
         )
     db.migrate()
     db.migrate()
-    assert db.schema_version == 2
+    assert db.schema_version == 3
     assert len(rows(path, "translation_consent")) == 1
 
 
 def test_repeated_startup_on_the_same_data_directory(tmp_path, make):
     make()
     assert put_consent(make()).status_code == 200
-    assert Database(tmp_path / "pebble" / "pebble.db").schema_version == 2
+    assert Database(tmp_path / "pebble" / "pebble.db").schema_version == 3
 
 
 def insert_translation(conn, episode_id, segment_id="seg-0001", fingerprint="a" * 64):
@@ -425,7 +425,7 @@ def test_health_reports_translation_now_that_requests_exist(make, tmp_path):
     assert REQUESTS_IMPLEMENTED is True
     client = make()
     before = client.get("/health").json()
-    assert before["schemaVersion"] == "1.8"
+    assert before["schemaVersion"] == CURRENT_SCHEMA_VERSION
     assert before["translation"]["newRequests"] == "consent_required"
     put_consent(client)
     assert client.get("/health").json()["translation"]["newRequests"] == "available"

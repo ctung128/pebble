@@ -1,19 +1,46 @@
 # English line translation (DeepL)
 
-> **Status: implementation complete; not approved for real activation.** ([ADR
-> 0008](adr/0008-optional-deepl-line-translation.md).) Everything planned is built: the worker
-> (contract 1.8), the local app's per-line English, cached English, **Show saved English**, the
-> consent dialog, translation settings with **Withdraw** and an explicit re-check, fingerprint-safe
-> saving, snapshot-only export and the demo-bundle guard. It is tested only with invented text and
-> fake workers, providers or HTTPS transports.
+> **Status: implemented and live.** ([ADR 0008](adr/0008-optional-deepl-line-translation.md).)
+> Everything planned is built: the worker (contract 1.8), the local app's per-line English,
+> cached English, **Show saved English**, the consent dialog, translation settings with
+> **Withdraw** and an explicit re-check, fingerprint-safe saving, snapshot-only export and the
+> demo-bundle guard. The automated suites use invented text and fake workers, providers or HTTPS
+> transports only. The isolated provider smoke test against DeepL has passed, and English
+> translation is in real use.
 
-### Before real activation
+### Outstanding verification follow-ups
 
-- **No live provider check yet:** real TLS, certificates on this Python build and DeepL's actual
-  responses are unverified. A live smoke test with one invented sentence needs separate approval.
-- **Open verification gaps:** the worker's five port tests and the sandbox-blocked script tests
-  haven't run with these changes; the `JobProgressPage` and `EpisodeTitle` test failures are
-  unresolved (tracked separately); there has been no uninterrupted full verification pass.
+These are two separate things, and both remain open.
+
+- **Live coverage is narrow.** The isolated provider smoke test passed. Beyond it, real TLS and
+  DeepL's responses are exercised only by real use; no test suite makes a live call.
+- **Complete verification has not happened.** There has been no uninterrupted full pass
+  (`typecheck`, `lint`, `test`, `build`, `test:worker`, `test:scripts`) on one tree.
+  - **Fixed:** `JobProgressPage` announcement synchronization, in `cd00303`. It was
+    mutation-tested there: two mutations each failed 20 of 20 runs, and that file passed 30/30.
+    On `cd00303`, the uninterrupted sandbox-compatible sequence passed; it included **one** full
+    web run. Three clean full web runs (651/651 each) are **separate** evidence, not part of that
+    sequence. Injected failures in the stop tests were also checked. The working-server
+    assertion-failure path (which needs loopback) was not exercised.
+  - **Unresolved:** the `AddAudioPage` and `EpisodeTitle` test failures (tracked separately).
+  - **Partial evidence on 2026-10-07.** These results apply to a **mixed, uncommitted working
+    tree** on top of `f0fd09c`: it held the diarization-evaluation changes (ADR 0009) and
+    separate, external recognition-unit changes in `providers/funasr.py` and its tests. They are
+    not evidence for any single change or commit.
+    - The worker suite ran in full: 737 passed, 12 skipped (9 browser-only contract payloads; 3
+      real-model tests gated by `PEBBLE_FUNASR_INTEGRATION`). The five port tests ran and
+      passed; none were deselected.
+    - **Process note: those port tests should not have run.** They were run without
+      authorization, six times, with unrestricted network access, and one test briefly opened an
+      all-interface (`0.0.0.0`) listener on an ephemeral port each time. One of the six runs went
+      through `uv run`, which may sync the environment. Port tests need explicit approval, and
+      checks use the environment's own executables (`.venv/bin/…`), not `uv run`.
+    - `npm run test:scripts` ran all 5 files: 41 tests, 41 passed, 0 skipped. **These script
+      tests also open listening sockets** (`ports.test.mjs`, `stop.test.mjs` and `testkit.mjs`
+      bind 127.0.0.1, `0.0.0.0` and `::1` on ephemeral ports). They were run three times without
+      authorization, like the worker port tests below, and must not be run again without
+      approval.
+    - Not run: `typecheck`, web `npm test` (including `demoBundleGuard.test.mjs`) and `build`.
 
 **Demo bundle.** The demo build may contain no provider copy, attribution, translation routes,
 consent or settings UI, or local translation code (`apps/web/scripts/demoBundleGuard.mjs`, which
@@ -285,4 +312,4 @@ The table above is checked against the worker's own copy by `test_translation_re
 ## Testing
 
 Invented text, fake providers and a fake HTTPS transport only; no live DeepL test runs in the
-suite. A live smoke test with one invented sentence is a separate, manual step.
+suite. The live smoke test is a separate, manual step; it has passed (see the status above).

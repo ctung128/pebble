@@ -35,7 +35,8 @@ Not approved:
 - the larger Chinese-English punctuation model
   (`iic/punc_ct-transformer_cn-en-common-vocab471067-large`)
 - any other FunASR model
-- speaker diarization
+- speaker diarization in the worker or the app (only the benchmark-only evaluation below
+  is approved; [ADR 0009](adr/0009-local-speaker-diarization-evaluation.md))
 - MPS support or configuration (the worker is CPU-only)
 - cloud or API transcription
 - a translation provider (other than DeepL line translation,
@@ -108,6 +109,32 @@ Model weights are **never committed, bundled or served**. They are not in this r
 in the public demo build (which runs with no models, worker, Python or keys), and the worker's
 HTTP API has no route that serves them. They exist only in your Pebble data directory, after
 you run `models pull` yourself.
+
+### Optional: speaker-embedding model (evaluation only)
+
+Approved for the diarization **evaluation** only ([ADR 0009](adr/0009-local-speaker-diarization-evaluation.md)).
+It is pinned in `SPEAKER_MODELS`, separate from `MANIFEST`, so transcription, health,
+`pebble:doctor`, `pebble:setup` and startup never require it.
+
+| Role    | Model ID (ModelScope)                     | Revision | Runtime files | Size (bytes) |
+| ------- | ----------------------------------------- | -------- | ------------- | ------------ |
+| Speaker | `iic/speech_campplus_sv_zh-cn_16k-common` | `v2.0.2` | 3             | 28,037,453   |
+
+- Files: `configuration.json`, `config.yaml`, `campplus_cn_common.bin` (SHA-256
+  `3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8`); every hash is in the
+  manifest. README, example audio, images and `requirements.txt` are not fetched.
+- License: Apache-2.0 per the card metadata and README front matter at the pinned tag (no
+  FunASR Model License link, no separate license file). Training data: "a large Chinese speaker
+  dataset, about 200k speakers" (README; not named).
+- Attribution: speech_campplus_sv_zh-cn_16k-common (CAM++ speaker verification, Mandarin,
+  16 kHz) by Alibaba Tongyi Lab, published by the iic organization on ModelScope. Licensed
+  under Apache-2.0.
+
+```bash
+npm run worker:models -- list --speaker
+npm run worker:models -- pull --speaker     # ~28 MB, the only network use
+npm run worker:models -- verify --speaker
+```
 
 ## Install, download, verify
 

@@ -14,6 +14,7 @@ from ..pipeline.probe import probe
 from ..providers.funasr import FunASRProvider
 from ..storage import Storage
 from . import compare, network, paired
+from . import diarize as diarize_bench
 from .corpus import CorpusError, find_clip
 from .overlap import MAX_OVERLAP_MS
 from .rebuild import RebuildError, rebuild_review
@@ -84,6 +85,58 @@ def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[ty
     tally = actions.add_parser("tally", help="count a paired review's ticks (numbers only)")
     tally.add_argument("name", metavar="overlap-<time>.md")
 
+    diarize = actions.add_parser(
+        "diarize",
+        help="speaker diarization evaluation on one named local episode (ADR 0009)",
+    )
+    diarize.add_argument(
+        "--episode", required=True, metavar="EPISODE_ID", help="an episode you chose, e.g. ep-…"
+    )
+    diarize.add_argument(
+        "--speakers",
+        type=int,
+        metavar="N",
+        help="also cluster with this speaker-count hint (the auto configuration always runs)",
+    )
+    diarize.add_argument(
+        "--lines",
+        type=int,
+        default=diarize_bench.DEFAULT_LINES,
+        help=f"lines to review ({diarize_bench.MIN_LINES}-{diarize_bench.MAX_LINES})",
+    )
+    diarize.add_argument(
+        "--seed",
+        type=int,
+        default=7,
+        help="auto runs use SEED, SEED+1 and SEED+2; the hint run and the review sample use SEED",
+    )
+    diarize.add_argument(
+        "--deadline-minutes",
+        type=float,
+        default=diarize_bench.DEFAULT_DEADLINE_MINUTES,
+        help=f"hard limit for the whole run ({diarize_bench.MIN_DEADLINE_MINUTES}-"
+        f"{diarize_bench.MAX_DEADLINE_MINUTES}); on expiry partial files are removed",
+    )
+    diarize.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print counts and the clustering path only; no model, no audio",
+    )
+
+    diarize_score = actions.add_parser(
+        "diarize-score", help="score a reviewed diarization run (numbers only)"
+    )
+    diarize_score.add_argument("--run", required=True, metavar="RUN_ID")
+
+    targeted = actions.add_parser(
+        "diarize-targeted",
+        help="blind check of a scored run's unmatched clusters (no audio, model or database)",
+    )
+    targeted.add_argument("--run", required=True, metavar="RUN_ID")
+    targeted.add_argument(
+        "--score", action="store_true", help="count the filled-in targeted sheet (numbers only)"
+    )
+
 
 def run_command(settings: Settings, args: argparse.Namespace) -> int:
     storage = Storage(settings.data_dir)
@@ -93,6 +146,8 @@ def run_command(settings: Settings, args: argparse.Namespace) -> int:
         return rebuild(storage, args.run)
     if args.bench_action in ("compare", "pair", "tally"):
         return experiment(storage, args)
+    if args.bench_action in ("diarize", "diarize-score", "diarize-targeted"):
+        return diarize(storage, settings, args)
     try:
         targets = [_target(value) for value in args.chunk]
         overlaps = _overlaps(args.overlap_ms, targets, args.mode)
@@ -208,6 +263,68 @@ def experiment(storage: Storage, args: argparse.Namespace) -> int:
         print(f"pebble-worker bench: {error}")
         return 2
     print("Read from saved results only; nothing was transcribed.")
+    return 0
+
+
+def diarize(storage: Storage, settings: Settings, args: argparse.Namespace) -> int:
+    """Prints numbers only; the private run folder holds the review sheet."""
+    network.block_network()
+    try:
+        if args.bench_action == "diarize-targeted":
+            if args.score:
+                scored = diarize_bench.score_targeted(storage, args.run)
+                print(
+                    json.dumps(
+                        {k: scored[k] for k in ("kind", "invalidRows", "clusters")}, indent=2
+                    )
+                )
+            else:
+                print(json.dumps(diarize_bench.prepare_targeted(storage, args.run), indent=2))
+                print("Fill in targeted-review.md in the run folder (private).")
+            return 0
+        if args.bench_action == "diarize-score":
+            scored = diarize_bench.score_run(storage, args.run)
+            print(
+                json.dumps(
+                    {k: scored[k] for k in ("reviewed", "configs", "proposedTargets")}, indent=2
+                )
+            )
+            print("Scored from saved results and your review; nothing was processed again.")
+            return 0
+        if args.dry_run:
+            episode = diarize_bench.load_episode(storage, args.episode)
+            summary = {
+                **diarize_bench.plan(episode, args.speakers),
+                "audio": diarize_bench.audio_status(storage, episode),
+            }
+            print(json.dumps(summary, indent=2))
+            print(
+                "Dry run: no model was loaded and no audio was read. Window counts are from the "
+                "stored line times; the run reports the counts it actually embeds."
+            )
+            return 0
+        directory = diarize_bench.run_bounded(
+            storage,
+            settings,
+            args.episode,
+            hint=args.speakers,
+            lines=args.lines,
+            seed=args.seed,
+            deadline_minutes=args.deadline_minutes,
+        )
+    except (diarize_bench.DiarizeError, StorageAccessError) as error:
+        print(f"pebble-worker bench: {error}")
+        return 2
+    result = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+    print(
+        json.dumps(
+            {k: result[k] for k in ("windows", "timingsMs", "configs", "performance")}, indent=2
+        )
+    )
+    print(f"  {directory.name} → {display_path(directory)}")
+    print("Review review.md there (private), then run: bench diarize-score --run " + directory.name)
+    if network.attempts():
+        print(f"Warning: {network.attempts()} network attempt(s) were blocked.")
     return 0
 
 

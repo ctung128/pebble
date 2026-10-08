@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SchemaVersionSchema } from "./common.ts";
 import { TranslationHealthSchema } from "./lineTranslation.ts";
+import { SpeakerHealthSchema } from "./speakers.ts";
 
 /**
  * Provider readiness (1.5). `ready` is the only usable state; `checking` means the worker is
@@ -56,6 +57,8 @@ export const WorkerHealthSchema = z.object({
    * is off (`translationAvailability`).
    */
   translation: TranslationHealthSchema.optional(),
+  /** Optional speaker detection (1.9). Absent from older workers, which means unavailable. */
+  speakers: SpeakerHealthSchema.optional(),
 });
 
 export type WorkerHealth = z.infer<typeof WorkerHealthSchema>;

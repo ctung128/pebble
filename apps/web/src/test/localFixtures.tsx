@@ -108,6 +108,22 @@ export function fakeWorkerClient(overrides: Partial<WorkerClient> = {}) {
       consentVersion,
       grantedAt: "2026-10-07T12:00:00.000Z",
     })),
+    // Speakers (1.9): none by default; a stray start fails loudly.
+    getEpisodeSpeakers: vi.fn(async (episodeId: string) => ({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      episodeId,
+      current: null,
+      latest: null,
+    })),
+    startSpeakerDetection: vi.fn(async (): Promise<never> => {
+      throw new Error("unexpected speaker detection request");
+    }),
+    cancelSpeakerRun: vi.fn(async (): Promise<never> => {
+      throw new Error("unexpected speaker cancel request");
+    }),
+    saveSpeakerCorrections: vi.fn(async (): Promise<never> => {
+      throw new Error("unexpected speaker corrections request");
+    }),
     withdrawTranslationConsent: vi.fn(async () => ({
       schemaVersion: CURRENT_SCHEMA_VERSION,
       provider: "deepl" as const,

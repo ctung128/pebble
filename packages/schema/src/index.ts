@@ -9,3 +9,4 @@ export * from "./learningItem.ts";
 export * from "./job.ts";
 export * from "./health.ts";
 export * from "./lineTranslation.ts";
+export * from "./speakers.ts";

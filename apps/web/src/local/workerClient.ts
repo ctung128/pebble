@@ -1,13 +1,16 @@
 import {
   CURRENT_SCHEMA_VERSION,
   TRANSLATION_PROVIDER,
+  parseEpisodeSpeakers,
   parseEpisodeTranslations,
   parseJob,
   parseTranslationConsent,
   parseTranslationResult,
   parseWorkerHealth,
+  type EpisodeSpeakers,
   type EpisodeTranslations,
   type Job,
+  type SpeakerCorrectionsRequest,
   type ParseResult,
   type TranslationConsent,
   type TranslationResult,
@@ -70,6 +73,14 @@ export interface WorkerClient {
   grantTranslationConsent(consentVersion: string): Promise<TranslationConsent>;
   /** 1.8: withdraws consent for every browser using this worker (idempotent). */
   withdrawTranslationConsent(): Promise<TranslationConsent>;
+  /** 1.9: the episode's speakers (current successful result and latest run). Read-only. */
+  getEpisodeSpeakers(episodeId: string): Promise<EpisodeSpeakers>;
+  /** 1.9: asks the worker to queue speaker detection; never runs it in the request. */
+  startSpeakerDetection(episodeId: string, speakerCount: number | null): Promise<EpisodeSpeakers>;
+  /** 1.9: cancels exactly this run (idempotent for a run that already ended). */
+  cancelSpeakerRun(episodeId: string, runId: string): Promise<EpisodeSpeakers>;
+  /** 1.9: replaces the current run's corrections, based on `revision`. */
+  saveSpeakerCorrections(request: SpeakerCorrectionsRequest): Promise<EpisodeSpeakers>;
 }
 
 export interface TranslationLineRequest {
@@ -82,6 +93,7 @@ export interface TranslationLineRequest {
 /** Worker episode ids; anything else is never sent to the delete endpoint. */
 export const LOCAL_EPISODE_ID = /^ep-[0-9a-f]{12}$/;
 const JOB_ID = /^job-[0-9a-f]{12}$/;
+const SPEAKER_RUN_ID = /^spk-[0-9a-f]{12}$/;
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -203,6 +215,60 @@ export class HttpWorkerClient implements WorkerClient {
     return result.data;
   }
 
+  async getEpisodeSpeakers(episodeId: string): Promise<EpisodeSpeakers> {
+    return validSpeakers(
+      await this.request(`episodes/${checkedEpisodeId(episodeId)}/speakers`),
+      episodeId,
+    );
+  }
+
+  async startSpeakerDetection(
+    episodeId: string,
+    speakerCount: number | null,
+  ): Promise<EpisodeSpeakers> {
+    const body = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      ...(speakerCount === null ? {} : { speakerCount }),
+    };
+    const payload = validSpeakers(
+      await this.request(`episodes/${checkedEpisodeId(episodeId)}/speakers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      episodeId,
+    );
+    if (payload.latest === null) throw invalid("The worker didn't report the new run.");
+    return payload;
+  }
+
+  async cancelSpeakerRun(episodeId: string, runId: string): Promise<EpisodeSpeakers> {
+    if (!SPEAKER_RUN_ID.test(runId)) {
+      throw new WorkerError("NOT_FOUND", "No such speaker run.", { status: 404 });
+    }
+    return validSpeakers(
+      await this.request(`episodes/${checkedEpisodeId(episodeId)}/speakers/runs/${runId}/cancel`, {
+        method: "POST",
+      }),
+      episodeId,
+    );
+  }
+
+  async saveSpeakerCorrections(request: SpeakerCorrectionsRequest): Promise<EpisodeSpeakers> {
+    const payload = validSpeakers(
+      await this.request(`episodes/${checkedEpisodeId(request.episodeId)}/speakers/corrections`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      }),
+      request.episodeId,
+    );
+    if (payload.current?.runId !== request.runId) {
+      throw invalid("The saved speakers are for another detection.");
+    }
+    return payload;
+  }
+
   upload({ file, title, ownershipConfirmed, onProgress, signal }: UploadRequest): Promise<Job> {
     return new Promise((resolve, reject) => {
       const xhr = this.createXhr();
@@ -260,6 +326,21 @@ export class HttpWorkerClient implements WorkerClient {
     if (!response.ok) throw fromEnvelope(body, response.status);
     return body;
   }
+}
+
+function checkedEpisodeId(id: string): string {
+  if (!LOCAL_EPISODE_ID.test(id)) {
+    throw new WorkerError("NOT_FOUND", "No such episode.", { status: 404 });
+  }
+  return id;
+}
+
+/** A valid episode-speakers payload for exactly this episode (never another one's). */
+function validSpeakers(payload: unknown, episodeId: string): EpisodeSpeakers {
+  const result = parseEpisodeSpeakers(payload);
+  if (!result.ok) throw invalid(result.message);
+  if (result.data.episodeId !== episodeId) throw invalid("The speakers are for another episode.");
+  return result.data;
 }
 
 function checkedJobId(id: string): string {

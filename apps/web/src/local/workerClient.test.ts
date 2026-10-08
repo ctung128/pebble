@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from "@pebble/schema";
 import { describe, expect, it, vi } from "vitest";
 import { makeJob } from "../test/localFixtures.tsx";
 import { HttpWorkerClient, WorkerError } from "./workerClient.ts";
@@ -214,7 +215,7 @@ describe("HttpWorkerClient — translation (1.8)", () => {
     expect(url).toBe(`${BASE}/translations`);
     expect(init?.method).toBe("POST");
     expect(JSON.parse(init?.body as string)).toEqual({
-      schemaVersion: "1.8",
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       episodeId: EP,
       segmentId: "seg-0001",
       text: "好的。",
@@ -288,9 +289,104 @@ describe("HttpWorkerClient — translation (1.8)", () => {
     expect(url).toBe(`${BASE}/translation/consent`);
     expect(init?.method).toBe("PUT");
     expect(JSON.parse(init?.body as string)).toEqual({
-      schemaVersion: "1.8",
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       provider: "deepl",
       consentVersion: "deepl-2026-10",
     });
+  });
+});
+
+describe("HttpWorkerClient — speakers (1.9)", () => {
+  const EP = "ep-0123456789ab";
+  const RUN = "spk-0123456789ab";
+  const speakers = (episodeId = EP, runId: string | null = RUN) => ({
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    episodeId,
+    current:
+      runId === null
+        ? null
+        : {
+            runId,
+            completedAt: "2026-10-07T12:00:00.000Z",
+            provenance: {
+              modelId: "invented/model",
+              modelRevision: "v0",
+              speakerCountHint: null,
+              clustering: "fake",
+              windows: 3,
+              noiseWindows: 0,
+              unassignedLines: 0,
+            },
+            speakers: [{ id: "S1", lines: 1, windows: 3 }],
+            assignments: { "seg-0001": "S1" },
+            corrections: null,
+            effective: { "seg-0001": "S1" },
+          },
+    latest: {
+      runId: RUN,
+      status: "queued",
+      failure: null,
+      createdAt: "2026-10-07T12:00:00.000Z",
+      updatedAt: "2026-10-07T12:00:00.000Z",
+    },
+  });
+  const fetching = (body: unknown) =>
+    vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => json(body));
+
+  it("reads, starts (with an optional hint) and cancels a specific run", async () => {
+    const fetchImpl = fetching(speakers());
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    await client.getEpisodeSpeakers(EP);
+    await client.startSpeakerDetection(EP, null);
+    await client.startSpeakerDetection(EP, 2);
+    await client.cancelSpeakerRun(EP, RUN);
+    const calls = fetchImpl.mock.calls.map(([url, init]) => [
+      url,
+      init?.method ?? "GET",
+      init?.body,
+    ]);
+    expect(calls).toEqual([
+      [`${BASE}/episodes/${EP}/speakers`, "GET", undefined],
+      [
+        `${BASE}/episodes/${EP}/speakers`,
+        "POST",
+        JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION }),
+      ],
+      [
+        `${BASE}/episodes/${EP}/speakers`,
+        "POST",
+        JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, speakerCount: 2 }),
+      ],
+      [`${BASE}/episodes/${EP}/speakers/runs/${RUN}/cancel`, "POST", undefined],
+    ]);
+  });
+
+  it("rejects another episode's speakers and corrections saved to another run", async () => {
+    const other = new HttpWorkerClient(BASE, { fetchImpl: fetching(speakers("ep-ffffffffffff")) });
+    expect((await errorFrom(other.getEpisodeSpeakers(EP))).code).toBe("INVALID_RESPONSE");
+    const replaced = new HttpWorkerClient(BASE, {
+      fetchImpl: fetching(speakers(EP, "spk-ffffffffffff")),
+    });
+    const request = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      episodeId: EP,
+      runId: RUN,
+      revision: 0,
+      names: {},
+      merges: {},
+      notSpeaker: [],
+      lines: {},
+    };
+    expect((await errorFrom(replaced.saveSpeakerCorrections(request))).code).toBe(
+      "INVALID_RESPONSE",
+    );
+  });
+
+  it("never sends an invalid episode or run id", async () => {
+    const fetchImpl = fetching(speakers());
+    const client = new HttpWorkerClient(BASE, { fetchImpl });
+    expect((await errorFrom(client.getEpisodeSpeakers("../x"))).code).toBe("NOT_FOUND");
+    expect((await errorFrom(client.cancelSpeakerRun(EP, "spk-../../x"))).code).toBe("NOT_FOUND");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

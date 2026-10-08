@@ -42,6 +42,24 @@ export const TRANSLATION_MARKERS = [
 ];
 
 /**
+ * Local speaker labels (ADR 0009): routes, controls and model copy. The reader's generic speaker
+ * letter ("Speaker A", used by the demo's authored fixtures) is not local and isn't listed.
+ */
+export const SPEAKER_MARKERS = [
+  "/speakers", // speaker routes (start, read, corrections, cancel)
+  "Detect speakers", // controls and copy
+  "Speakers in this episode",
+  "Mark speaker",
+  "Merge speakers",
+  "Correct lines",
+  "Save speaker changes",
+  "Expected number of speakers",
+  "pull --speaker", // model setup copy
+  "speaker model",
+  "built-in sandbox",
+];
+
+/**
  * The one permitted provider occurrence: the shared schema's provider identifier
  * (`TRANSLATION_PROVIDER` in packages/schema/src/lineTranslation.ts), which the demo bundles
  * with the contract validators. It is recognised only in its compiled context: the literal
@@ -63,7 +81,7 @@ export function findDemoBundleLeaks(files) {
   const leaks = [];
   let literals = 0;
   for (const { name, text } of files) {
-    for (const marker of [...LOCAL_MODE_MARKERS, ...TRANSLATION_MARKERS]) {
+    for (const marker of [...LOCAL_MODE_MARKERS, ...TRANSLATION_MARKERS, ...SPEAKER_MARKERS]) {
       if (text.includes(marker)) leaks.push(`${name}: "${marker}"`);
     }
     literals += [...text.matchAll(SCHEMA_PROVIDER_CONTEXT)].length;
