@@ -48,6 +48,10 @@ export const SPEAKERS = {
   saving: "Saving…",
   discard: "Discard changes",
   saved: "Speaker changes saved.",
+  savedTucked:
+    "Speaker changes saved. To change them again, choose Edit speaker settings in the transcript actions menu.",
+  showPanel: "Edit speaker settings",
+  hidePanel: "Hide speakers",
   unsaved: "You have unsaved speaker changes.",
   cantSave: "Some changes can't be saved together. Check the names and merges.",
 } as const;

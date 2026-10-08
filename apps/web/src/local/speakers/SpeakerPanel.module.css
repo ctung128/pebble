@@ -72,6 +72,11 @@
   cursor: default;
 }
 
+.hide {
+  composes: button;
+  margin-left: auto;
+}
+
 .primary {
   composes: button;
   background: var(--accent);

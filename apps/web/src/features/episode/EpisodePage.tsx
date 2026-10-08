@@ -163,7 +163,8 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
   const flagged = useMemo(() => deriveReviewHints(segments, reviewHints), [segments, reviewHints]);
   // Local mode only (the demo's overlay is always null): speaker letters for the displayed lines.
   // The transcript isn't changed; copy, English, saving and corrections use the original lines.
-  const speakerOverlay = useSpeakerOverlay(episode.id, transcript);
+  const focusMenu = useCallback(() => moreButton.current?.focus(), []);
+  const speakerOverlay = useSpeakerOverlay(episode.id, transcript, { focusMenu });
   const speakerLabels = speakerOverlay?.labels;
   const displayedSegments = useMemo(
     () =>
@@ -289,6 +290,7 @@ function EpisodeView({ episode, transcript, reviewHints }: EpisodeViewProps) {
       onSelect: () => worker.setShowSaved(!worker.showSaved),
     });
   }
+  menuItems.push(...(speakerOverlay?.menuItems ?? []));
   if (capabilities.copy && segments.length > 0) {
     menuItems.push({
       key: "copy",

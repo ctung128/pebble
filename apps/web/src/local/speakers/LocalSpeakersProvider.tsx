@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CURRENT_SCHEMA_VERSION, type Segment, type Transcript } from "@pebble/schema";
+import type { MoreMenuItem } from "../../components/MoreMenu.tsx";
 import {
   SpeakerOverlayContext,
   type SpeakerOverlay,
+  type SpeakerOverlayOptions,
   type SpeakerOverlaySource,
 } from "../../features/speakers/speakerOverlay.ts";
 import { formatTime } from "../../lib/formatTime.ts";
@@ -44,7 +46,11 @@ import { useEpisodeSpeakers } from "./useEpisodeSpeakers.ts";
  * requested. Corrections are a draft for one detection until saved through the worker; the
  * transcript, English and saved items are never touched.
  */
-function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): SpeakerOverlay | null {
+function useLocalSpeakerOverlay(
+  episodeId: string,
+  transcript: Transcript,
+  { focusMenu }: SpeakerOverlayOptions,
+): SpeakerOverlay | null {
   const { client, status } = useWorker();
   const capability = status.kind === "ready" ? (status.health.speakers ?? null) : null;
   const enabled =
@@ -76,6 +82,12 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
 
   const [notice, setNotice] = useState<{ runId: string | null; text: string } | null>(null);
   const [correcting, setCorrecting] = useState(false);
+  // The learner's explicit show/hide choice for this detection; null follows the default.
+  const [shownChoice, setShownChoice] = useState<{ runId: string | null; open: boolean } | null>(
+    null,
+  );
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const focusHeading = useRef(false);
 
   // A newer detection replaced the one on screen: say what wasn't carried over (in-session).
   const shown = useRef<{ runId: string; hadCorrections: boolean; dirty: boolean } | null>(null);
@@ -141,7 +153,9 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
     switch (outcome.kind) {
       case "saved":
         setEdit(null);
-        setNotice({ runId: current.runId, text: SPEAKERS.saved });
+        setShownChoice(null); // back to the default: tucked into the menu once saved
+        setNotice({ runId: current.runId, text: SPEAKERS.savedTucked });
+        focusMenu();
         break;
       case "conflict": {
         // Never save the old full draft over the newly saved corrections: rebase it three ways.
@@ -168,7 +182,7 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
         setNotice({ runId: current.runId, text: speakerRequestProblem(outcome.code) });
         break;
     }
-  }, [clashCount, current, draft, episodeId, mine, saved, state]);
+  }, [clashCount, current, draft, episodeId, focusMenu, mine, saved, state]);
 
   // The explicit decision after a clash: keep my draft (saved later, over the new revision) or
   // take the saved version.
@@ -181,6 +195,8 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
   const useSaved = useCallback(() => {
     setEdit(null);
     setClash(null);
+    // Taking the saved version isn't the learner's own save: keep the panel open to review it.
+    if (current) setShownChoice({ runId: current.runId, open: true });
     setNotice(current ? { runId: current.runId, text: SPEAKER_CONFLICT_DISCARDED } : null);
   }, [current]);
 
@@ -228,7 +244,40 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
     };
   }, [correcting, current, draft, effective, update, visible]);
 
+  // Once this detection's corrections are saved and nothing is pending, the panel is tucked into
+  // the transcript actions menu. It stays open while a run is active or failed, or while there
+  // are unsaved or clashing edits, so status and work are never hidden.
+  const latest = state.payload?.latest ?? null;
+  const settled = latest === null || latest.status === "completed";
+  const hasSaved = current?.corrections != null;
+  const tuckable = hasSaved && settled && !dirty && clashCount === 0;
+  const choice =
+    shownChoice && shownChoice.runId === (current?.runId ?? null) ? shownChoice.open : null;
+  const panelOpen = choice ?? !tuckable;
+  useEffect(() => {
+    if (panelOpen && focusHeading.current && headingRef.current) {
+      headingRef.current.focus();
+      focusHeading.current = false;
+    }
+  }, [panelOpen]);
+  const showPanel = useCallback(
+    (open: boolean) => {
+      setShownChoice({ runId: current?.runId ?? null, open });
+      focusHeading.current = open;
+    },
+    [current],
+  );
+
   if (!enabled || capability === null) return null;
+  const menuItems: MoreMenuItem[] = hasSaved
+    ? [
+        {
+          key: "speakers",
+          label: panelOpen ? SPEAKERS.hidePanel : SPEAKERS.showPanel,
+          onSelect: () => showPanel(!panelOpen),
+        },
+      ]
+    : [];
   const conflictChoice =
     clashCount > 0 ? { count: clashCount, onKeepMine: keepMine, onUseSaved: useSaved } : null;
   const panel = (
@@ -257,13 +306,29 @@ function useLocalSpeakerOverlay(episodeId: string, transcript: Transcript): Spea
       onSave={() => void save()}
       onDiscard={() => setEdit(null)}
       conflict={conflictChoice}
+      headingRef={headingRef}
+      onHide={
+        hasSaved
+          ? () => {
+              showPanel(false);
+              focusMenu();
+            }
+          : null
+      }
     />
+  );
+  // Tucked away: the panel is gone, but its announcements (e.g. "saved") still reach screen readers.
+  const tucked = (
+    <p className={styles.visuallyHidden} role="status" aria-live="polite">
+      {noticeText}
+    </p>
   );
   return {
     labels: current ? labels : new Map(),
     spokenNames: current ? spokenNames : new Map(),
-    panel,
+    panel: panelOpen ? panel : tucked,
     lineAccessory,
+    menuItems,
   };
 }
 

@@ -268,6 +268,11 @@ const lineButton = (list: HTMLElement, n: number) =>
 
 const panel = () => screen.findByRole("region", { name: SPEAKERS.heading });
 
+async function openFromMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "Transcript actions" }));
+  await user.click(await screen.findByRole("menuitem", { name: SPEAKERS.showPanel }));
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((res) => {
@@ -573,9 +578,12 @@ describe("corrections", () => {
       notSpeaker: ["S3"],
       lines: { "seg-0001": null },
     });
+    // Saved: the panel is tucked into the transcript actions menu, and that is announced.
     await waitFor(() =>
-      expect(within(region).getByRole("status").textContent).toContain(SPEAKERS.saved),
+      expect(screen.queryByRole("region", { name: SPEAKERS.heading })).toBeNull(),
     );
+    expect(screen.getByText(SPEAKERS.savedTucked)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Transcript actions" }));
   });
 
   /** A worker whose first save is refused because `elsewhere` was saved meanwhile. */
@@ -704,6 +712,71 @@ describe("corrections", () => {
   });
 });
 
+describe("tucking the panel into the menu", () => {
+  const savedPayload = (id: string, latest?: { run: string; status: Status }) =>
+    payload(id, { assignments: ["S1", "S2", "S1"], corrections: { names: { S1: NAME } }, latest });
+
+  it("opens tucked away when corrections are saved, with letters still on the lines", async () => {
+    const worker = client(READY, {
+      getEpisodeSpeakers: vi.fn(async (id: string) => savedPayload(id)),
+    });
+    renderEpisode(worker);
+    const list = await transcriptLoaded();
+    await waitFor(() => expect(lineButton(list, 1).textContent).toMatch(/Speaker\s*B/));
+    expect(screen.queryByRole("region", { name: SPEAKERS.heading })).toBeNull();
+  });
+
+  it("reopens from the menu with focus on its heading, and hides again by button or menu", async () => {
+    const worker = client(READY, {
+      getEpisodeSpeakers: vi.fn(async (id: string) => savedPayload(id)),
+    });
+    renderEpisode(worker);
+    await transcriptLoaded();
+    const user = userEvent.setup();
+    await openFromMenu(user);
+    const region = await panel();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(region).getByRole("heading", { name: SPEAKERS.heading }),
+      ),
+    );
+    await user.click(within(region).getByRole("button", { name: SPEAKERS.hidePanel }));
+    expect(screen.queryByRole("region", { name: SPEAKERS.heading })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Transcript actions" }));
+    await openFromMenu(user);
+    await panel();
+    await user.click(screen.getByRole("button", { name: "Transcript actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: SPEAKERS.hidePanel }));
+    expect(screen.queryByRole("region", { name: SPEAKERS.heading })).toBeNull();
+  });
+
+  it("stays open while a run is active, and offers no menu item before anything is saved", async () => {
+    const worker = client(READY, {
+      getEpisodeSpeakers: vi.fn(async (id: string) =>
+        savedPayload(id, { run: RUN_2, status: "running" }),
+      ),
+    });
+    renderEpisode(worker);
+    expect(await panel()).toBeTruthy();
+
+    const fresh = client(READY, {
+      getEpisodeSpeakers: vi.fn(async (id: string) =>
+        payload(id, { assignments: ["S1", "S2", "S1"] }),
+      ),
+    });
+    const second = renderEpisode(fresh, { episodeId: EP_B });
+    await within(second.container).findByRole("region", { name: SPEAKERS.heading });
+    const user = userEvent.setup();
+    await user.click(within(second.container).getByRole("button", { name: "Transcript actions" }));
+    expect(
+      within(second.container).queryByRole("menuitem", { name: SPEAKERS.showPanel }),
+    ).toBeNull();
+    expect(
+      within(second.container).queryByRole("menuitem", { name: SPEAKERS.hidePanel }),
+    ).toBeNull();
+  });
+});
+
 // --- Privacy and accessibility ----------------------------------------------------------------
 
 describe("privacy and accessibility", () => {
@@ -784,7 +857,8 @@ describe("privacy and accessibility", () => {
     const [item] = await store.listItems();
     expect(item?.text).toBe(chinese);
     expect(JSON.stringify(item)).not.toContain(NAME);
-    // An unsaved name is not announced.
+    // An unsaved name is not announced. (Saved corrections tuck the panel into the menu.)
+    await openFromMenu(user);
     const region = await panel();
     await user.type(within(region).getByLabelText(SPEAKERS.nameLabel("A")), "Draft");
     expect(lineButton(list, 0).textContent).not.toContain("Draft");

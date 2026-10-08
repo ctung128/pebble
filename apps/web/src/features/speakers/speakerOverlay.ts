@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { Segment, Transcript } from "@pebble/schema";
+import type { MoreMenuItem } from "../../components/MoreMenu.tsx";
 
 /**
  * Extra speaker information a content source can lay over the reader (local mode only). The
@@ -18,11 +19,22 @@ export interface SpeakerOverlay {
   panel: ReactNode;
   /** An extra control for each line, or null. Must keep its identity while nothing changes. */
   lineAccessory: ((segment: Segment) => ReactNode) | null;
+  /** Extra items for the transcript actions menu (e.g. showing a tucked-away panel). */
+  menuItems: MoreMenuItem[];
+}
+
+export interface SpeakerOverlayOptions {
+  /** Moves focus to the transcript actions menu (after the panel is tucked away). */
+  focusMenu: () => void;
 }
 
 export interface SpeakerOverlaySource {
   /** A hook: called once per render of the episode view, in the same order every time. */
-  useOverlay(episodeId: string, transcript: Transcript): SpeakerOverlay | null;
+  useOverlay(
+    episodeId: string,
+    transcript: Transcript,
+    options: SpeakerOverlayOptions,
+  ): SpeakerOverlay | null;
 }
 
 /** The demo, and any app without a local provider: no overlay and no requests. */
@@ -33,6 +45,7 @@ export const SpeakerOverlayContext = createContext<SpeakerOverlaySource>(NONE);
 export function useSpeakerOverlay(
   episodeId: string,
   transcript: Transcript,
+  options: SpeakerOverlayOptions,
 ): SpeakerOverlay | null {
-  return useContext(SpeakerOverlayContext).useOverlay(episodeId, transcript);
+  return useContext(SpeakerOverlayContext).useOverlay(episodeId, transcript, options);
 }

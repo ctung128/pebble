@@ -53,6 +53,8 @@ export const SPEAKER_MARKERS = [
   "Merge speakers",
   "Correct lines",
   "Save speaker changes",
+  "Edit speaker settings",
+  "Hide speakers",
   "Expected number of speakers",
   "pull --speaker", // model setup copy
   "speaker model",

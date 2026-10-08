@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type RefObject } from "react";
 import type { EpisodeSpeakers, SpeakerHealth } from "@pebble/schema";
 import { ConfirmButton } from "../../components/ConfirmButton.tsx";
 import {
@@ -47,9 +47,16 @@ export interface SpeakerPanelProps {
   onToggleCorrecting: () => void;
   onSave: () => void;
   onDiscard: () => void;
+  /** The heading, focused when the panel is reopened from the menu. */
+  headingRef: RefObject<HTMLHeadingElement | null>;
+  /** Tucks the panel into the transcript actions menu (once corrections are saved), or null. */
+  onHide: (() => void) | null;
   /** After a clashing conflict: the explicit choice that must come before saving. */
   conflict: { count: number; onKeepMine: () => void; onUseSaved: () => void } | null;
 }
+
+/** What the key and its rows need: the panel's props without the heading ref. */
+type KeyProps = Omit<SpeakerPanelProps, "headingRef">;
 
 const parseHint = (text: string): number | null | "invalid" => {
   if (text.trim() === "") return null;
@@ -58,7 +65,7 @@ const parseHint = (text: string): number | null | "invalid" => {
 };
 
 /** The speaker key and controls for one episode (local mode only). */
-export function SpeakerPanel(props: SpeakerPanelProps) {
+export function SpeakerPanel({ headingRef, ...props }: SpeakerPanelProps) {
   const { capability, payload, draft } = props;
   const headingId = useId();
   const hintId = useId();
@@ -86,10 +93,15 @@ export function SpeakerPanel(props: SpeakerPanelProps) {
   return (
     <section className={styles.panel} aria-labelledby={headingId}>
       <div className={styles.titleRow}>
-        <h2 id={headingId} className={styles.title}>
+        <h2 id={headingId} className={styles.title} ref={headingRef} tabIndex={-1}>
           {SPEAKERS.heading}
         </h2>
         <span className={styles.badge}>{SPEAKERS.badge}</span>
+        {props.onHide ? (
+          <button type="button" className={styles.hide} onClick={props.onHide}>
+            {SPEAKERS.hidePanel}
+          </button>
+        ) : null}
       </div>
       <p className={styles.note}>{SPEAKERS.disclosure}</p>
 
@@ -166,7 +178,7 @@ export function SpeakerPanel(props: SpeakerPanelProps) {
   );
 }
 
-function SpeakerKey(props: SpeakerPanelProps & { current: SpeakerResult; draft: SpeakerDraft }) {
+function SpeakerKey(props: KeyProps & { current: SpeakerResult; draft: SpeakerDraft }) {
   const { current, draft } = props;
   const visible = visibleSpeakers(current, draft);
   const merged = Object.entries(draft.merges);
@@ -260,9 +272,7 @@ function SpeakerKey(props: SpeakerPanelProps & { current: SpeakerResult; draft: 
   );
 }
 
-function SpeakerRow(
-  props: SpeakerPanelProps & { current: SpeakerResult; draft: SpeakerDraft; id: string },
-) {
+function SpeakerRow(props: KeyProps & { current: SpeakerResult; draft: SpeakerDraft; id: string }) {
   const { current, draft, id } = props;
   const letter = letterFor(id);
   const nameId = useId();
