@@ -206,6 +206,8 @@ def test_latin_words_and_numbers_keep_their_single_unit_pairs():
             ["他说\uff1a“你好。”", "然后走了。"],
         ),
         ("走了。“好”。", list("走了好"), ["走了。", "“好”。"]),
+        # The punctuation model capitalizes a sentence-initial Latin unit; its text is kept.
+        ("结束。 Ok我们", ["结", "束", "ok", "我", "们"], ["结束。", "Ok我们"]),
         # Semicolons don't split; content after the last mark is kept as a final line.
         ("一\uff1b二。三", list("一二三"), ["一\uff1b二。", "三"]),
     ],

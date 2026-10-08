@@ -510,7 +510,8 @@ def unit_sentences(text: Any, raw_text: Any, timestamps: Any) -> list[UnitLine]:
     `raw_text` holds the recognition units separated by whitespace, one per `timestamp` pair
     (FunASR joins its VAD segments with a space there). Each unit must appear next in `text`,
     exactly; only whitespace and punctuation (Unicode P*) may come between units, which is
-    where the punctuation model inserted its marks. Every unit and every pair is used once, in
+    where the punctuation model inserted its marks (letter case may differ, since it also
+    capitalizes sentence-initial Latin words). Every unit and every pair is used once, in
     order: nothing is split, interpolated, duplicated or redistributed. A line ends after a
     LINE_END_MARKS mark between two units (plus any closing quotes or brackets right after
     it), so a boundary can never fall inside a unit. The text of each line is `text` itself,
@@ -531,9 +532,9 @@ def unit_sentences(text: Any, raw_text: Any, timestamps: Any) -> list[UnitLine]:
     line_from = first = pos = 0
     for i, unit in enumerate(units):
         gap_start = pos
-        while pos < len(text) and not text.startswith(unit, pos) and _inserted(text[pos]):
+        while pos < len(text) and not _unit_at(text, unit, pos) and _inserted(text[pos]):
             pos += 1
-        if not text.startswith(unit, pos):
+        if not _unit_at(text, unit, pos):
             raise UnitMappingError(f"unit {i + 1} of {len(units)} doesn't match the text")
         if i > 0:
             cut = _line_end(text, gap_start, pos)
@@ -559,6 +560,14 @@ def _unit_pair(pair: Any, n: int) -> list[int]:
             raise NormalizationError(f"unit {n} has no valid time")
         values.append(round(value))
     return values
+
+
+def _unit_at(text: str, unit: str, pos: int) -> bool:
+    """
+    Whether `unit` is next in `text` at `pos`, ignoring letter case: the punctuation model
+    capitalizes a Latin word that starts a sentence ("ok" becomes "Ok").
+    """
+    return text[pos : pos + len(unit)].lower() == unit.lower()
 
 
 def _inserted(char: str) -> bool:
