@@ -245,8 +245,8 @@ function useLocalSpeakerOverlay(
   }, [correcting, current, draft, effective, update, visible]);
 
   // Once this detection's corrections are saved and nothing is pending, the panel is tucked into
-  // the transcript actions menu. It stays open while a run is active or failed, or while there
-  // are unsaved or clashing edits, so status and work are never hidden.
+  // the transcript actions menu. Otherwise it opens by default while a run is active or failed,
+  // or while there are unsaved or clashing edits; the learner can still hide it themselves.
   const latest = state.payload?.latest ?? null;
   const settled = latest === null || latest.status === "completed";
   const hasSaved = current?.corrections != null;
@@ -269,15 +269,14 @@ function useLocalSpeakerOverlay(
   );
 
   if (!enabled || capability === null) return null;
-  const menuItems: MoreMenuItem[] = hasSaved
-    ? [
-        {
-          key: "speakers",
-          label: panelOpen ? SPEAKERS.hidePanel : SPEAKERS.showPanel,
-          onSelect: () => showPanel(!panelOpen),
-        },
-      ]
-    : [];
+  // Always in the menu, so a panel hidden with its button can always come back.
+  const menuItems: MoreMenuItem[] = [
+    {
+      key: "speakers",
+      label: panelOpen ? SPEAKERS.hidePanel : SPEAKERS.showPanel,
+      onSelect: () => showPanel(!panelOpen),
+    },
+  ];
   const conflictChoice =
     clashCount > 0 ? { count: clashCount, onKeepMine: keepMine, onUseSaved: useSaved } : null;
   const panel = (
@@ -304,17 +303,12 @@ function useLocalSpeakerOverlay(
       onUnmerge={(source) => update((d) => unmergeSpeaker(d, source))}
       onToggleCorrecting={() => setCorrecting((on) => !on)}
       onSave={() => void save()}
-      onDiscard={() => setEdit(null)}
       conflict={conflictChoice}
       headingRef={headingRef}
-      onHide={
-        hasSaved
-          ? () => {
-              showPanel(false);
-              focusMenu();
-            }
-          : null
-      }
+      onHide={() => {
+        showPanel(false);
+        focusMenu();
+      }}
     />
   );
   // Tucked away: the panel is gone, but its announcements (e.g. "saved") still reach screen readers.

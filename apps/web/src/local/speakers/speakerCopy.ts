@@ -7,10 +7,10 @@
 export const SPEAKERS = {
   heading: "Speakers",
   badge: "Experimental",
-  disclosure:
-    "Pebble can guess who is speaking on each line. It runs on this computer and the audio isn't uploaded. While it runs, new transcriptions wait until it finishes.",
-  freshStart:
-    "Detecting again starts fresh: names and corrections belong to one detection and aren't carried over.",
+  notDetected: "Not detected",
+  detecting: "Detecting…",
+  summary: (speakers: number, lines: number) =>
+    `${speakers === 1 ? "1 speaker" : `${speakers} speakers`} · ${lines === 1 ? "1 line" : `${lines} lines`}`,
   detect: "Detect speakers",
   detectAgain: "Detect speakers again",
   starting: "Starting…",
@@ -19,20 +19,19 @@ export const SPEAKERS = {
   hintLabel: "Expected number of speakers (optional)",
   hintHelp: "Leave empty to let Pebble decide. Use 1–15.",
   hintProblem: "Use a whole number from 1 to 15, or leave it empty.",
-  none: "No speakers detected yet.",
   checkAgain: "Check again",
   keyHeading: "Speakers in this episode",
   nameLabel: (letter: string) => `Name for speaker ${letter}`,
   namePlaceholder: "Add a name",
   lineCount: (n: number) => (n === 1 ? "1 line" : `${n} lines`),
   notSpeaker: "Not a speaker",
-  notSpeakerLabel: (letter: string) => `Mark speaker ${letter} as not a speaker`,
-  mergeLabel: (letter: string) => `Merge speaker ${letter} into`,
-  mergeChoose: "Merge into…",
-  mergeButton: "Merge",
+  actionsLabel: (letter: string) => `Actions for speaker ${letter}`,
+  mergeInto: (letter: string, name: string) =>
+    name ? `Merge into ${letter} (${name})` : `Merge into ${letter}`,
   mergePrompt: (from: string, into: string) =>
     `Show all of speaker ${from}'s lines as speaker ${into}?`,
   mergeConfirm: "Merge speakers",
+  mergeCancel: "Cancel",
   mergedRow: (from: string, into: string) => `${from} is shown as ${into}`,
   hiddenRow: (letter: string) => `${letter} is marked not a speaker`,
   undo: "Undo",
@@ -46,7 +45,6 @@ export const SPEAKERS = {
   lineNotSpeaker: "Not a speaker",
   save: "Save speaker changes",
   saving: "Saving…",
-  discard: "Discard changes",
   saved: "Speaker changes saved.",
   savedTucked:
     "Speaker changes saved. To change them again, choose Edit speaker settings in the transcript actions menu.",

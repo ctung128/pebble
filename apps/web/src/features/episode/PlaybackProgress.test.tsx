@@ -1,8 +1,8 @@
 /**
- * Listening position: saved conservatively; offered back on request in local mode, restored
- * (paused) on arrival in the demo. Invented content.
+ * Listening position: saved conservatively and restored (paused) on arrival, in the demo and
+ * in local mode alike. Invented content.
  */
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../../test/fixtures.tsx";
 import { MemoryLearningStore } from "../learning/MemoryLearningStore.ts";
@@ -144,82 +144,15 @@ describe("saving the listening position", () => {
   });
 });
 
-describe("resume controls (local mode)", () => {
-  beforeEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", true));
+describe.each([
+  ["demo", false],
+  ["local mode", true],
+])("restoring the position (%s)", (_, local) => {
+  beforeEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", local));
   afterEach(() => vi.stubGlobal("__PEBBLE_LOCAL__", false));
-
-  it("offers Resume and Start over for a saved position, without playing on load", async () => {
-    const play = vi.mocked(HTMLMediaElement.prototype.play);
-    play.mockClear();
-    await renderEpisode(await storeWith(record()));
-    expect(screen.getByRole("group", { name: "Listening progress" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Resume 0:06" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument();
-    expect(play).not.toHaveBeenCalled();
-    expect(now).toBe(0);
-  });
-
-  it("resumes from the saved position only when asked", async () => {
-    const play = vi.mocked(HTMLMediaElement.prototype.play);
-    play.mockClear();
-    await renderEpisode(await storeWith(record()));
-    fireEvent.click(screen.getByRole("button", { name: "Resume 0:06" }));
-    expect(now).toBe(6);
-    expect(play).toHaveBeenCalledTimes(1);
-  });
-
-  it("starts over from zero and forgets the saved position", async () => {
-    const play = vi.mocked(HTMLMediaElement.prototype.play);
-    play.mockClear();
-    now = 5;
-    const { store } = await renderEpisode(await storeWith(record()));
-    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
-    expect(now).toBe(0);
-    expect(play).toHaveBeenCalledTimes(1);
-    await act(async () => {});
-    expect(await store.listPlayback()).toEqual([]);
-  });
-
-  it("offers Listen again after a real finish", async () => {
-    const play = vi.mocked(HTMLMediaElement.prototype.play);
-    play.mockClear();
-    const { store } = await renderEpisode(
-      await storeWith(record({ positionMs: 9_000, finishedAt: "2026-10-05T12:05:00.000Z" })),
-    );
-    expect(screen.getByRole("group", { name: "Listening progress" })).toHaveTextContent(
-      "Finished·Listen again",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Listen again" }));
-    expect(now).toBe(0);
-    expect(play).toHaveBeenCalledTimes(1);
-    await act(async () => {});
-    expect(await store.listPlayback()).toEqual([]);
-  });
-
-  it("goes away once playback starts", async () => {
-    const { fire } = await renderEpisode(await storeWith(record()));
-    fire("play");
-    expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    ["under 5 s", record({ positionMs: 4_000 })],
-    ["from an episode that has since changed length", record({ durationMs: 60_000 })],
-  ])("offers nothing for a position %s", async (_, saved) => {
-    await renderEpisode(await storeWith(saved));
-    expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
-  });
-
-  it("stays out of the way when arriving to a specific line", async () => {
-    await renderEpisode(await storeWith(record()), "/?segment=seg-2");
-    expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
-  });
-});
-
-describe("restoring the position (demo)", () => {
   const seekbar = () => screen.getByRole("slider", { name: "Seek" });
 
-  it("opens paused where the visitor left off, with no resume controls", async () => {
+  it("opens paused where the listener left off, with no resume controls", async () => {
     const play = vi.mocked(HTMLMediaElement.prototype.play);
     play.mockClear();
     await renderEpisode(await storeWith(record()));
@@ -228,7 +161,9 @@ describe("restoring the position (demo)", () => {
     const scrolled = vi.mocked(Element.prototype.scrollIntoView).mock.contexts.at(-1);
     expect(scrolled).toHaveAttribute("data-segment-index", "2");
     expect(screen.queryByRole("group", { name: "Listening progress" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Resume|Start over/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Resume|Start over|Listen again/ }),
+    ).not.toBeInTheDocument();
     expect(play).not.toHaveBeenCalled();
   });
 
@@ -236,7 +171,7 @@ describe("restoring the position (demo)", () => {
     ["nothing saved", undefined],
     ["a position under 5 s", record({ positionMs: 4_000 })],
     ["a finished episode", record({ positionMs: 9_000, finishedAt: "2026-10-05T12:05:00.000Z" })],
-  ])("starts from the beginning for %s", async (_, saved) => {
+  ])("starts from the beginning for %s", async (_label, saved) => {
     await renderEpisode(saved ? await storeWith(saved) : undefined);
     expect(seekbar()).toHaveAttribute("aria-valuetext", "0:00 of 0:09");
   });

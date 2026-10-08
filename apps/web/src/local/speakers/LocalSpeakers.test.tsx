@@ -342,7 +342,8 @@ describe("speaker capability gating", () => {
     await waitFor(() => expect(worker.getEpisodeSpeakers).toHaveBeenCalledTimes(1));
     expect(worker.getEpisodeSpeakers).toHaveBeenCalledWith(EP_A);
     expect(worker.startSpeakerDetection).not.toHaveBeenCalled();
-    expect(await screen.findByText(SPEAKERS.none)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: SPEAKERS.detect })).toBeTruthy();
+    expect(screen.queryByText("No speakers detected yet.")).toBeNull();
   });
 
   it.each(["model_missing", "isolation_unavailable"] as const)(
@@ -545,17 +546,24 @@ describe("corrections", () => {
 
     await user.type(within(region).getByLabelText(SPEAKERS.nameLabel("A")), NAME);
 
-    // Merge B into A, with a confirmation step.
-    const mergeB = within(region).getByLabelText(SPEAKERS.mergeLabel("B"));
-    await user.selectOptions(mergeB, "S1");
-    const rowB = within(mergeB.closest("li") as HTMLElement);
-    await user.click(rowB.getByRole("button", { name: SPEAKERS.mergeButton }));
+    // Merge B into A from B's menu, with a confirmation step.
+    const actionsB = within(region).getByRole("button", { name: SPEAKERS.actionsLabel("B") });
+    const tileB = within(actionsB.closest("li") as HTMLElement);
+    await user.click(actionsB);
+    await user.click(await screen.findByRole("menuitem", { name: SPEAKERS.mergeInto("A", NAME) }));
     expect(lineButton(list, 1).textContent).toMatch(/Speaker\s*B/); // not yet
-    await user.click(rowB.getByRole("button", { name: SPEAKERS.mergeConfirm }));
+    await user.click(tileB.getByRole("button", { name: SPEAKERS.mergeConfirm }));
     expect(lineButton(list, 1).textContent).toMatch(/Speaker\s*A/);
+    // B's tile now says what happened, with a way back.
+    expect(
+      within(region).getByRole("button", {
+        name: SPEAKERS.undoLabel(SPEAKERS.mergedRow("B", "A")),
+      }),
+    ).toBeTruthy();
 
-    // Mark C as not a speaker: its line shows no letter.
-    await user.click(within(region).getByRole("button", { name: SPEAKERS.notSpeakerLabel("C") }));
+    // Mark C as not a speaker from its menu: its line shows no letter.
+    await user.click(within(region).getByRole("button", { name: SPEAKERS.actionsLabel("C") }));
+    await user.click(await screen.findByRole("menuitem", { name: SPEAKERS.notSpeaker }));
     expect(lineButton(list, 2).textContent).not.toMatch(/Speaker\s*[A-Z]/);
 
     // Per-line: reassign the first line to not-a-speaker, then back.
@@ -750,7 +758,7 @@ describe("tucking the panel into the menu", () => {
     expect(screen.queryByRole("region", { name: SPEAKERS.heading })).toBeNull();
   });
 
-  it("stays open while a run is active, and offers no menu item before anything is saved", async () => {
+  it("opens while a run is active, and can be hidden and reopened before anything is saved", async () => {
     const worker = client(READY, {
       getEpisodeSpeakers: vi.fn(async (id: string) =>
         savedPayload(id, { run: RUN_2, status: "running" }),
@@ -767,13 +775,12 @@ describe("tucking the panel into the menu", () => {
     const second = renderEpisode(fresh, { episodeId: EP_B });
     await within(second.container).findByRole("region", { name: SPEAKERS.heading });
     const user = userEvent.setup();
+    const region = within(second.container).getByRole("region", { name: SPEAKERS.heading });
+    await user.click(within(region).getByRole("button", { name: SPEAKERS.hidePanel }));
+    expect(within(second.container).queryByRole("region", { name: SPEAKERS.heading })).toBeNull();
     await user.click(within(second.container).getByRole("button", { name: "Transcript actions" }));
-    expect(
-      within(second.container).queryByRole("menuitem", { name: SPEAKERS.showPanel }),
-    ).toBeNull();
-    expect(
-      within(second.container).queryByRole("menuitem", { name: SPEAKERS.hidePanel }),
-    ).toBeNull();
+    await user.click(await screen.findByRole("menuitem", { name: SPEAKERS.showPanel }));
+    await within(second.container).findByRole("region", { name: SPEAKERS.heading });
   });
 });
 

@@ -1,6 +1,6 @@
-import { useId, useState, type RefObject } from "react";
+import { useId, useState, type ReactNode, type RefObject } from "react";
 import type { EpisodeSpeakers, SpeakerHealth } from "@pebble/schema";
-import { ConfirmButton } from "../../components/ConfirmButton.tsx";
+import { MoreMenu, type MoreMenuItem } from "../../components/MoreMenu.tsx";
 import {
   SPEAKER_CONFLICT_ACTIONS,
   SPEAKER_STATUS,
@@ -46,11 +46,10 @@ export interface SpeakerPanelProps {
   onUnmerge: (source: string) => void;
   onToggleCorrecting: () => void;
   onSave: () => void;
-  onDiscard: () => void;
   /** The heading, focused when the panel is reopened from the menu. */
   headingRef: RefObject<HTMLHeadingElement | null>;
-  /** Tucks the panel into the transcript actions menu (once corrections are saved), or null. */
-  onHide: (() => void) | null;
+  /** Tucks the panel into the transcript actions menu. */
+  onHide: () => void;
   /** After a clashing conflict: the explicit choice that must come before saving. */
   conflict: { count: number; onKeepMine: () => void; onUseSaved: () => void } | null;
 }
@@ -64,17 +63,28 @@ const parseHint = (text: string): number | null | "invalid" => {
   return Number.isInteger(n) && n >= 1 && n <= 15 ? n : "invalid";
 };
 
-/** The speaker key and controls for one episode (local mode only). */
+/** Fills for the letter avatars, in turn; they differ in lightness, not only hue. */
+const AVATAR_TONES = ["toneA", "toneB", "toneC"] as const;
+const toneOf = (index: number) => styles[AVATAR_TONES[index % AVATAR_TONES.length]!];
+/** At most this many letters in the header's avatar stack; the rest are counted. */
+const STACK_MAX = 4;
+
+/**
+ * The speaker card for one episode (local mode only). Its header always says where things stand
+ * (not detected, detecting, or who was found); the body shows one thing at a time.
+ */
 export function SpeakerPanel({ headingRef, ...props }: SpeakerPanelProps) {
   const { capability, payload, draft } = props;
   const headingId = useId();
   const hintId = useId();
   const [hintText, setHintText] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const latest = payload?.latest ?? null;
   const current = payload?.current ?? null;
   const active = latest?.status === "queued" || latest?.status === "running";
   const available = capability.state === "ready";
   const hint = parseHint(hintText);
+  const visible = current && draft ? visibleSpeakers(current, draft) : [];
 
   let status = "";
   if (latest && active) {
@@ -90,20 +100,109 @@ export function SpeakerPanel({ headingRef, ...props }: SpeakerPanelProps) {
       : null;
   const unavailable = capability.state === "ready" ? null : SPEAKER_UNAVAILABLE[capability.state];
 
+  let summary: string = SPEAKERS.notDetected;
+  if (active) summary = SPEAKERS.detecting;
+  else if (current && draft) {
+    const lines = visible.reduce((sum, id) => sum + (props.lineCounts.get(id) ?? 0), 0);
+    summary = SPEAKERS.summary(visible.length, lines);
+  }
+
+  const detect =
+    available && !active ? (
+      <>
+        <button
+          type="button"
+          className={current ? styles.link : styles.button}
+          disabled={props.starting || hint === "invalid"}
+          onClick={() => props.onStart(hint === "invalid" ? null : hint)}
+        >
+          {props.starting ? SPEAKERS.starting : current ? SPEAKERS.detectAgain : SPEAKERS.detect}
+        </button>
+        <button
+          type="button"
+          className={styles.link}
+          aria-expanded={advancedOpen}
+          aria-controls={advancedOpen ? `${hintId}-advanced` : undefined}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          {SPEAKERS.advanced}
+        </button>
+      </>
+    ) : null;
+  const advanced =
+    detect && advancedOpen ? (
+      <div id={`${hintId}-advanced`} className={styles.advanced}>
+        <div className={styles.row}>
+          <label htmlFor={hintId}>{SPEAKERS.hintLabel}</label>
+          <input
+            id={hintId}
+            className={styles.input}
+            inputMode="numeric"
+            size={3}
+            value={hintText}
+            aria-describedby={`${hintId}-help`}
+            aria-invalid={hint === "invalid" || undefined}
+            onChange={(event) => setHintText(event.target.value)}
+          />
+        </div>
+        <p id={`${hintId}-help`} className={styles.note}>
+          {hint === "invalid" ? SPEAKERS.hintProblem : SPEAKERS.hintHelp}
+        </p>
+      </div>
+    ) : null;
+
   return (
     <section className={styles.panel} aria-labelledby={headingId}>
-      <div className={styles.titleRow}>
-        <h2 id={headingId} className={styles.title} ref={headingRef} tabIndex={-1}>
-          {SPEAKERS.heading}
-        </h2>
-        <span className={styles.badge}>{SPEAKERS.badge}</span>
-        {props.onHide ? (
-          <button type="button" className={styles.hide} onClick={props.onHide}>
-            {SPEAKERS.hidePanel}
-          </button>
-        ) : null}
-      </div>
-      <p className={styles.note}>{SPEAKERS.disclosure}</p>
+      <header className={styles.header}>
+        {active ? (
+          <span className={styles.stack} aria-hidden="true">
+            <span className={styles.pending} />
+            <span className={styles.pending} />
+            <span className={styles.pending} />
+          </span>
+        ) : visible.length > 0 ? (
+          <span className={styles.stack} aria-hidden="true">
+            {visible.slice(0, STACK_MAX).map((id, index) => (
+              <span key={id} className={`${styles.avatar} ${toneOf(index)}`}>
+                {letterFor(id)}
+              </span>
+            ))}
+            {visible.length > STACK_MAX ? (
+              <span className={`${styles.avatar} ${styles.more}`}>
+                +{visible.length - STACK_MAX}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <svg
+            className={styles.glyph}
+            aria-hidden="true"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <circle cx="9" cy="8" r="3.5" />
+            <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
+            <path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.9 2.6 2.6 3 5.2" />
+          </svg>
+        )}
+        <div className={styles.heading}>
+          <div className={styles.titleRow}>
+            <h2 id={headingId} className={styles.title} ref={headingRef} tabIndex={-1}>
+              {SPEAKERS.heading}
+            </h2>
+            <span className={styles.badge}>{SPEAKERS.badge}</span>
+          </div>
+          <span className={active ? styles.summaryActive : styles.summary}>{summary}</span>
+        </div>
+        <button type="button" className={styles.hide} onClick={props.onHide}>
+          {SPEAKERS.hidePanel}
+        </button>
+      </header>
 
       <p className={styles.status} role="status" aria-live="polite">
         {[status, failure, props.notice].filter(Boolean).join(" ")}
@@ -113,15 +212,14 @@ export function SpeakerPanel({ headingRef, ...props }: SpeakerPanelProps) {
           {speakerRequestProblem(props.problem)}
         </p>
       ) : null}
-
       {unavailable ? (
         <p className={styles.note}>
           {unavailable} {SPEAKER_UNAVAILABLE.keepReadable}
         </p>
       ) : null}
 
-      <div className={styles.row}>
-        {active ? (
+      {active ? (
+        <div className={styles.row}>
           <button
             type="button"
             className={styles.button}
@@ -130,105 +228,60 @@ export function SpeakerPanel({ headingRef, ...props }: SpeakerPanelProps) {
           >
             {SPEAKERS.cancel}
           </button>
-        ) : available ? (
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={props.starting || hint === "invalid"}
-            onClick={() => props.onStart(hint === "invalid" ? null : hint)}
-          >
-            {props.starting ? SPEAKERS.starting : current ? SPEAKERS.detectAgain : SPEAKERS.detect}
-          </button>
-        ) : null}
-        {active && props.pollStopped ? (
-          <button type="button" className={styles.button} onClick={props.onCheckAgain}>
-            {SPEAKERS.checkAgain}
-          </button>
-        ) : null}
-      </div>
-      {available && !active ? (
-        <details>
-          <summary>{SPEAKERS.advanced}</summary>
-          <div className={styles.row}>
-            <label htmlFor={hintId}>{SPEAKERS.hintLabel}</label>
-            <input
-              id={hintId}
-              className={styles.input}
-              inputMode="numeric"
-              size={3}
-              value={hintText}
-              aria-describedby={`${hintId}-help`}
-              aria-invalid={hint === "invalid" || undefined}
-              onChange={(event) => setHintText(event.target.value)}
-            />
-          </div>
-          <p id={`${hintId}-help`} className={styles.note}>
-            {hint === "invalid" ? SPEAKERS.hintProblem : SPEAKERS.hintHelp}
-          </p>
-        </details>
+          {props.pollStopped ? (
+            <button type="button" className={styles.button} onClick={props.onCheckAgain}>
+              {SPEAKERS.checkAgain}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {current && draft ? (
-        <SpeakerKey {...props} current={current} draft={draft} />
-      ) : !active ? (
-        <p className={styles.note}>{SPEAKERS.none}</p>
+        <SpeakerKey {...props} current={current} draft={draft} visible={visible} detect={detect} />
+      ) : detect ? (
+        <div className={styles.row}>{detect}</div>
       ) : null}
-      <p className={styles.note}>{SPEAKERS.freshStart}</p>
+      {advanced}
     </section>
   );
 }
 
-function SpeakerKey(props: KeyProps & { current: SpeakerResult; draft: SpeakerDraft }) {
-  const { current, draft } = props;
-  const visible = visibleSpeakers(current, draft);
+type KeyOwnProps = {
+  current: SpeakerResult;
+  draft: SpeakerDraft;
+  visible: string[];
+  /** Detect again and Advanced, in the bottom row; null while detection can't start. */
+  detect: ReactNode;
+};
+
+function SpeakerKey(props: KeyProps & KeyOwnProps) {
+  const { draft, visible } = props;
   const merged = Object.entries(draft.merges);
   const keyHeading = useId();
   return (
     <>
-      <h3 id={keyHeading} className={styles.title}>
+      <h3 id={keyHeading} className={styles.visuallyHidden}>
         {SPEAKERS.keyHeading}
       </h3>
-      <ul className={styles.key} aria-labelledby={keyHeading}>
-        {visible.map((id) => (
-          <SpeakerRow key={id} {...props} id={id} />
+      <ul className={styles.tiles} aria-labelledby={keyHeading}>
+        {visible.map((id, index) => (
+          <SpeakerTile key={id} {...props} id={id} tone={toneOf(index)} />
+        ))}
+        {merged.map(([source, target]) => (
+          <TuckedTile
+            key={source}
+            row={SPEAKERS.mergedRow(letterFor(source), letterFor(target))}
+            onUndo={() => props.onUnmerge(source)}
+          />
+        ))}
+        {draft.notSpeaker.map((id) => (
+          <TuckedTile
+            key={id}
+            row={SPEAKERS.hiddenRow(letterFor(id))}
+            onUndo={() => props.onNotSpeaker(id, false)}
+          />
         ))}
       </ul>
-      {merged.length > 0 || draft.notSpeaker.length > 0 ? (
-        <ul className={styles.key}>
-          {merged.map(([source, target]) => {
-            const row = SPEAKERS.mergedRow(letterFor(source), letterFor(target));
-            return (
-              <li key={source} className={styles.speaker}>
-                <span>{row}</span>
-                <button
-                  type="button"
-                  className={styles.button}
-                  aria-label={SPEAKERS.undoLabel(row)}
-                  onClick={() => props.onUnmerge(source)}
-                >
-                  {SPEAKERS.undo}
-                </button>
-              </li>
-            );
-          })}
-          {draft.notSpeaker.map((id) => {
-            const row = SPEAKERS.hiddenRow(letterFor(id));
-            return (
-              <li key={id} className={styles.speaker}>
-                <span>{row}</span>
-                <button
-                  type="button"
-                  className={styles.button}
-                  aria-label={SPEAKERS.undoLabel(row)}
-                  onClick={() => props.onNotSpeaker(id, false)}
-                >
-                  {SPEAKERS.undo}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
       {props.conflict ? (
         <div className={styles.row} role="group" aria-label={SPEAKER_CONFLICT_ACTIONS.keepMine}>
           <button type="button" className={styles.primary} onClick={props.conflict.onKeepMine}>
@@ -248,21 +301,14 @@ function SpeakerKey(props: KeyProps & { current: SpeakerResult; draft: SpeakerDr
         >
           {props.correcting ? SPEAKERS.doneCorrecting : SPEAKERS.correctLines}
         </button>
+        {props.detect}
         <button
           type="button"
-          className={styles.primary}
+          className={styles.save}
           disabled={!props.dirty || !props.savable || props.saving || props.conflict !== null}
           onClick={props.onSave}
         >
           {props.saving ? SPEAKERS.saving : SPEAKERS.save}
-        </button>
-        <button
-          type="button"
-          className={styles.button}
-          disabled={!props.dirty || props.saving}
-          onClick={props.onDiscard}
-        >
-          {SPEAKERS.discard}
         </button>
       </div>
       {props.dirty ? (
@@ -272,22 +318,53 @@ function SpeakerKey(props: KeyProps & { current: SpeakerResult; draft: SpeakerDr
   );
 }
 
-function SpeakerRow(props: KeyProps & { current: SpeakerResult; draft: SpeakerDraft; id: string }) {
+/** A merged or not-a-speaker cluster: what happened to it, and a way back. */
+function TuckedTile({ row, onUndo }: { row: string; onUndo: () => void }) {
+  return (
+    <li className={styles.tucked}>
+      <span>{row}</span>
+      <button
+        type="button"
+        className={styles.link}
+        aria-label={SPEAKERS.undoLabel(row)}
+        onClick={onUndo}
+      >
+        {SPEAKERS.undo}
+      </button>
+    </li>
+  );
+}
+
+function SpeakerTile(props: KeyProps & KeyOwnProps & { id: string; tone: string | undefined }) {
   const { current, draft, id } = props;
   const letter = letterFor(id);
   const nameId = useId();
-  const mergeId = useId();
-  const [target, setTarget] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
   const name = draft.names[id] ?? "";
   const problem = speakerNameProblem(name);
   const unlocked = canMergeOrHide(draft, id);
   const targets = mergeTargets(current, draft, id);
-  const chosen = targets.includes(target) ? target : "";
+  const target = pending && targets.includes(pending) ? pending : null;
+  const items: MoreMenuItem[] = [
+    ...targets.map((other) => ({
+      key: `merge-${other}`,
+      label: SPEAKERS.mergeInto(letterFor(other), draft.names[other]?.trim() ?? ""),
+      onSelect: () => setPending(other),
+    })),
+    { key: "hide", label: SPEAKERS.notSpeaker, onSelect: () => props.onNotSpeaker(id, true) },
+  ];
   return (
-    <li className={styles.speaker}>
-      <span className={styles.letter} aria-hidden="true">
-        {letter}
-      </span>
+    <li className={styles.tile}>
+      <div className={styles.tileTop}>
+        <span
+          className={`${styles.avatar} ${styles.avatarLg} ${props.tone ?? ""}`}
+          aria-hidden="true"
+        >
+          {letter}
+        </span>
+        <span className={styles.count}>{SPEAKERS.lineCount(props.lineCounts.get(id) ?? 0)}</span>
+        {unlocked ? <MoreMenu label={SPEAKERS.actionsLabel(letter)} items={items} /> : null}
+      </div>
       <label htmlFor={nameId} className={styles.visuallyHidden}>
         {SPEAKERS.nameLabel(letter)}
       </label>
@@ -301,59 +378,38 @@ function SpeakerRow(props: KeyProps & { current: SpeakerResult; draft: SpeakerDr
         aria-describedby={problem ? `${nameId}-problem` : undefined}
         onChange={(event) => props.onRename(id, event.target.value)}
       />
-      <span className={styles.count}>{SPEAKERS.lineCount(props.lineCounts.get(id) ?? 0)}</span>
       {problem ? (
         <span id={`${nameId}-problem`} className={styles.problem}>
           {problem}
         </span>
       ) : null}
-      {unlocked ? (
-        <>
-          <button
-            type="button"
-            className={styles.button}
-            aria-label={SPEAKERS.notSpeakerLabel(letter)}
-            onClick={() => props.onNotSpeaker(id, true)}
-          >
-            {SPEAKERS.notSpeaker}
-          </button>
-          {targets.length > 0 ? (
-            <>
-              <label htmlFor={mergeId} className={styles.visuallyHidden}>
-                {SPEAKERS.mergeLabel(letter)}
-              </label>
-              <select
-                id={mergeId}
-                className={styles.select}
-                value={chosen}
-                onChange={(event) => setTarget(event.target.value)}
-              >
-                <option value="">{SPEAKERS.mergeChoose}</option>
-                {targets.map((other) => (
-                  <option key={other} value={other}>
-                    {letterFor(other)}
-                    {draft.names[other] ? ` — ${draft.names[other]}` : ""}
-                  </option>
-                ))}
-              </select>
-              <ConfirmButton
-                className={styles.button}
-                disabled={chosen === ""}
-                prompt={SPEAKERS.mergePrompt(letter, chosen ? letterFor(chosen) : "")}
-                confirmLabel={SPEAKERS.mergeConfirm}
-                onConfirm={() => {
-                  if (chosen) props.onMerge(id, chosen);
-                  setTarget("");
-                }}
-              >
-                {SPEAKERS.mergeButton}
-              </ConfirmButton>
-            </>
-          ) : null}
-        </>
-      ) : (
-        <span className={styles.note}>{SPEAKERS.locked}</span>
-      )}
+      {unlocked ? null : <span className={styles.note}>{SPEAKERS.locked}</span>}
+      {target ? (
+        <div
+          className={styles.confirm}
+          role="group"
+          aria-label={SPEAKERS.mergePrompt(letter, letterFor(target))}
+          onKeyDown={(event) => event.key === "Escape" && setPending(null)}
+        >
+          <span>{SPEAKERS.mergePrompt(letter, letterFor(target))}</span>
+          <div className={styles.row}>
+            <button type="button" className={styles.link} onClick={() => setPending(null)}>
+              {SPEAKERS.mergeCancel}
+            </button>
+            <button
+              type="button"
+              className={styles.button}
+              autoFocus
+              onClick={() => {
+                setPending(null);
+                props.onMerge(id, target);
+              }}
+            >
+              {SPEAKERS.mergeConfirm}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </li>
   );
 }
